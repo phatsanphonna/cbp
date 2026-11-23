@@ -1,0 +1,26 @@
+{
+  "name": "@cbp/database",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./auth-schema": "./src/auth-schema.ts",
+    "./controller-status": "./src/controller-status.ts",
+    "./groups": "./src/groups.ts",
+    "./host-agents": "./src/host-agents.ts",
+    "./inventory": "./src/inventory.ts",
+    "./overview": "./src/overview.ts"
+  },
+  "scripts": {
+    "db:push": "bun --env-file=../../.env.local --bun drizzle-kit push",
+    "db:setup-controller": "bun --env-file=../../.env.local scripts/setup-controller.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "drizzle-kit": "^0.31.0",
+    "postgres": "^3.4.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "$app/tsconfig",
+  "include": ["src", "vite.config.ts"],
+  "exclude": ["src/service-worker"],
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "strict": true
+  }
+}

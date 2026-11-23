@@ -1,0 +1,7 @@
+go 1.27.4
+
+use (
+	./apps/agent
+	./apps/controller
+	./packages/agent-rpc
+)

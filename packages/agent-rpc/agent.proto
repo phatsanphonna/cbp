@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package cbp.agent.v1;
+
+option go_package = "cbp/agent-rpc;rpc";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service Controller {
+  // The string value is the one-time enrollment code.
+  rpc Enroll(google.protobuf.StringValue) returns (google.protobuf.Empty);
+
+  // The report contains hostname, operatingSystem, architecture and collectedAt.
+  rpc CheckIn(google.protobuf.Struct) returns (google.protobuf.Empty);
+}

@@ -1,0 +1,18 @@
+{
+  "name": "cbp",
+  "private": true,
+  "packageManager": "bun@1.4.5",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo run dev dev:controller --env-mode=loose --continue=dependencies-successful",
+    "dev:controller": "bun --env-file=.env.local apps/controller/dev.ts",
+    "build": "turbo run build"
+  },
+  "devDependencies": {
+    "turbo": "^2.11.13"
+  },
+  "dependencies": {
+    "@tanstack/svelte-table": "^9.3.2",
+    "mode-watcher": "^1.1.0"
+  }
+}

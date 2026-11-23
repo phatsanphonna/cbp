@@ -1,0 +1,149 @@
+<script lang="ts">
+  import { resolve } from '$app/paths';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import * as CodeBlock from '#lib/components/ui/code-block/index.ts';
+
+  const sections = [
+    { id: 'web', label: 'Configure the web app' },
+    { id: 'controller', label: 'Start the controller' },
+    { id: 'agent', label: 'Enroll an agent' },
+    { id: 'verify', label: 'Verify the check-in' }
+  ];
+
+  const webCommands = `bun -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+# Save the generated value as CBP_CONTROLLER_TOKEN in the root .env.local.
+bun --filter @cbp/database db:setup-controller`;
+
+  const controllerEnv = String.raw`export CBP_WEB_URL='https://cbp-web.internal'
+read -rsp 'Controller service token: ' CBP_CONTROLLER_TOKEN
+export CBP_CONTROLLER_TOKEN
+printf '\n'`;
+
+  const controllerCommands = String.raw`go build -o ./cbp-controller ./apps/controller
+./cbp-controller serve \
+  -listen 0.0.0.0:50051 \
+  -tls-cert ./controller-fullchain.pem \
+  -tls-key ./controller.key`;
+
+  const agentSettings = `CBP_AGENT_CONTROLLER_ADDRESS=cbp-controller.internal:50051
+# Optional for a private CA. Use the PEM path on the Linux agent hosts.
+# CBP_AGENT_CA_FILE=/etc/cbp/controller-ca.pem`;
+</script>
+
+<svelte:head>
+  <title>Controller setup | Certified by Pat</title>
+</svelte:head>
+
+{#snippet commands(label: string, command: string)}
+  <CodeBlock.Root size="sm">
+    <CodeBlock.Header>
+      <CodeBlock.Title>{label}</CodeBlock.Title>
+      <CodeBlock.Actions>
+        <CodeBlock.CopyButton value={command} aria-label={`Copy ${label} commands`} />
+      </CodeBlock.Actions>
+    </CodeBlock.Header>
+    <CodeBlock.Content code={command} wrap aria-label={label} />
+  </CodeBlock.Root>
+{/snippet}
+
+<section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="controller-setup">
+  <header class="mb-7 grid gap-1.5">
+    <h1 id="controller-setup" class="font-heading text-xl font-semibold">Controller setup</h1>
+    <p class="max-w-prose text-sm text-muted-foreground">
+      Run the controller on Windows or Linux and connect it to CBP so agent check-ins appear in the host inventory.
+    </p>
+  </header>
+
+  <div class="grid max-w-6xl items-start gap-6 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10">
+    <nav aria-label="On this page" class="border-y py-3 text-xs lg:sticky lg:top-4 lg:border-y-0 lg:border-e lg:pe-4">
+      <p class="mb-2 font-medium">On this page</p>
+      <ol class="grid list-decimal gap-2 ps-5">
+        {#each sections as section (section.id)}
+          <li><a href={`#${section.id}`} class="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">{section.label}</a></li>
+        {/each}
+      </ol>
+    </nav>
+
+    <article class="grid min-w-0 gap-7 text-sm leading-relaxed">
+      <p class="max-w-prose">
+        Agents connect to the controller over gRPC with TLS. The controller calls the web app over HTTPS, and the web app stores enrollment and check-in data in PostgreSQL.
+        Use Go 1.27.4 or later where you build the binaries. Run the commands from the repository root.
+      </p>
+
+      <section id="web" aria-labelledby="web-heading" class="grid scroll-m-4 gap-3 border-t pt-5">
+        <h2 id="web-heading" class="font-heading text-base font-semibold">1. Configure the web app</h2>
+        <p class="max-w-prose">
+          Generate a service token, save it in the repository root's <code>.env.local</code>, then create the controller tables and restart the web app.
+          Keep the token on the web and controller servers.
+        </p>
+        {@render commands('Web server', webCommands)}
+        <p class="max-w-prose">
+          In the same <code>.env.local</code> file, set the controller address your Linux agents can reach.
+          If you use a private CA, set the PEM path as it appears on those hosts. Restart the web app after saving.
+        </p>
+        {@render commands('Web enrollment settings', agentSettings)}
+      </section>
+
+      <section id="controller" aria-labelledby="controller-heading" class="grid scroll-m-4 gap-3 border-t pt-5">
+        <h2 id="controller-heading" class="font-heading text-base font-semibold">2. Start the controller</h2>
+        <h3 class="font-medium">Windows development</h3>
+        <p class="max-w-prose">
+          Put <code>controller-fullchain.pem</code> and <code>controller.key</code> in the repository root, or set their
+          paths with <code>CBP_CONTROLLER_TLS_CERT</code> and <code>CBP_CONTROLLER_TLS_KEY</code> in <code>.env.local</code>.
+          Run <code>bun dev</code> to start the web app and controller together. Run <code>bun dev:controller</code>
+          to start just the controller.
+        </p>
+        <p class="max-w-prose">
+          For agents on other hosts, set <code>CBP_CONTROLLER_LISTEN=0.0.0.0:50051</code> and allow inbound TCP
+          <code>50051</code> from those hosts. Set <code>CBP_AGENT_CONTROLLER_ADDRESS</code> to the Windows DNS name and
+          port they can reach, and use a TLS certificate that covers that name.
+        </p>
+        <h3 class="font-medium">Linux VM</h3>
+        <p class="max-w-prose">
+          On the Linux VM, replace the example URL with the web app's base URL and enter the same service token.
+          If the web app uses a private CA, set <code>CBP_WEB_CA_FILE</code> to its PEM certificate on the VM.
+        </p>
+        {@render commands('Controller environment', controllerEnv)}
+        <p class="max-w-prose">
+          Provide a TLS certificate and matching private key for the controller. The certificate must cover the DNS name agents use.
+          Allow inbound TCP port <code>50051</code> from the agent hosts.
+        </p>
+        {@render commands('Linux VM', controllerCommands)}
+        <p class="max-w-prose text-muted-foreground">
+          If you run the controller in Docker on the VM, publish TCP <code>50051</code>, mount the TLS files read-only,
+          and supply the controller environment to the container.
+        </p>
+      </section>
+
+      <section id="agent" aria-labelledby="agent-heading" class="grid scroll-m-4 gap-3 border-t pt-5">
+        <h2 id="agent-heading" class="font-heading text-base font-semibold">3. Enroll an agent</h2>
+        <p class="max-w-prose">
+          <a href={resolve('/hosts/new')} class="font-medium underline underline-offset-4">Register a host</a>, then open its details from the host inventory.
+          Under <strong>Agent enrollment</strong>, select <strong>Generate enrollment code</strong> to enable agent management.
+          Copy the generated command and paste it into a Linux shell at the CBP repository root.
+          It includes the controller address, host UUID, and the single-use enrollment code, which expires after 15 minutes.
+        </p>
+        <p class="max-w-prose">
+          The command uses <code>go run</code>, so the Linux host needs Go and a checkout of CBP. Run it as the account that will run the agent.
+        </p>
+      </section>
+
+      <section id="verify" aria-labelledby="verify-heading" class="grid scroll-m-4 gap-3 border-t pt-5">
+        <h2 id="verify-heading" class="font-heading text-base font-semibold">4. Verify the check-in</h2>
+        <p class="max-w-prose">
+          The navbar shows <strong>Controller online</strong> when the controller has checked in to CBP within the last 30 seconds.
+        </p>
+        <p class="max-w-prose">
+          Look for <code>check-in accepted</code> in the agent log. Refresh the host details page to see
+          <strong>Last agent check-in</strong>, hostname, operating system, and architecture.
+          Run the agent without <code>-once</code> to check in every minute. The credential file handles subsequent authentication.
+        </p>
+        <p class="max-w-prose">
+          To revoke an agent or cancel an unused code, select <strong>Reset enrollment</strong> on the host details page.
+          To enroll a replacement, generate a new code and use a fresh credential file.
+        </p>
+        <Button href={resolve('/hosts')} variant="outline" class="justify-self-start">Open host inventory</Button>
+      </section>
+    </article>
+  </div>
+</section>

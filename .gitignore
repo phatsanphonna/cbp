@@ -1,0 +1,11 @@
+node_modules/
+.turbo/
+dist/
+.svelte-kit/
+.env
+.env.local
+controller-state/
+.agent-local/
+/controller.key
+/controller-fullchain.pem
+/controller-ca.pem

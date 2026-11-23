@@ -1,0 +1,34 @@
+import { building } from '$app/env';
+import { resolve as resolvePath } from '$app/paths';
+import { redirect, type Handle } from '@sveltejs/kit';
+import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { getAuth } from '#lib/server/auth.js';
+
+export const handle: Handle = ({ event, resolve }) => {
+  event.locals.user = null;
+  if (building || event.route.id === '/api/internal/controller/[operation]') return resolve(event);
+
+  const auth = getAuth();
+  return svelteKitHandler({
+    event,
+    auth,
+    building,
+    resolve: async (event) => {
+      const { id } = event.route;
+      if (!id) return resolve(event);
+
+      const session = await auth.api.getSession({ headers: event.request.headers });
+      const user = session?.user;
+      event.locals.user = user
+        ? { name: user.name, email: user.email, username: user.displayUsername ?? user.username, image: user.image }
+        : null;
+
+      if (id === '/signin') {
+        if (user) redirect(303, resolvePath('/'));
+      } else if (!user) {
+        redirect(303, resolvePath('/signin'));
+      }
+      return resolve(event);
+    }
+  });
+};
