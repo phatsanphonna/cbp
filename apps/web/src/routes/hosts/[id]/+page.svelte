@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Info } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import AgentEnrollment from '#lib/components/svelte/agent-enrollment.svelte';
   import DeploymentStatusBadge from '#lib/components/svelte/deployment-status-badge.svelte';
@@ -8,6 +9,7 @@
   import { Badge } from '#lib/components/ui/badge/index.ts';
   import { Button } from '#lib/components/ui/button/index.ts';
   import * as Table from '#lib/components/ui/table/index.ts';
+  import * as Tooltip from '#lib/components/ui/tooltip/index.ts';
   import { refreshHostPing } from '#lib/hooks/refresh-host-ping.js';
   import { nextDeploymentExpiry, watchDeploymentUpdates } from '#lib/hooks/watch-deployment-updates.svelte.js';
   import type { PageProps } from './$types';
@@ -23,6 +25,12 @@
     { label: 'Operating system', value: host.operatingSystem },
     { label: 'Architecture', value: host.architecture }
   ]);
+  const listenerLabels = {
+    ready: 'TLS ready',
+    unreachable: 'Listener unreachable',
+    'tls-error': 'TLS handshake failed',
+    'not-allowed': 'Target not enabled'
+  } as const;
 
   watchDeploymentUpdates(() => nextDeploymentExpiry(Object.values(data.agentDeployments.statuses)));
 </script>
@@ -79,7 +87,7 @@
       <div>
         <dt class="text-muted-foreground">Network reachability</dt>
         <dd class="mt-1" aria-live="polite">
-          {host.lastPingLabel}
+          <span class:text-destructive={host.lastPingStatus === 'no-reply'}>{host.lastPingLabel}</span>
           {#if host.lastPingAt}
             · <time datetime={host.lastPingAt.iso}>{host.lastPingAt.label}</time>
           {/if}
@@ -95,6 +103,22 @@
         <dt class="text-muted-foreground">Last agent check-in</dt>
         <dd class="mt-1">{@render timestamp(host.agentSeenAt, host.agentManaged ? 'No check-in recorded' : 'Agent not configured')}</dd>
       </div>
+      {#if host.agentManaged}
+        <div>
+          <dt class="text-muted-foreground">Allowed deployment services</dt>
+          <dd class="mt-1 flex flex-wrap gap-1">
+            {#if host.allowedDeploymentServices === null}
+              <span>Not reported</span>
+            {:else}
+              {#each host.allowedDeploymentServices as service (service)}
+                <Badge variant="secondary">{service}</Badge>
+              {:else}
+                <span>None enabled</span>
+              {/each}
+            {/if}
+          </dd>
+        </div>
+      {/if}
       <div>
         <dt class="text-muted-foreground">Last Ansible run</dt>
         <dd class="mt-1">
@@ -140,6 +164,7 @@
             <Table.Head scope="col">Certificate</Table.Head>
             <Table.Head scope="col">Web service</Table.Head>
             <Table.Head scope="col">Method</Table.Head>
+            <Table.Head scope="col">Listener readiness</Table.Head>
             <Table.Head scope="col">Verification</Table.Head>
             <Table.Head scope="col" class="text-right">Actions</Table.Head>
           </Table.Row>
@@ -163,6 +188,38 @@
               </Table.Cell>
               <Table.Cell>{deployment.engine ?? 'Not specified'}</Table.Cell>
               <Table.Cell>{deployment.method}</Table.Cell>
+              <Table.Cell>
+                {#if deployment.listenerStatus}
+                  {#if deployment.listenerStatus === 'ready'}
+                    <Tooltip.Root>
+                      <Tooltip.Trigger class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring" aria-label="TLS ready. Show listener details">
+                        <Badge variant="secondary">
+                          {listenerLabels.ready}
+                          <Info data-icon="inline-end" aria-hidden="true" />
+                        </Badge>
+                      </Tooltip.Trigger>
+                      <Tooltip.Content sideOffset={4} class="max-w-xs">
+                        {#if deployment.listenerAddress}<p class="font-mono">{deployment.listenerAddress}</p>{/if}
+                        {#if deployment.listenerCheckedAt}
+                          <time class="block" datetime={deployment.listenerCheckedAt.iso}>{deployment.listenerCheckedAt.label}</time>
+                        {:else if !deployment.listenerAddress}
+                          Listener details unavailable.
+                        {/if}
+                      </Tooltip.Content>
+                    </Tooltip.Root>
+                  {:else}
+                    <Badge variant="outline">{listenerLabels[deployment.listenerStatus]}</Badge>
+                    {#if deployment.listenerAddress}
+                      <p class="text-muted-foreground">{deployment.listenerAddress}</p>
+                    {/if}
+                    {#if deployment.listenerCheckedAt}
+                      <time class="text-muted-foreground" datetime={deployment.listenerCheckedAt.iso}>{deployment.listenerCheckedAt.label}</time>
+                    {/if}
+                  {/if}
+                {:else}
+                  <span class="text-muted-foreground">{deployment.method === 'Agent' && deployment.engine ? 'Not reported' : '—'}</span>
+                {/if}
+              </Table.Cell>
               <Table.Cell><span class:text-destructive={deployment.status === 'Failed'}>{deployment.status}</span></Table.Cell>
               <Table.Cell class="text-right">
                 <EditDeploymentEndpointDialog
@@ -176,7 +233,7 @@
               </Table.Cell>
             </Table.Row>
           {:else}
-            <Table.Row><Table.Cell colspan={7} class="py-8 text-center text-muted-foreground">No certificate deployments recorded for this host.</Table.Cell></Table.Row>
+            <Table.Row><Table.Cell colspan={8} class="py-8 text-center text-muted-foreground">No certificate deployments recorded for this host.</Table.Cell></Table.Row>
           {/each}
         </Table.Body>
       </Table.Root>

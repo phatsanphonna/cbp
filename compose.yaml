@@ -5,13 +5,13 @@ x-web-build: &web-build
 
 services:
   db:
-    image: postgres:17-bookworm
+    image: postgres:19.0-alpine3.23
     environment:
       POSTGRES_DB: cbp
       POSTGRES_USER: cbp
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
-      - cbp-db:/var/lib/postgresql/data
+      - cbp-db:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cbp -d cbp"]
       interval: 5s
@@ -24,6 +24,7 @@ services:
     build: *web-build
     environment:
       DATABASE_URL: *database-url
+      CBP_DATABASE_WEB_PASSWORD: ${CBP_DATABASE_WEB_PASSWORD:?Set a URL-safe CBP_DATABASE_WEB_PASSWORD in .env}
     depends_on:
       db:
         condition: service_healthy
@@ -33,19 +34,32 @@ services:
     image: cbp-web:local
     build: *web-build
     environment:
-      DATABASE_URL: *database-url
+      DATABASE_URL: "postgresql://cbp_web:${CBP_DATABASE_WEB_PASSWORD:?Set a URL-safe CBP_DATABASE_WEB_PASSWORD in .env}@db:5432/cbp"
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      CBP_ADMIN_EMAILS: ${CBP_ADMIN_EMAILS:-}
+      CBP_TRUSTED_PROXY_TOKEN: ${CBP_TRUSTED_PROXY_TOKEN:-}
       CBP_CONTROLLER_TOKEN: ${CBP_CONTROLLER_TOKEN:?Set CBP_CONTROLLER_TOKEN in .env}
       CBP_DEPLOYMENT_ENCRYPTION_KEY: ${CBP_DEPLOYMENT_ENCRYPTION_KEY:?Set CBP_DEPLOYMENT_ENCRYPTION_KEY in .env}
       CBP_AGENT_CONTROLLER_ADDRESS: ${CBP_AGENT_CONTROLLER_ADDRESS:?Set the controller address agents can reach}
       CBP_AGENT_CA_FILE: ${CBP_AGENT_CA_FILE:-}
+      CBP_AGENT_CA_DOWNLOAD_FILE: ${CBP_AGENT_CA_DOWNLOAD_FILE:+/run/cbp/agent-ca-download.pem}
+    volumes:
+      - type: bind
+        source: ${CBP_AGENT_CA_DOWNLOAD_FILE:-${CBP_CONTROLLER_TLS_CERT:-./controller-fullchain.pem}}
+        target: /run/cbp/agent-ca-download.pem
+        read_only: true
+        bind:
+          create_host_path: false
     depends_on:
       db-setup:
         condition: service_completed_successfully
     ports:
       - "${CBP_WEB_BIND:-127.0.0.1}:${CBP_WEB_PORT:-3000}:3000"
-      - "${CBP_CONTROLLER_PORT:-50051}:50051"
+      - target: 50051
+        published: "${CBP_CONTROLLER_PORT:-50051}"
+        host_ip: ${CBP_CONTROLLER_BIND:-127.0.0.1}
+        protocol: tcp
     restart: unless-stopped
 
   controller:

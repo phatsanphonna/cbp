@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -25,7 +25,7 @@ func TestProbeInventoryPaginatesAndReports(t *testing.T) {
 			return
 		}
 		var payload webRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		if err := json.UnmarshalRead(r.Body, &payload); err != nil {
 			t.Error(err)
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -34,9 +34,13 @@ func TestProbeInventoryPaginatesAndReports(t *testing.T) {
 		case "/api/internal/controller/probe-hosts":
 			switch payload.After {
 			case "":
-				json.NewEncoder(w).Encode(inventory[:200])
+				if err := json.MarshalWrite(w, inventory[:200]); err != nil {
+					t.Error(err)
+				}
 			case inventory[199].ID:
-				json.NewEncoder(w).Encode(inventory[200:])
+				if err := json.MarshalWrite(w, inventory[200:]); err != nil {
+					t.Error(err)
+				}
 			default:
 				t.Error("unexpected cursor")
 				w.WriteHeader(http.StatusBadRequest)

@@ -26,7 +26,8 @@ printf '\n'`;
 
   const agentSettings = `CBP_AGENT_CONTROLLER_ADDRESS=cbp-controller.internal:50051
 # Optional for a private CA. Use the PEM path on the Linux agent hosts.
-# CBP_AGENT_CA_FILE=/etc/cbp/controller-ca.pem`;
+# CBP_AGENT_CA_FILE=/etc/cbp/controller-ca.pem
+# CBP_AGENT_CA_DOWNLOAD_FILE=/absolute/path/to/controller-ca.pem`;
 
 </script>
 

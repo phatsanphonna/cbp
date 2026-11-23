@@ -25,6 +25,7 @@ export const hosts = pgTable('cbp_hosts', {
   lastPingAt: instant('last_ping_at'),
   lastPingStatus: text('last_ping_status', { enum: ['reachable', 'no-reply', 'unavailable'] }),
   lastPingAddress: text('last_ping_address'),
+  allowedDeploymentServices: text('allowed_deployment_services').array(),
   agentManaged: boolean('agent_managed').notNull().default(false),
   ansibleManaged: boolean('ansible_managed').notNull().default(false),
   agentSeenAt: instant('agent_seen_at'),
@@ -66,7 +67,10 @@ export const deployments = pgTable('cbp_deployments', {
   endpoint: text().notNull(),
   engine: text(),
   method: text({ enum: ['Agent', 'Ansible', 'Manual'] }).notNull(),
-  status: text({ enum: ['Pending', 'Verified', 'Failed'] }).notNull().default('Pending')
+  status: text({ enum: ['Pending', 'Verified', 'Failed'] }).notNull().default('Pending'),
+  listenerStatus: text('listener_status', { enum: ['ready', 'unreachable', 'tls-error', 'not-allowed'] }),
+  listenerAddress: text('listener_address'),
+  listenerCheckedAt: instant('listener_checked_at')
 }, (table) => [unique().on(table.certificateId, table.endpoint)]);
 
 export const deploymentRuns = pgTable('cbp_deployment_runs', {

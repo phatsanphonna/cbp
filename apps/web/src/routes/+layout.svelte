@@ -21,6 +21,8 @@
     '/alerts': 'Alerts',
     '/alerts/channels': 'Notification channels',
     '/audit': 'Audit log',
+    '/users': 'Users',
+    '/users/new': 'Create user',
     '/docs/controller': 'Controller setup',
     '/docs/agent': 'Agent setup'
   };

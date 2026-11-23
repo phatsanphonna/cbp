@@ -6,12 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
+	"encoding/json/v2"
 	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
@@ -66,18 +65,20 @@ func TestEnrollmentOverTLS(t *testing.T) {
 	if err != nil || record.TokenHash != digest(token) || record.InviteHash != "" {
 		t.Fatal("expected only the agent token hash in state", err)
 	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
+	call(host, rpc.NewToken(), rpc.UnregisterMethod, &emptypb.Empty{}, codes.Unauthenticated)
+	call(host, token, rpc.CheckInMethod, report, codes.OK)
+	call(host, token, rpc.UnregisterMethod, &emptypb.Empty{}, codes.OK)
+	call(host, token, rpc.UnregisterMethod, &emptypb.Empty{}, codes.OK)
 	call(host, token, rpc.CheckInMethod, report, codes.Unauthenticated)
 }
 
 func TestDeploymentRPCOverTLS(t *testing.T) {
 	const host = "host-a"
+	const diagnostic = `2026/11/23 14:56:29 +07:00 WARN deployment certificate verification failed error="x509: cannot validate certificate for 192.0.2.10 because it doesn't contain any IP SANs"`
 	agentToken, controllerToken := rpc.NewToken(), rpc.NewToken()
 	webServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var payload webRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil ||
+		if err := json.UnmarshalRead(r.Body, &payload); err != nil ||
 			r.Header.Get("Authorization") != "Bearer "+controllerToken {
 			t.Error("invalid controller request")
 			w.WriteHeader(http.StatusBadRequest)
@@ -88,10 +89,27 @@ func TestDeploymentRPCOverTLS(t *testing.T) {
 			return
 		}
 		switch r.URL.Path {
+		case "/api/internal/controller/unregister":
+			w.WriteHeader(http.StatusNoContent)
 		case "/api/internal/controller/deployment-claim":
-			json.NewEncoder(w).Encode(map[string]string{"id": "job", "privateKey": "test key"})
+			if err := json.MarshalWrite(w, map[string]string{"id": "job", "privateKey": "test key"}); err != nil {
+				t.Error(err)
+			}
 		case "/api/internal/controller/deployment-result":
-			if payload.JobID != "job" || payload.Outcome != "ok" {
+			switch payload.JobID {
+			case "job":
+				if payload.Outcome != "ok" || payload.Diagnostic != "" {
+					t.Error("incorrect successful deployment result")
+				}
+			case "verification-failure":
+				if payload.Outcome != "certificate" || payload.Diagnostic != diagnostic {
+					t.Error("certificate diagnostic was not forwarded")
+				}
+			case "invalid-diagnostic":
+				if payload.Outcome != "certificate" || payload.Diagnostic != "" {
+					t.Error("invalid diagnostic should be omitted from the forwarded failure")
+				}
+			default:
 				t.Error("incorrect deployment result")
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -121,6 +139,18 @@ func TestDeploymentRPCOverTLS(t *testing.T) {
 	}
 	result, _ := structpb.NewStruct(map[string]any{"jobId": "job", "outcome": "ok"})
 	if err := conn.Invoke(authorized, rpc.FinishDeploymentMethod, result, &emptypb.Empty{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, fields := range []map[string]any{
+		{"jobId": "verification-failure", "outcome": "certificate", "diagnostic": diagnostic},
+		{"jobId": "invalid-diagnostic", "outcome": "certificate", "diagnostic": "multiple\nlines"},
+	} {
+		result, _ := structpb.NewStruct(fields)
+		if err := conn.Invoke(authorized, rpc.FinishDeploymentMethod, result, &emptypb.Empty{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := conn.Invoke(authorized, rpc.UnregisterMethod, &emptypb.Empty{}, &emptypb.Empty{}); err != nil {
 		t.Fatal(err)
 	}
 }

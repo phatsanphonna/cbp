@@ -12,6 +12,9 @@
   const deploymentSettings = `bun --filter @cbp/database db:setup-controller
 bun -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`;
 
+  const buildAgent = 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o cbp-agent-linux ./apps/agent';
+  const installAgent = 'install -D -T -o root -g root -m 0755 -- ./cbp-agent-linux /usr/local/bin/cbp-agent';
+
   const agentConfig = `controller: cbp-controller.internal:50051
 host: 00000000-0000-0000-0000-000000000000
 ca: /etc/cbp/controller-ca.pem
@@ -45,11 +48,20 @@ deploymentServices: [Nginx]`;
 
       <section id="agent" aria-labelledby="agent-heading" class="grid scroll-m-4 gap-3 border-t pt-5">
         <h2 id="agent-heading" class="font-heading text-base font-semibold">1. Enroll an agent</h2>
+        <p class="max-w-prose">Build the binary from the repository root. Use <code>GOARCH=arm64</code> for an ARM64 host.</p>
+        <SetupCommands label="Build the Linux agent" command={buildAgent} />
+        <p class="max-w-prose">Copy <code>cbp-agent-linux</code> to the Linux host. To install it manually, run this command as root from the directory containing the binary.</p>
+        <SetupCommands label="Install the Linux agent" command={installAgent} />
         <p class="max-w-prose">
           <a href={resolve('/hosts/new')} class="font-medium underline underline-offset-4">Register a host</a>, then open its details from the host inventory.
           Under <strong>Agent enrollment</strong>, select <strong>Generate enrollment code</strong> to enable agent management.
-          Install <code>cbp-agent</code> on the Linux host and run the generated command as root on that host.
+          Run the generated command as root on the Linux host. It installs <code>./cbp-agent-linux</code> if <code>cbp-agent</code> is missing.
+          Update an older agent binary before running the generated <code>cbp-agent register</code> command.
           It includes the controller address, host UUID, and the single-use enrollment code, which expires after 15 minutes.
+        </p>
+        <p class="max-w-prose">
+          If the command includes a CA installation step, select <strong>Download controller CA</strong> when available and copy the trusted PEM to the source path shown in that step.
+          The command installs it as a root-owned file with mode <code>0644</code> and uses an absolute path for the service.
         </p>
         <p class="max-w-prose">
           After the first successful check-in, the command starts and enables <code>cbp-agent.service</code> so the agent
@@ -63,8 +75,18 @@ deploymentServices: [Nginx]`;
           Look for <code>check-in accepted</code> in the agent log. Refresh the host details page to see
           <strong>Last agent check-in</strong>, hostname, operating system, and architecture.
           Run <code>systemctl status cbp-agent</code> to check the service. It checks in every minute by default.
-          To install the service for an existing enrollment, run <code>cbp-agent -install-service</code> as root
+          Follow agent logs with <code>sudo tail -f /var/log/cbp/agent.log</code> when using the generated enrollment command.
+          To install the service for an existing enrollment, run <code>cbp-agent --install-service</code> as root
           with the existing controller, host, and credential settings supplied through YAML or command-line flags.
+        </p>
+        <p class="max-w-prose">
+          Run <code>cbp-agent register</code> with the enrollment code and the usual connection flags to enroll and check in once.
+          For an IP-registered host, the address seen by the controller must match the host's registered IP.
+          Add <code>--install-service</code> to start the systemd service. To retire the agent, run <code>cbp-agent uninstall</code>
+          and then <code>cbp-agent unregister</code> with the usual connection flags or YAML.
+        </p>
+        <p class="max-w-prose">
+          The host details page also shows the agent’s allowed deployment services. Each linked Agent endpoint shows its latest TLS listener check and the address the agent tested.
         </p>
         <p class="max-w-prose">
           To revoke an agent or cancel an unused code, select <strong>Reset enrollment</strong> on the host details page.
@@ -83,7 +105,8 @@ deploymentServices: [Nginx]`;
         <p class="max-w-prose">
           On each Linux host, configure the agent in <code>/etc/cbp/cbp.yaml</code> or <code>/etc/cbp/cbp.yml</code>.
           Replace the example host ID with the enrolled host ID and use its existing credential file.
-          Set <code>ca</code> if the controller uses a private CA. The agent also accepts <code>-config</code> for a custom path.
+          Set <code>ca</code> if the controller uses a private CA. The agent also accepts <code>--config</code> for a custom path.
+          Set <code>deploymentCAFile</code> to trust a private CA for deployed certificates. Upload the full chain with its intermediates.
         </p>
         <SetupCommands label="Agent YAML configuration" command={agentConfig} />
         <p class="max-w-prose">
@@ -107,6 +130,7 @@ deploymentServices: [Nginx]`;
           Set <code>verifyAddress</code> or <code>serverName</code> for TLS verification. For custom files, use absolute paths in
           <code>certificateFile</code> and <code>keyFile</code> for Apache2 or Nginx, or <code>certificateFile</code> for HAProxy.
           Use <code>configFile</code> for a custom HAProxy configuration path. Existing per-endpoint configurations still work.
+          Root agents require root-owned configuration, CA files, and certificate destinations in directories protected from other users' writes.
         </p>
         <p class="max-w-prose">
           In a certificate’s <strong>Deployments</strong> section, select <strong>Link host</strong>, set the deployment method to

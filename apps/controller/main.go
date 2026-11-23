@@ -14,6 +14,7 @@ import (
 	rpc "cbp/agent-rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 )
 
 func main() {
@@ -63,6 +64,14 @@ func run(args []string) error {
 				MinVersion:   tls.VersionTLS12,
 			})),
 			grpc.MaxRecvMsgSize(16*1024),
+			grpc.MaxConcurrentStreams(16),
+			grpc.ConnectionTimeout(5*time.Second),
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionIdle:     2 * time.Minute,
+				MaxConnectionAge:      15 * time.Minute,
+				MaxConnectionAgeGrace: 10 * time.Second,
+			}),
+			grpc.UnaryInterceptor(limitAgentRequests(time.Now)),
 		)
 		rpc.RegisterController(server, &controller{stateDir: *stateDir, web: web})
 		if web != nil {
@@ -72,7 +81,7 @@ func run(args []string) error {
 			go web.probeHosts(ctx)
 		}
 		slog.Info("controller listening", "address", listener.Addr(), "webConnectedMode", web != nil)
-		return server.Serve(listener)
+		return server.Serve(limitAgentConnections(listener, 1024, 128))
 
 	case "invite", "revoke":
 		host := flags.String("host", "", "registered host ID")

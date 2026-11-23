@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +11,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	rpc "cbp/agent-rpc"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestWebClient(t *testing.T) {
@@ -21,7 +25,7 @@ func TestWebClient(t *testing.T) {
 			t.Error("missing controller authentication or JSON headers")
 		}
 		var payload webRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.HostID != "host" {
+		if err := json.UnmarshalRead(r.Body, &payload); err != nil || payload.HostID != "host" {
 			t.Error("unexpected request payload", err)
 		}
 		switch r.URL.Path {
@@ -57,6 +61,48 @@ func TestWebClient(t *testing.T) {
 	}
 	if _, err := newWebClient("http://cbp.example.test", token, ""); err == nil {
 		t.Error("expected plain HTTP to a remote web app to be rejected")
+	}
+}
+
+func TestConnectedCheckInReadiness(t *testing.T) {
+	token := rpc.NewToken()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webRequest
+		if err := json.UnmarshalRead(r.Body, &payload); err != nil || payload.Report == nil {
+			t.Errorf("missing forwarded report: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if payload.Report.AllowedServices == nil {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		services, ok := payload.Report.AllowedServices.([]any)
+		if !ok || len(services) != 0 || payload.Report.ListenerResults == nil {
+			t.Error("an explicit empty capabilities report did not survive forwarding")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"listenerTargets":[{"id":"target","endpoint":"example.com:443","engine":"Nginx"}]}`))
+	}))
+	defer server.Close()
+	client, err := newWebClient(server.URL, token, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs(rpc.HostHeader, "host", "authorization", "Bearer "+token))
+	fields := map[string]any{"hostname": "host", "operatingSystem": "linux", "architecture": "amd64", "collectedAt": time.Now().UTC().Format(time.RFC3339)}
+	controller := &controller{web: client}
+	request, _ := structpb.NewStruct(fields)
+	reply, err := controller.CheckIn(ctx, request)
+	if err != nil || len(reply.GetFields()) != 0 {
+		t.Fatalf("legacy check-in failed: %v", err)
+	}
+	fields["allowedServices"], fields["listenerResults"] = []any{}, []any{}
+	request, _ = structpb.NewStruct(fields)
+	reply, err = controller.CheckIn(ctx, request)
+	targets := reply.GetFields()["listenerTargets"].GetListValue().GetValues()
+	if err != nil || len(targets) != 1 || targets[0].GetStructValue().GetFields()["id"].GetStringValue() != "target" {
+		t.Fatalf("listener targets did not survive check-in: %v", err)
 	}
 }
 

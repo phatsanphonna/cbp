@@ -205,7 +205,7 @@
       <p class="mb-3 text-xs" role="status">{form.linkMessage ?? form.endpointMessage ?? form.removeDeploymentMessage}</p>
     {/if}
     {#if data.agentDeployments.httpsRequired && deploymentTargets.length}
-      <p class="mb-3 text-xs text-muted-foreground">Open CBP over HTTPS to deploy.</p>
+      <p class="mb-3 text-xs text-muted-foreground">Private-key uploads require a trusted HTTPS connection.</p>
     {/if}
     <div class="border">
       <Table.Root>

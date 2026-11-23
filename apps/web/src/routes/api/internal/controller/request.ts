@@ -7,7 +7,8 @@ const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/;
 export const digest = (value: string) => createHash('sha256').update(value).digest();
 
 export function controllerPost(
-  handle: (db: ReturnType<typeof getDatabase>, body: Record<string, unknown>) => Promise<number | Response>
+  handle: (db: ReturnType<typeof getDatabase>, body: Record<string, unknown>) => Promise<number | Response>,
+  maxBodySize = 4096
 ): RequestHandler {
   return async ({ request, route }) => {
     const controllerToken = getControllerToken();
@@ -18,7 +19,7 @@ export function controllerPost(
     if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
       return response(415);
     }
-    const body = await readBody(request);
+    const body = await readBody(request, maxBodySize);
     if (!body) return response(400);
 
     try {
@@ -45,13 +46,13 @@ function response(status: number) {
   return new Response(null, { status, headers: { 'cache-control': 'no-store' } });
 }
 
-async function readBody(request: Request): Promise<Record<string, unknown> | null> {
+async function readBody(request: Request, maxBodySize: number): Promise<Record<string, unknown> | null> {
   if (!request.body) return null;
   let bytes = 0;
   const limited = request.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
     transform(chunk, controller) {
       bytes += chunk.byteLength;
-      if (bytes > 4096) controller.error(new Error('Request too large'));
+      if (bytes > maxBodySize) controller.error(new Error('Request too large'));
       else controller.enqueue(chunk);
     }
   }));

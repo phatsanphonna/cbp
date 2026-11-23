@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/netip"
+	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -14,8 +15,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	rpc "cbp/agent-rpc"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,6 +34,7 @@ type deploymentTarget struct {
 	VerifyAddress   string `yaml:"verifyAddress"`
 	ServerName      string `yaml:"serverName"`
 	managedDir      string
+	roots           *x509.CertPool
 }
 
 const managedTLSRoot = "/etc/cbp/tls"
@@ -99,6 +103,7 @@ func (config agentConfig) deploymentTarget(endpoint, engine string) (deploymentT
 		return target, errors.New("service is not enabled for deployment at this endpoint")
 	}
 	target.Engine = engine
+	target.roots = config.deploymentRoots
 	return configureDeploymentTarget(endpoint, target)
 }
 
@@ -145,6 +150,11 @@ func configureDeploymentTarget(endpoint string, target deploymentTarget) (deploy
 		(target.KeyFile != "" && (!filepath.IsAbs(target.KeyFile) ||
 			filepath.Clean(target.KeyFile) == filepath.Clean(target.CertificateFile))) {
 		return target, errors.New("certificate and key destinations must be distinct absolute paths")
+	} else {
+		target.CertificateFile = filepath.Clean(target.CertificateFile)
+		if target.KeyFile != "" {
+			target.KeyFile = filepath.Clean(target.KeyFile)
+		}
 	}
 	switch target.Engine {
 	case "Apache2", "Nginx":
@@ -157,9 +167,63 @@ func configureDeploymentTarget(endpoint string, target deploymentTarget) (deploy
 		}
 		if target.ConfigFile == "" {
 			target.ConfigFile = "/etc/haproxy/haproxy.cfg"
+		} else {
+			target.ConfigFile = filepath.Clean(target.ConfigFile)
 		}
 	}
 	return target, nil
+}
+
+func loadDeploymentRoots(path string) (*x509.CertPool, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := validatePrivilegedInput(path); err != nil {
+		return nil, err
+	}
+	pem, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		return nil, err
+	}
+	if !roots.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("deployment CA file contains no PEM certificates: %s", path)
+	}
+	return roots, nil
+}
+
+func verifyDeploymentChain(chain [][]byte, target deploymentTarget) error {
+	leaf, err := x509.ParseCertificate(chain[0])
+	if err != nil {
+		return err
+	}
+	intermediates := x509.NewCertPool()
+	for _, raw := range chain[1:] {
+		certificate, err := x509.ParseCertificate(raw)
+		if err != nil {
+			return err
+		}
+		intermediates.AddCert(certificate)
+	}
+	_, err = leaf.Verify(x509.VerifyOptions{DNSName: target.ServerName, Roots: target.roots, Intermediates: intermediates})
+	return err
+}
+
+func certificateDiagnostic(err error, at time.Time) string {
+	detail := fmt.Sprintf("%s WARN deployment certificate verification failed error=%q", at.Format("2006/01/02 15:04:05 Z07:00"), err.Error())
+	if len(detail) > rpc.MaxDeploymentDiagnosticBytes {
+		const ellipsis = "…"
+		end := rpc.MaxDeploymentDiagnosticBytes - len(ellipsis)
+		for !utf8.RuneStart(detail[end]) {
+			end--
+		}
+		detail = detail[:end] + ellipsis
+	}
+	return detail
 }
 
 func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfig) error {
@@ -178,22 +242,34 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 	endpoint := fields["endpoint"].GetStringValue()
 	target, targetErr := config.deploymentTarget(endpoint, fields["engine"].GetStringValue())
 	outcome := "configuration"
+	var verificationErr error
 	if targetErr == nil {
 		installContext, stop := context.WithTimeout(ctx, 90*time.Second)
-		outcome = installDeployment(installContext, target, fields["fullchain"].GetStringValue(), fields["privateKey"].GetStringValue())
+		outcome, verificationErr = installDeployment(installContext, target, fields["fullchain"].GetStringValue(), fields["privateKey"].GetStringValue())
 		stop()
 	} else {
-		slog.Warn("deployment target rejected", "error", targetErr)
+		logrus.WithError(targetErr).Warn("deployment target rejected")
 	}
-	reply, _ := structpb.NewStruct(map[string]any{"jobId": id, "outcome": outcome})
+	result := map[string]any{"jobId": id, "outcome": outcome}
+	if verificationErr != nil {
+		result["diagnostic"] = certificateDiagnostic(verificationErr, time.Now())
+	}
+	reply, _ := structpb.NewStruct(result)
 	reportContext, stop := context.WithTimeout(context.WithoutCancel(ctx), 25*time.Second)
 	defer stop()
 	for attempt := 0; attempt < 3; attempt++ {
 		callContext, finish := context.WithTimeout(reportContext, 7*time.Second)
 		err = conn.Invoke(callContext, rpc.FinishDeploymentMethod, reply, &emptypb.Empty{})
 		finish()
-		if status.Code(err) != codes.Unavailable && status.Code(err) != codes.DeadlineExceeded {
+		if status.Code(err) != codes.Unavailable && status.Code(err) != codes.DeadlineExceeded && status.Code(err) != codes.ResourceExhausted {
 			return err
+		}
+		if status.Code(err) == codes.ResourceExhausted {
+			select {
+			case <-reportContext.Done():
+				return err
+			case <-time.After(time.Second):
+			}
 		}
 	}
 	return err

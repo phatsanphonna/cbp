@@ -22,7 +22,7 @@ COPY packages/database/package.json packages/database/package.json
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY apps/web/ apps/web/
 COPY packages/database/ packages/database/
-RUN CBP_CONTAINER_BUILD=1 bun --filter web run build
+RUN bun run --filter web build
 ENV NODE_ENV=production
 EXPOSE 3000
 USER bun

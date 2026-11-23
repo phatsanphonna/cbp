@@ -10,6 +10,9 @@ const deploymentActions = {
 const actionLabels: Record<string, Record<string, string>> = {
   '/signin': { default: 'Sign in' },
   '/signout': { default: 'Sign out' },
+  '/account/password': { default: 'Change password' },
+  '/users': { remove: 'Remove user' },
+  '/users/new': { default: 'Create user' },
   '/hosts/new': { default: 'Add host' },
   '/hosts/[id]': {
     ...deploymentActions, inviteAgent: 'Generate enrollment code', resetAgent: 'Reset enrollment',
@@ -31,9 +34,11 @@ export async function auditUserAction(event: RequestEvent, resolve: () => Respon
   const labels = actionLabels[route];
   const action = labels && Object.hasOwn(labels, key) ? labels[key] : 'Submit form';
   const record = async (status: number) => {
+    if (route === '/signin' && [403, 413, 429].includes(status)) return;
     const actor = event.locals.auditActor;
     const id = event.locals.auditTargetId ?? event.params.id;
-    const targetId = id && /^(?:[0-9]+|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i.test(id) ? id : null;
+    const targetPattern = route === '/users' ? /^[A-Za-z0-9_-]{1,128}$/ : /^(?:[0-9]+|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i;
+    const targetId = id && targetPattern.test(id) ? id : null;
     try {
       await recordAuditEvent(getDatabase(), { actorId: actor?.id, actorName: actor?.name, action, route, targetId, status });
     } catch {

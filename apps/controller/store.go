@@ -4,7 +4,8 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"os"
 	"path/filepath"
@@ -46,7 +47,7 @@ func writeRecord(path string, record agentRecord) error {
 		return err
 	}
 	defer os.Remove(file.Name())
-	writeErr := json.NewEncoder(file).Encode(record)
+	writeErr := json.MarshalEncode(jsontext.NewEncoder(file), record)
 	if writeErr == nil {
 		writeErr = file.Sync()
 	}

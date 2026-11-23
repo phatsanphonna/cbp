@@ -30,10 +30,11 @@
 
 {#if explanation}
   <Tooltip.Root>
-    <Tooltip.Trigger class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring">
+    <Tooltip.Trigger class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
+      aria-label={status === 'Failed' ? 'Failed. Show failure details' : undefined}>
       {@render badge()}
     </Tooltip.Trigger>
-    <Tooltip.Content sideOffset={4}>{explanation}</Tooltip.Content>
+    <Tooltip.Content role="tooltip" sideOffset={4} class="max-w-sm wrap-anywhere">{explanation}</Tooltip.Content>
   </Tooltip.Root>
 {:else}
   {@render badge()}

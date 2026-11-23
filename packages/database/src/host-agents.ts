@@ -1,18 +1,18 @@
-import { and, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { openDatabase } from './index.js';
-import { hostAgents, hosts } from './inventory-schema.js';
+import { deploymentJobs, deployments, hostAgents, hosts } from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 // Lock the host first so revocation, check-ins and host deletion serialize.
-export async function withAgentHost<T>(db: Database, hostId: string, work: (tx: Transaction) => Promise<T>, allowUnmanaged = false) {
+export async function withAgentHost<T>(db: Database, hostId: string, work: (tx: Transaction, name: string) => Promise<T>, allowUnmanaged = false) {
   if (!hostIdPattern.test(hostId)) return 'missing' as const;
   return db.transaction(async (tx) => {
-    const [host] = await tx.select({ agentManaged: hosts.agentManaged })
+    const [host] = await tx.select({ agentManaged: hosts.agentManaged, name: hosts.name })
       .from(hosts).where(eq(hosts.id, hostId)).for('update');
-    return host && (host.agentManaged || allowUnmanaged) ? work(tx) : 'missing' as const;
+    return host && (host.agentManaged || allowUnmanaged) ? work(tx, host.name) : 'missing' as const;
   });
 }
 
@@ -46,35 +46,93 @@ export function inviteHostAgent(db: Database, hostId: string, inviteHash: string
   }, enableAgent);
 }
 
-export function enrollHostAgent(db: Database, hostId: string, inviteHash: string, tokenHash: string) {
-  return withAgentHost(db, hostId, async (tx) => {
+export function enrollHostAgent(db: Database, hostId: string, inviteHash: string, tokenHash: string, address?: string) {
+  return withAgentHost(db, hostId, async (tx, name) => {
+    const pendingInvite = and(eq(hostAgents.hostId, hostId), eq(hostAgents.inviteHash, inviteHash),
+      isNull(hostAgents.tokenHash), gt(hostAgents.inviteExpiresAt, new Date()));
+    const expected = enrollmentIP(name);
+    if (expected && expected !== enrollmentIP(address ?? '')) {
+      const [invite] = await tx.select({ hostId: hostAgents.hostId }).from(hostAgents).where(pendingInvite);
+      return invite ? 'address-mismatch' : 'denied';
+    }
     const [saved] = await tx.update(hostAgents).set({ tokenHash, inviteHash: null, inviteExpiresAt: null })
-      .where(and(eq(hostAgents.hostId, hostId), eq(hostAgents.inviteHash, inviteHash),
-        isNull(hostAgents.tokenHash), gt(hostAgents.inviteExpiresAt, new Date())))
-      .returning({ hostId: hostAgents.hostId });
+      .where(pendingInvite).returning({ hostId: hostAgents.hostId });
     return saved ? 'ok' : 'denied';
   });
+}
+
+function enrollmentIP(value: string) {
+  if (value.includes('%')) return null;
+  const version = isIP(value);
+  if (version !== 6) return version === 4 ? value : null;
+  const ip = new URL(`http://[${value}]/`).hostname.slice(1, -1);
+  const mapped = /^::ffff:([0-9a-f]+):([0-9a-f]+)$/.exec(ip);
+  if (!mapped) return ip;
+  const upper = parseInt(mapped[1], 16);
+  const lower = parseInt(mapped[2], 16);
+  return [upper >> 8, upper & 255, lower >> 8, lower & 255].join('.');
 }
 
 type AgentReport = Pick<typeof hosts.$inferSelect, 'hostname' | 'operatingSystem' | 'architecture'>
   & { lastProbedAt: Date };
 
-export function saveAgentCheckIn(db: Database, hostId: string, tokenHash: string, report: AgentReport) {
+export const listenerBatchSize = 12;
+export type AgentReadiness = {
+  allowedServices: string[];
+  cursor?: string;
+  results: { id: string; endpoint: string; engine: string; status: NonNullable<typeof deployments.$inferSelect.listenerStatus>; address: string | null }[];
+};
+
+export function saveAgentCheckIn(db: Database, hostId: string, tokenHash: string, report: AgentReport, readiness?: AgentReadiness) {
   return withAgentHost(db, hostId, async (tx) => {
     const [agent] = await tx.select({ hostId: hostAgents.hostId }).from(hostAgents)
       .where(and(eq(hostAgents.hostId, hostId), eq(hostAgents.tokenHash, tokenHash)));
     if (!agent) return 'denied';
 
     await tx.update(hosts).set({ agentSeenAt: sql`greatest(${hosts.agentSeenAt}, now())` }).where(eq(hosts.id, hostId));
-    await tx.update(hosts).set(report).where(and(eq(hosts.id, hostId),
+    await tx.update(hosts).set({ ...report, allowedDeploymentServices: readiness?.allowedServices }).where(and(eq(hosts.id, hostId),
       or(isNull(hosts.lastProbedAt), lte(hosts.lastProbedAt, report.lastProbedAt))));
-    return 'ok';
+    if (!readiness) return 'ok';
+
+    for (const result of readiness.results) {
+      await tx.update(deployments).set({
+        listenerStatus: result.status, listenerAddress: result.address, listenerCheckedAt: report.lastProbedAt
+      }).where(and(
+        eq(deployments.id, result.id), eq(deployments.hostId, hostId), eq(deployments.method, 'Agent'),
+        eq(deployments.endpoint, result.endpoint), eq(deployments.engine, result.engine),
+        or(isNull(deployments.listenerCheckedAt), lte(deployments.listenerCheckedAt, report.lastProbedAt))
+      ));
+    }
+
+    const targets = await tx.select({ id: deployments.id, endpoint: deployments.endpoint, engine: deployments.engine })
+      .from(deployments).where(and(eq(deployments.hostId, hostId), eq(deployments.method, 'Agent'),
+        inArray(deployments.engine, ['Apache2', 'Nginx', 'HAProxy']),
+        readiness.cursor ? gt(deployments.id, readiness.cursor) : undefined))
+      .orderBy(deployments.id).limit(listenerBatchSize + 1);
+    return {
+      listenerTargets: targets.slice(0, listenerBatchSize),
+      nextListenerCursor: targets.length > listenerBatchSize ? targets[listenerBatchSize - 1].id : ''
+    };
   });
 }
 
-export function revokeHostAgent(db: Database, hostId: string) {
+export function revokeHostAgent(db: Database, hostId: string, tokenHash?: string) {
   return withAgentHost(db, hostId, async (tx) => {
+    if (tokenHash !== undefined) {
+      const [agent] = await tx.select({ tokenHash: hostAgents.tokenHash }).from(hostAgents).where(eq(hostAgents.hostId, hostId));
+      if (!agent?.tokenHash) return 'ok';
+      if (agent.tokenHash !== tokenHash) return 'denied';
+    }
     await tx.delete(hostAgents).where(eq(hostAgents.hostId, hostId));
+    await tx.update(deploymentJobs).set({
+      status: sql`case when ${deploymentJobs.expiresAt} <= now() then 'Expired' else 'Failed' end`,
+      detail: 'Agent enrollment was revoked before the deployment could be confirmed.',
+      sealedKey: null
+    }).where(and(eq(deploymentJobs.hostId, hostId), inArray(deploymentJobs.status, ['Queued', 'Running'])));
+    await tx.update(hosts).set({ allowedDeploymentServices: null }).where(eq(hosts.id, hostId));
+    await tx.update(deployments).set({ listenerStatus: null, listenerAddress: null, listenerCheckedAt: null })
+      .where(eq(deployments.hostId, hostId));
     return 'ok';
   }, true);
 }
+import { isIP } from 'node:net';

@@ -1,9 +1,81 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"errors"
+	"math/big"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	rpc "cbp/agent-rpc"
 )
+
+func TestVerifyDeploymentChainRequiresIntermediate(t *testing.T) {
+	now := time.Now()
+	makeCertificate := func(serial int64, isCA bool, parent *x509.Certificate, signer ed25519.PrivateKey) ([]byte, *x509.Certificate, ed25519.PrivateKey) {
+		t.Helper()
+		public, key, err := ed25519.GenerateKey(rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		template := &x509.Certificate{
+			SerialNumber: big.NewInt(serial), NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour),
+			BasicConstraintsValid: true, IsCA: isCA, KeyUsage: x509.KeyUsageDigitalSignature,
+		}
+		if isCA {
+			template.KeyUsage |= x509.KeyUsageCertSign
+		} else {
+			template.DNSNames = []string{"app.example.test"}
+		}
+		if parent == nil {
+			parent, signer = template, key
+		}
+		raw, err := x509.CreateCertificate(rand.Reader, template, parent, public, signer)
+		if err != nil {
+			t.Fatal(err)
+		}
+		certificate, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw, certificate, key
+	}
+
+	_, root, rootKey := makeCertificate(1, true, nil, nil)
+	intermediateRaw, intermediate, intermediateKey := makeCertificate(2, true, root, rootKey)
+	leafRaw, _, _ := makeCertificate(3, false, intermediate, intermediateKey)
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+	target := deploymentTarget{ServerName: "app.example.test", roots: roots}
+	if err := verifyDeploymentChain([][]byte{leafRaw}, target); err == nil {
+		t.Fatal("chain without the intermediate was trusted")
+	}
+	if err := verifyDeploymentChain([][]byte{leafRaw, intermediateRaw}, target); err != nil {
+		t.Fatal(err)
+	}
+	target.ServerName = "192.0.2.10"
+	err := verifyDeploymentChain([][]byte{leafRaw, intermediateRaw}, target)
+	if err == nil {
+		t.Fatal("the DNS-only certificate was trusted for an IP address")
+	}
+	at := time.Date(2026, 11, 23, 14, 56, 29, 0, time.FixedZone("GMT+7", 7*60*60))
+	diagnostic := certificateDiagnostic(err, at)
+	want := `2026/11/23 14:56:29 +07:00 WARN deployment certificate verification failed error="x509: cannot validate certificate for 192.0.2.10 because it doesn't contain any IP SANs"`
+	if diagnostic != want {
+		t.Fatalf("diagnostic = %q, want %q", diagnostic, want)
+	}
+}
+
+func TestCertificateDiagnosticBounds(t *testing.T) {
+	diagnostic := certificateDiagnostic(errors.New("unexpected\n"+strings.Repeat("語", 512)), time.Now())
+	if !rpc.ValidDeploymentDiagnostic(diagnostic) || !strings.HasSuffix(diagnostic, "…") {
+		t.Fatalf("expected a bounded single-line diagnostic, got %q", diagnostic)
+	}
+}
 
 func TestManagedTLSPaths(t *testing.T) {
 	for _, test := range []struct {

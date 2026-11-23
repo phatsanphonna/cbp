@@ -5,7 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -28,14 +28,16 @@ type webClient struct {
 }
 
 type webRequest struct {
-	HostID  string      `json:"hostId,omitempty"`
-	Code    string      `json:"code,omitempty"`
-	Token   string      `json:"token,omitempty"`
-	Report  *hostReport `json:"report,omitempty"`
-	JobID   string      `json:"jobId,omitempty"`
-	Outcome string      `json:"outcome,omitempty"`
-	After   string      `json:"after,omitempty"`
-	Probes  []hostProbe `json:"probes,omitempty"`
+	HostID     string      `json:"hostId,omitempty"`
+	Code       string      `json:"code,omitempty"`
+	Address    string      `json:"address,omitempty"`
+	Token      string      `json:"token,omitempty"`
+	Report     *hostReport `json:"report,omitempty"`
+	JobID      string      `json:"jobId,omitempty"`
+	Outcome    string      `json:"outcome,omitempty"`
+	Diagnostic string      `json:"diagnostic,omitempty"`
+	After      string      `json:"after,omitempty"`
+	Probes     []hostProbe `json:"probes,omitempty"`
 }
 
 type hostReport struct {
@@ -43,6 +45,10 @@ type hostReport struct {
 	OperatingSystem string    `json:"operatingSystem"`
 	Architecture    string    `json:"architecture"`
 	CollectedAt     time.Time `json:"collectedAt"`
+	// An explicit empty list clears readiness data. An omitted field means a legacy report.
+	AllowedServices any    `json:"allowedServices,omitzero"`
+	ListenerResults any    `json:"listenerResults,omitzero"`
+	ListenerCursor  string `json:"listenerCursor,omitempty"`
 }
 
 func webFromEnv() (*webClient, error) {
@@ -134,7 +140,7 @@ func (w *webClient) request(ctx context.Context, operation string, payload webRe
 	}
 	defer response.Body.Close()
 	if response.StatusCode == http.StatusOK && reply != nil {
-		return json.NewDecoder(io.LimitReader(response.Body, 128*1024)).Decode(reply)
+		return json.UnmarshalRead(io.LimitReader(response.Body, 128*1024), reply)
 	}
 	if response.StatusCode != http.StatusNoContent {
 		return webStatusError(response.StatusCode)

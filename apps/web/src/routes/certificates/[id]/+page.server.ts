@@ -10,14 +10,15 @@ import { displayCertificateDomain } from '../display-domain.js';
 import { expiryStatus } from '../expiry.js';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, cookies, depends, url }) => {
+export const load: PageServerLoad = async (event) => {
+  const { params, cookies, depends } = event;
   depends('cbp:agent-deployments');
   const database = getDatabase();
   const certificate = await findCertificate(database, params.id);
   if (!certificate) error(404, 'Certificate not found');
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const [hosts, agentDeployments] = await Promise.all([
-    listHostOptions(database), loadAgentDeployments(certificate.deployments.map(({ id }) => id), url)
+    listHostOptions(database), loadAgentDeployments(certificate.deployments.map(({ id }) => id), event)
   ]);
   return {
     agentDeployments,

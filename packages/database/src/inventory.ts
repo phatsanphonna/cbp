@@ -42,7 +42,10 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
 
     const [linked] = await tx.insert(deployments).values(values).onConflictDoUpdate({
       target: [deployments.certificateId, deployments.endpoint],
-      set: { hostId: values.hostId, method: values.method, status: 'Pending', engine: values.engine },
+      set: {
+        hostId: values.hostId, method: values.method, status: 'Pending', engine: values.engine,
+        listenerStatus: null, listenerAddress: null, listenerCheckedAt: null
+      },
       setWhere: isNull(deployments.hostId)
     }).returning({ id: deployments.id });
     return linked ? 'linked' : 'duplicate';
@@ -59,10 +62,18 @@ export async function updateDeploymentEndpoint(
   if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return 'missing';
 
   const ownerColumn = 'hostId' in owner ? deployments.hostId : deployments.certificateId;
+  const targetChanged = or(
+    sql`${deployments.endpoint} <> ${endpoint}`,
+    engine === undefined ? undefined : sql`${deployments.engine} is distinct from ${engine}`,
+    method === undefined ? undefined : sql`${deployments.method} <> ${method}`
+  );
   try {
     const [updated] = await db.update(deployments).set({
       endpoint, engine, method,
-      status: sql`case when ${deployments.endpoint} <> ${endpoint} then 'Pending' else ${deployments.status} end`
+      status: sql`case when ${deployments.endpoint} <> ${endpoint} then 'Pending' else ${deployments.status} end`,
+      listenerStatus: sql`case when ${targetChanged} then null else ${deployments.listenerStatus} end`,
+      listenerAddress: sql`case when ${targetChanged} then null else ${deployments.listenerAddress} end`,
+      listenerCheckedAt: sql`case when ${targetChanged} then null else ${deployments.listenerCheckedAt} end`
     }).where(and(eq(deployments.id, id), eq(ownerColumn, ownerId))).returning({ id: deployments.id });
     return updated ? 'updated' : 'missing';
   } catch (error) {
@@ -146,6 +157,9 @@ export async function findHost(db: Database, id: string) {
     engine: deployments.engine,
     method: deployments.method,
     status: deployments.status,
+    listenerStatus: deployments.listenerStatus,
+    listenerAddress: deployments.listenerAddress,
+    listenerCheckedAt: deployments.listenerCheckedAt,
     certificateId: certificates.id,
     domain: certificates.domain
   }).from(deployments).innerJoin(certificates, eq(deployments.certificateId, certificates.id))

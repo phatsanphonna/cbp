@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 
+	rpc "cbp/agent-rpc"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -40,7 +42,11 @@ func (c *controller) FinishDeployment(ctx context.Context, req *structpb.Struct)
 	if !validField(jobID, 36) || !validField(outcome, 16) {
 		return nil, status.Error(codes.InvalidArgument, "invalid deployment result")
 	}
-	if err := c.web.send(ctx, "deployment-result", webRequest{HostID: host, Token: token, JobID: jobID, Outcome: outcome}); err != nil {
+	payload := webRequest{HostID: host, Token: token, JobID: jobID, Outcome: outcome}
+	if diagnostic := fields["diagnostic"].GetStringValue(); outcome == "certificate" && rpc.ValidDeploymentDiagnostic(diagnostic) {
+		payload.Diagnostic = diagnostic
+	}
+	if err := c.web.send(ctx, "deployment-result", payload); err != nil {
 		if err == webStatusError(404) {
 			return nil, status.Error(codes.NotFound, "deployment expired or no longer exists")
 		}

@@ -1,10 +1,10 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { CBP_AGENT_CA_FILE, CBP_AGENT_CONTROLLER_ADDRESS } from '$app/env/private';
+import { CBP_AGENT_CA_DOWNLOAD_FILE, CBP_AGENT_CA_FILE, CBP_AGENT_CONTROLLER_ADDRESS } from '$app/env/private';
 import { resolve } from '$app/paths';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { hostAgentEnrollment, inviteHostAgent, revokeHostAgent } from '@cbp/database/host-agents';
 import { findHost, findHostAddress, listCertificateOptions, removeHost, saveHostPing, saveHostReport } from '@cbp/database/inventory';
-import { linuxAgentEnrollmentCommand, normalizeAgentControllerAddress } from '#lib/server/agent-enrollment-command.js';
+import { agentCaPaths, linuxAgentEnrollmentCommand, normalizeAgentControllerAddress } from '#lib/server/agent-enrollment-command.js';
 import { loadAgentDeployments } from '#lib/server/agent-deployment.js';
 import { getDatabase } from '#lib/server/database.js';
 import { dateFormatter } from '#lib/server/date-formatter.js';
@@ -15,7 +15,8 @@ import { pingHost, pingLabels } from '#lib/server/ping-host.js';
 import { displayCertificateDomain } from '../../certificates/display-domain.js';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, cookies, depends, url }) => {
+export const load: PageServerLoad = async (event) => {
+  const { params, cookies, depends } = event;
   depends('cbp:agent-deployments', 'cbp:host-ping');
   const database = getDatabase();
   const host = await findHost(database, params.id);
@@ -24,12 +25,14 @@ export const load: PageServerLoad = async ({ params, cookies, depends, url }) =>
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const timestamp = (date: Date | null) => date ? { iso: date.toISOString(), label: format.format(date) } : null;
   const [enrollment, agentDeployments] = await Promise.all([
-    hostAgentEnrollment(database, host.id), loadAgentDeployments(host.deployments.map(({ id }) => id), url)
+    hostAgentEnrollment(database, host.id), loadAgentDeployments(host.deployments.map(({ id }) => id), event)
   ]);
   return {
     agentDeployments,
     enrollment: {
       configured: Boolean(normalizeAgentControllerAddress(CBP_AGENT_CONTROLLER_ADDRESS)),
+      caDownloadSource: event.locals.user?.isAdmin && CBP_AGENT_CA_FILE && CBP_AGENT_CA_DOWNLOAD_FILE
+        ? agentCaPaths(CBP_AGENT_CA_FILE).source : null,
       status: enrollment.status,
       expiresAt: timestamp(enrollment.expiresAt)
     },
@@ -39,6 +42,10 @@ export const load: PageServerLoad = async ({ params, cookies, depends, url }) =>
     host: {
       ...host,
       ipAddress: hostIpAddress(host),
+      deployments: host.deployments.map((deployment) => ({
+        ...deployment,
+        listenerCheckedAt: timestamp(deployment.listenerCheckedAt)
+      })),
       lastPingAt: timestamp(host.lastPingAt),
       lastPingLabel: host.lastPingStatus ? pingLabels[host.lastPingStatus] : 'Not checked',
       agentSeenAt: timestamp(host.agentSeenAt),

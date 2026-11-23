@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Check } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { toast } from 'svelte-sonner';
   import { Button } from '#lib/components/ui/button/index.ts';
@@ -51,9 +52,13 @@
           <FieldGroup class="gap-2">
             {#each choices as choice (choice.id)}
               <Field orientation="horizontal">
-                <input type="checkbox" id="{id}-{choice.id}" name="deploymentTarget" value={choice.value}
-                  bind:group={selected} class="size-4 shrink-0 accent-primary"
-                  disabled={pending || (selectedHosts.has(choice.hostId) && !selected.includes(choice.value))} />
+                <span class="grid size-4 shrink-0 place-items-center">
+                  <input type="checkbox" id="{id}-{choice.id}" name="deploymentTarget" value={choice.value}
+                    bind:group={selected}
+                    class="peer col-start-1 row-start-1 size-4 appearance-none border border-input bg-background checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 forced-colors:appearance-auto"
+                    disabled={pending || (selectedHosts.has(choice.hostId) && !selected.includes(choice.value))} />
+                  <Check aria-hidden="true" class="invisible pointer-events-none col-start-1 row-start-1 size-3 text-primary-foreground peer-checked:visible peer-disabled:opacity-50 forced-colors:hidden" />
+                </span>
                 <FieldLabel for="{id}-{choice.id}" class="flex min-w-0 flex-col items-start gap-1">
                   <span class="wrap-anywhere">{choice.hostName}</span>
                   <span class="wrap-anywhere font-normal text-muted-foreground">{choice.endpoint} · {choice.engine}</span>

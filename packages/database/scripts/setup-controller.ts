@@ -1,6 +1,11 @@
 import { openDatabase } from '../src/index.js';
 import { sql } from 'drizzle-orm';
 
+const webPassword = Bun.env.CBP_DATABASE_WEB_PASSWORD;
+if (webPassword !== undefined && !/^[A-Za-z0-9_-]{32,128}$/.test(webPassword)) {
+  throw new Error('CBP_DATABASE_WEB_PASSWORD must be 32 to 128 URL-safe characters');
+}
+
 const db = openDatabase();
 try {
   await db.$client`
@@ -21,6 +26,13 @@ try {
   await db.$client`
     alter table cbp_certificates add column if not exists previous_fullchain text
   `;
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`alter table cbp_hosts add column if not exists allowed_deployment_services text[]`);
+    await tx.execute(sql`alter table cbp_deployments
+      add column if not exists listener_status text,
+      add column if not exists listener_address text,
+      add column if not exists listener_checked_at timestamp with time zone`);
+  });
   await db.$client`
     create table if not exists cbp_host_agents (
       host_id uuid primary key,
@@ -102,6 +114,27 @@ try {
       after insert or update of status, detail or delete on cbp_deployment_jobs
       for each row execute function cbp_notify_deployment_update()`);
   });
+  if (webPassword) {
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('cbp.web_password', ${webPassword}, true)`);
+      await tx.execute(sql`do $$ begin
+        if not exists (select 1 from pg_roles where rolname = 'cbp_web') then
+          create role cbp_web;
+        end if;
+        execute format('alter role cbp_web login nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls password %L',
+          current_setting('cbp.web_password'));
+      end $$`);
+      await tx.execute(sql`grant usage on schema public to cbp_web`);
+      await tx.execute(sql`grant select, insert, update, delete on
+        public.cbp_auth_user, public.cbp_auth_session, public.cbp_auth_account, public.cbp_auth_verification,
+        public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_deployments
+        to cbp_web`);
+      await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,
+        public.cbp_deployment_jobs, public.cbp_notification_channels to cbp_web`);
+      await tx.execute(sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`);
+      await tx.execute(sql`grant select on public.cbp_alerts to cbp_web`);
+    });
+  }
 } finally {
   await db.$client.close();
 }

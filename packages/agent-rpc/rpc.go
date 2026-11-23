@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"regexp"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -13,17 +16,24 @@ import (
 )
 
 const (
-	serviceName            = "cbp.agent.v1.Controller"
-	EnrollMethod           = "/" + serviceName + "/Enroll"
-	CheckInMethod          = "/" + serviceName + "/CheckIn"
-	ClaimDeploymentMethod  = "/" + serviceName + "/ClaimDeployment"
-	FinishDeploymentMethod = "/" + serviceName + "/FinishDeployment"
-	HostHeader             = "cbp-host-id"
+	serviceName                  = "cbp.agent.v1.Controller"
+	EnrollMethod                 = "/" + serviceName + "/Enroll"
+	UnregisterMethod             = "/" + serviceName + "/Unregister"
+	CheckInMethod                = "/" + serviceName + "/CheckIn"
+	ClaimDeploymentMethod        = "/" + serviceName + "/ClaimDeployment"
+	FinishDeploymentMethod       = "/" + serviceName + "/FinishDeployment"
+	HostHeader                   = "cbp-host-id"
+	MaxDeploymentDiagnosticBytes = 512
 )
 
 var hostIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
 func ValidHostID(value string) bool { return hostIDPattern.MatchString(value) }
+
+func ValidDeploymentDiagnostic(value string) bool {
+	return len(value) <= MaxDeploymentDiagnosticBytes && utf8.ValidString(value) &&
+		strings.TrimSpace(value) != "" && !strings.ContainsFunc(value, unicode.IsControl)
+}
 
 func NewToken() string {
 	var data [32]byte
@@ -41,7 +51,8 @@ func ValidToken(value string) bool {
 
 type Controller interface {
 	Enroll(context.Context, *wrapperspb.StringValue) (*emptypb.Empty, error)
-	CheckIn(context.Context, *structpb.Struct) (*emptypb.Empty, error)
+	Unregister(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
+	CheckIn(context.Context, *structpb.Struct) (*structpb.Struct, error)
 	ClaimDeployment(context.Context, *emptypb.Empty) (*structpb.Struct, error)
 	FinishDeployment(context.Context, *structpb.Struct) (*emptypb.Empty, error)
 }
@@ -53,6 +64,7 @@ func RegisterController(server *grpc.Server, controller Controller) {
 		HandlerType: (*Controller)(nil),
 		Methods: []grpc.MethodDesc{
 			method("Enroll", EnrollMethod, Controller.Enroll),
+			method("Unregister", UnregisterMethod, Controller.Unregister),
 			method("CheckIn", CheckInMethod, Controller.CheckIn),
 			method("ClaimDeployment", ClaimDeploymentMethod, Controller.ClaimDeployment),
 			method("FinishDeployment", FinishDeploymentMethod, Controller.FinishDeployment),

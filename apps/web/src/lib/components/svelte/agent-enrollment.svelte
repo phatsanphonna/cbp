@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Copy } from '@lucide/svelte';
+  import { Copy, Download } from '@lucide/svelte';
   import { enhance } from '$app/forms';
   import { resolve } from '$app/paths';
   import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
@@ -8,10 +8,11 @@
   import * as CodeBlock from '#lib/components/ui/code-block/index.ts';
   import { Spinner } from '#lib/components/ui/spinner/index.ts';
 
-  let { hostId, agentManaged, configured, status, expiresAt, code, command, error, message }: {
+  let { hostId, agentManaged, configured, caDownloadSource, status, expiresAt, code, command, error, message }: {
     hostId: string;
     agentManaged: boolean;
     configured: boolean;
+    caDownloadSource: string | null;
     status: 'not-enrolled' | 'pending' | 'enrolled';
     expiresAt: { iso: string; label: string } | null;
     code?: string;
@@ -93,11 +94,19 @@
   {#if !configured && status === 'not-enrolled'}
     <p class="text-xs text-muted-foreground">Set <code>CBP_AGENT_CONTROLLER_ADDRESS</code> in the web app to enable enrollment commands.</p>
   {/if}
+  {#if caDownloadSource}
+    <div class="flex flex-wrap items-center gap-2">
+      <Button href={resolve('/api/agent-ca')} download variant="outline" size="sm">
+        <Download data-icon="inline-start" aria-hidden="true" /> Download controller CA
+      </Button>
+      <p class="text-xs text-muted-foreground">Copy it to <code>{caDownloadSource}</code> on the Linux host before running the enrollment command.</p>
+    </div>
+  {/if}
   {#if error}<p class="text-xs text-destructive" role="alert">{error}</p>{/if}
   {#if message}<p class="text-xs" role="status">{message}</p>{/if}
   {#if code && command && status === 'pending'}
     <div class="grid gap-3 border bg-muted/40 p-3">
-      <p class="text-xs">Run this command as root on the Linux host after installing <code>cbp-agent</code> on its PATH. It enrolls the agent and starts its systemd service.</p>
+      <p class="text-xs">Run this command as root on the Linux host. If the agent is missing, first copy the binary there as <code>./cbp-agent-linux</code>. The command installs it if needed, enrolls it, and starts its systemd service.</p>
       <CodeBlock.Root size="sm">
         <CodeBlock.Header>
           <CodeBlock.Title>Linux enrollment command</CodeBlock.Title>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BookOpen, FileBadge, History, LayoutDashboard, LogIn, LogOut, RefreshCw, Send, Server, ShieldCheck } from '@lucide/svelte';
+  import { Bell, BookOpen, FileBadge, History, KeyRound, LayoutDashboard, LogIn, LogOut, RefreshCw, Send, Server, ShieldCheck, Users } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import * as Avatar from '#lib/components/ui/avatar/index.ts';
@@ -16,6 +16,7 @@
     { label: 'Deployments', route: '/deployments', icon: Send },
     { label: 'Alerts', route: '/alerts', icon: Bell },
     { label: 'Audit log', route: '/audit', icon: History },
+    { label: 'Users', route: '/users', icon: Users, adminOnly: true },
     { label: 'Controller setup', route: '/docs/controller', icon: BookOpen },
     { label: 'Agent setup', route: '/docs/agent', icon: BookOpen }
   ] as const;
@@ -37,7 +38,7 @@
       <Sidebar.Group>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
-            {#each navigation as item (item.route)}
+            {#each navigation.filter((item) => !('adminOnly' in item) || user?.isAdmin) as item (item.route)}
               {@const current = page.route.id === item.route}
               {@const active = current || page.route.id?.startsWith(`${item.route}/`) === true}
               <Sidebar.MenuItem>
@@ -78,6 +79,17 @@
       </div>
     {/if}
     <Sidebar.Menu>
+      {#if user}
+        <Sidebar.MenuItem>
+          <Sidebar.MenuButton isActive={page.route.id === '/account/password'}>
+            {#snippet child({ props })}
+              <a {...props} href={resolve('/account/password')} onclick={() => sidebar.setOpenMobile(false)}>
+                <KeyRound aria-hidden="true" /><span>Change password</span>
+              </a>
+            {/snippet}
+          </Sidebar.MenuButton>
+        </Sidebar.MenuItem>
+      {/if}
       <Sidebar.MenuItem>
         {#if user}
           <form method="POST" action={resolve('/signout')}>

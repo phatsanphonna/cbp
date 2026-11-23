@@ -1,20 +1,15 @@
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-bun';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
+const envDir = '../..';
+
 export default defineConfig({
+  envDir,
   plugins: [tailwindcss(), sveltekit({
-    adapter: process.env.CBP_CONTAINER_BUILD === '1' ? {
-      name: 'cbp-bun-container',
-      adapt(builder) {
-        builder.rimraf('dist');
-        builder.writeClient('dist/client');
-        builder.writeServer('dist/server');
-        builder.generateServerInstance('dist/app.js', { serverDirectory: 'dist/server' });
-      }
-    } : adapter(),
-    env: { dir: '../..' }
+    adapter: adapter({ out: 'dist', envPrefix: 'CBP_BUN_', serverOptions: { hostname: '0.0.0.0', idleTimeout: 30 } }),
+    env: { dir: envDir }
   })],
   ssr: { noExternal: ['@tanstack/svelte-table', '@tanstack/svelte-store'] }
 });

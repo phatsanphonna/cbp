@@ -21,7 +21,7 @@ export function authOptions(
     options: {
       secret,
       baseURL,
-      database: drizzleAdapter(database, { provider: 'pg', schema }),
+      database: drizzleAdapter(database, { provider: 'pg', schema, transaction: true }),
       emailAndPassword: { enabled: true, disableSignUp },
       plugins: [username()]
     }

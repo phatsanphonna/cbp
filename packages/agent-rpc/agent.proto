@@ -12,12 +12,16 @@ service Controller {
   // The string value is the one-time enrollment code.
   rpc Enroll(google.protobuf.StringValue) returns (google.protobuf.Empty);
 
-  // The report contains hostname, operatingSystem, architecture and collectedAt.
-  rpc CheckIn(google.protobuf.Struct) returns (google.protobuf.Empty);
+  // Revokes only the enrollment authenticated by the caller's agent credential.
+  rpc Unregister(google.protobuf.Empty) returns (google.protobuf.Empty);
+
+  // The report includes host metadata, allowed services and listener results.
+  // The reply can include targets to check before the next report and a continuation cursor.
+  rpc CheckIn(google.protobuf.Struct) returns (google.protobuf.Struct);
 
   // A job contains id, engine, endpoint, fullchain and privateKey. An empty reply means no job.
   rpc ClaimDeployment(google.protobuf.Empty) returns (google.protobuf.Struct);
 
-  // The result contains jobId and outcome.
+  // The result contains jobId and outcome, with an optional certificate diagnostic.
   rpc FinishDeployment(google.protobuf.Struct) returns (google.protobuf.Empty);
 }

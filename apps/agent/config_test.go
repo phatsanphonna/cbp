@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,6 +14,7 @@ func TestReadYAMLConfig(t *testing.T) {
 			if err := os.WriteFile(path, []byte(`
 controller: controller.example.com:50051
 interval: 30s
+logFile: /var/lib/cbp/checks.log
 deploymentServices: [Nginx, HAProxy]
 deployments:
   app.example.com:443:
@@ -25,7 +25,12 @@ deployments:
 `), 0600); err != nil {
 				t.Fatal(err)
 			}
-			cfg, err := readConfig(path)
+			file, err := os.Open(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			cfg, err := decodeConfig(file, path)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -35,16 +40,18 @@ deployments:
 			if cfg.Deployments["app.example.com:443"].KeyFile != "/etc/nginx/app.key" {
 				t.Fatal("missing deployment target")
 			}
-			flags := flag.NewFlagSet("test", flag.ContinueOnError)
-			controller := flags.String("controller", "", "")
-			interval := flags.Duration("interval", time.Minute, "")
-			if err := flags.Parse([]string{"-controller", "override.example.com:50051"}); err != nil {
+			flags := newAgentCommand().Flags()
+			if err := flags.Parse([]string{"--controller", "override.example.com:50051"}); err != nil {
 				t.Fatal(err)
 			}
 			if err := applyConfig(flags, cfg); err != nil {
 				t.Fatal(err)
 			}
-			if *controller != "override.example.com:50051" || *interval != 30*time.Second {
+			controller, controllerErr := flags.GetString("controller")
+			interval, intervalErr := flags.GetDuration("interval")
+			logFile, logFileErr := flags.GetString("log-file")
+			if controllerErr != nil || intervalErr != nil || logFileErr != nil ||
+				controller != "override.example.com:50051" || interval != 30*time.Second || logFile != "/var/lib/cbp/checks.log" {
 				t.Fatal("CLI override or YAML interval was ignored")
 			}
 		})

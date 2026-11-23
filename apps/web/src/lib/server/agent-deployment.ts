@@ -6,18 +6,15 @@ import { deploymentServices } from '#lib/deployment-services.js';
 import { deploymentEncryptionKey, getControllerToken } from './controller-config.js';
 import { getDatabase } from './database.js';
 import { readDeploymentKey, sealDeploymentKey } from './deployment-key.js';
+import { hasTrustedTransport, type Connection } from './trusted-transport.js';
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 type DeploymentSelection = { id: string; endpoint: string; hostId: string; engine: string };
 
-function privateKeyUploadAllowed(url: URL) {
-  return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-}
-
-export async function loadAgentDeployments(ids: string[], url: URL) {
+export async function loadAgentDeployments(ids: string[], connection: Connection) {
   const enabled = Boolean(deploymentEncryptionKey() && getControllerToken());
   const statuses = enabled ? await deploymentJobStatuses(getDatabase(), ids) : [];
-  const httpsRequired = enabled && !privateKeyUploadAllowed(url);
+  const httpsRequired = enabled && !hasTrustedTransport(connection);
   return {
     blocked: !enabled || httpsRequired,
     httpsRequired,
@@ -26,13 +23,14 @@ export async function loadAgentDeployments(ids: string[], url: URL) {
 }
 
 export async function deployCertificateAction(
-  { request, url, setHeaders, locals }: Pick<RequestEvent, 'request' | 'url' | 'setHeaders' | 'locals'>,
+  event: Pick<RequestEvent, 'request' | 'setHeaders' | 'locals'> & Connection,
   certificateId: string
 ) {
+  const { request, setHeaders, locals } = event;
   setHeaders({ 'cache-control': 'no-store' });
   const reject = (status: number, message: string) => fail(status, { deployError: message });
-  if (!privateKeyUploadAllowed(url)) {
-    return reject(400, 'Open CBP over HTTPS to submit a private key.');
+  if (!hasTrustedTransport(event)) {
+    return reject(400, 'A trusted HTTPS connection is required to submit a private key.');
   }
   const encryptionKey = deploymentEncryptionKey();
   if (!encryptionKey || !getControllerToken()) return reject(503, 'Agent deployment is unavailable.');

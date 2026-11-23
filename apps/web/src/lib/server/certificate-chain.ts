@@ -4,6 +4,11 @@ const dnsName = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?
 const publicPem = /-----BEGIN CERTIFICATE-----\r?\n[A-Za-z0-9+/=\r\n]+\r?\n-----END CERTIFICATE-----/g;
 const maxPemSize = 32_768;
 
+export function certificatePemBlocks(pem: string) {
+  const blocks = pem.match(publicPem);
+  return blocks?.length && !pem.replace(publicPem, '').trim() ? blocks : null;
+}
+
 export async function readCertificateChain(fields: FormData) {
   const pasted = fields.get('pem');
   const upload = fields.get('certificateFile');
@@ -20,8 +25,8 @@ export async function readCertificateChain(fields: FormData) {
 
 export function parseCertificateChain(pem: string) {
   if (pem.length > maxPemSize) return { message: 'Use a PEM certificate or chain up to 32 KB.' } as const;
-  const blocks = pem.match(publicPem);
-  if (!blocks?.length || pem.replace(publicPem, '').trim()) {
+  const blocks = certificatePemBlocks(pem);
+  if (!blocks) {
     return { message: 'Provide a public PEM certificate or fullchain.pem containing only certificates.' } as const;
   }
 
