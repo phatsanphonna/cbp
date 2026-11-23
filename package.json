@@ -16,9 +16,5 @@
   },
   "devDependencies": {
     "turbo": "^2.11.13"
-  },
-  "dependencies": {
-    "@tanstack/svelte-table": "^9.3.2",
-    "mode-watcher": "^1.1.0"
   }
 }

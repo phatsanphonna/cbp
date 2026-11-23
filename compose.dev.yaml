@@ -8,11 +8,11 @@ services:
       POSTGRES_USER: cbp
       POSTGRES_PASSWORD: ${CBP_DEV_POSTGRES_PASSWORD:?Set CBP_DEV_POSTGRES_PASSWORD in .cbp-dev/.env}
     ports:
-      - '127.0.0.1:5433:5432'
+      - "127.0.0.1:5433:5432"
     volumes:
       - cbp-db:/var/lib/postgresql
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U cbp -d cbp']
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cbp -d cbp"]
       interval: 2s
       timeout: 5s
       retries: 30

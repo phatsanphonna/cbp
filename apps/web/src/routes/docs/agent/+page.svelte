@@ -94,8 +94,8 @@ deploymentServices: [Nginx]`;
           >, then open its details from the host inventory. Under
           <strong>Agent enrollment</strong>, select
           <strong>Generate enrollment code</strong>
-          to enable agent management. Run the generated command as root on the
-          Linux host. It installs <code>./cbp-agent-linux</code> if
+          to enable agent management. Run the generated command as root on the Linux
+          host. It installs <code>./cbp-agent-linux</code> if
           <code>cbp-agent</code>
           is missing. Update an older agent binary before running the generated
           <code>cbp-agent register</code> command. It includes the controller address,
@@ -105,8 +105,8 @@ deploymentServices: [Nginx]`;
           If the command includes a CA installation step, select <strong
             >Download controller CA</strong
           >
-          when available and copy the trusted PEM to the source path shown in
-          that step. The command installs it as a root-owned file with mode
+          when available and copy the trusted PEM to the source path shown in that
+          step. The command installs it as a root-owned file with mode
           <code>0644</code> and uses an absolute path for the service.
         </p>
         <p class="max-w-prose">
@@ -133,8 +133,8 @@ deploymentServices: [Nginx]`;
           architecture. Run <code>systemctl status cbp-agent</code> to check the
           service. It checks in every minute by default. Follow agent logs with
           <code>sudo tail -f /var/log/cbp/agent.log</code>
-          when using the generated enrollment command. To install the service
-          for an existing enrollment, run
+          when using the generated enrollment command. To install the service for
+          an existing enrollment, run
           <code>cbp-agent --install-service</code> as root with the existing controller,
           host, and credential settings supplied through YAML or command-line flags.
         </p>

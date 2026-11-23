@@ -5,6 +5,7 @@
   import ThemeToggle from "#lib/components/svelte/theme-toggle.svelte";
   import * as Sidebar from "#lib/components/ui/sidebar/index.ts";
   import { Toaster } from "#lib/components/ui/sonner/index.ts";
+  import { ModeWatcher } from "mode-watcher";
   import theme from "./layout.css?inline";
 
   const themeMarkup = `<style>${theme}</style>`;
@@ -37,6 +38,7 @@
   {@html themeMarkup}
 </svelte:head>
 
+<ModeWatcher />
 <Toaster richColors />
 
 {#if page.route.id === "/signin"}
