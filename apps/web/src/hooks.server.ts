@@ -4,9 +4,17 @@ import { redirect, type Handle } from '@sveltejs/kit';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { getAuth } from '#lib/server/auth.js';
 
+const controllerRoutes = [
+  '/api/internal/controller/check-in',
+  '/api/internal/controller/enroll',
+  '/api/internal/controller/heartbeat',
+  '/api/internal/controller/invite',
+  '/api/internal/controller/revoke'
+];
+
 export const handle: Handle = ({ event, resolve }) => {
   event.locals.user = null;
-  if (building || event.route.id === '/api/internal/controller/[operation]') return resolve(event);
+  if (building || (event.route.id && controllerRoutes.includes(event.route.id))) return resolve(event);
 
   const auth = getAuth();
   return svelteKitHandler({
