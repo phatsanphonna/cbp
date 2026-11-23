@@ -82,8 +82,8 @@ deploymentServices: [Nginx]`;
         <p class="max-w-prose">
           Run <code>cbp-agent register</code> with the enrollment code and the usual connection flags to enroll and check in once.
           For an IP-registered host, the address seen by the controller must match the host's registered IP.
-          Add <code>--install-service</code> to start the systemd service. To retire the agent, run <code>cbp-agent uninstall</code>
-          and then <code>cbp-agent unregister</code> with the usual connection flags or YAML.
+          Add <code>--install-service</code> to start the systemd service. To retire the agent, run <code>cbp-agent unregister</code>
+          as root before <code>cbp-agent uninstall</code>. Unregister reads the managed systemd unit or the default agent YAML.
         </p>
         <p class="max-w-prose">
           The host details page also shows the agent’s allowed deployment services. Each linked Agent endpoint shows its latest TLS listener check and the address the agent tested.

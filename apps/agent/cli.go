@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"runtime"
 	"strings"
 	"time"
 
@@ -58,8 +59,14 @@ func newAgentCommand() *cobra.Command {
 	unregister := &cobra.Command{
 		Use:   "unregister",
 		Short: "Revoke this agent's enrollment and remove its local credential",
+		Long:  "Revoke this agent's enrollment and remove its local credential. With no flags, use the managed systemd service or the default agent YAML.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if runtime.GOOS == "linux" && cmd.Flags().NFlag() == 0 {
+				if err := loadAgentServiceFlags(cmd.Context(), cmd.Flags()); err != nil {
+					return err
+				}
+			}
 			if _, err := loadAgentConfig(cmd.Flags(), &unregisterOptions); err != nil {
 				return err
 			}

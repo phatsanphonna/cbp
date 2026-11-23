@@ -17,7 +17,7 @@ import (
 
 func unregisterAgent(ctx context.Context, options agentOptions) error {
 	if !rpc.ValidHostID(options.host) || options.credentialFile == "" {
-		return errors.New("provide a valid --host and --credential-file to unregister")
+		return errors.New("unregister needs the enrolled host ID and credential file from the managed service, agent YAML, or --host and --credential-file")
 	}
 	path, err := filepath.Abs(options.credentialFile)
 	if err != nil {

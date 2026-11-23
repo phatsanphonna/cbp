@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.27.4-bookworm AS controller-build
 WORKDIR /src
 COPY go.work go.work.sum ./
@@ -16,14 +18,16 @@ CMD ["serve", "-listen", "0.0.0.0:50051", "-tls-cert", "/run/cbp/controller-full
 
 FROM oven/bun:1.4.5 AS web
 WORKDIR /app
-COPY package.json bun.lock ./
-COPY apps/web/package.json apps/web/package.json
-COPY packages/database/package.json packages/database/package.json
-RUN bun install --frozen-lockfile --ignore-scripts
-COPY apps/web/ apps/web/
-COPY packages/database/ packages/database/
-RUN bun run --filter web build
+COPY --chmod=644 package.json bun.lock ./
+COPY --chmod=644 apps/web/package.json apps/web/package.json
+COPY --chmod=644 packages/database/package.json packages/database/package.json
+RUN umask 022 && bun install --frozen-lockfile --ignore-scripts
+COPY --chmod=u=rwX,go=rX apps/web/ apps/web/
+COPY --chmod=u=rwX,go=rX packages/database/ packages/database/
+RUN umask 022 && bun run --filter web build
 ENV NODE_ENV=production
 EXPOSE 3000
 USER bun
+RUN test -r package.json && test -r packages/database/package.json \
+    && test -r packages/database/scripts/setup-controller.ts && test -r apps/web/dist/index.js
 CMD ["bun", "apps/web/scripts/serve-container.js"]
