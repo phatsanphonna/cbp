@@ -5,6 +5,7 @@ import { error, redirect, type Handle } from '@sveltejs/kit';
 import { auditUserAction } from '#lib/server/audit-action.js';
 import { getAuth, isAdminEmail } from '#lib/server/auth.js';
 import { getDatabase } from '#lib/server/database.js';
+import { isDirectHttps } from '#lib/server/trusted-transport.js';
 
 const controllerRoutes = [
   '/api/internal/controller/check-in',
@@ -45,7 +46,11 @@ import.meta.hot?.dispose(() => { clearInterval(expiryTimer); });
 export const handle: Handle = async ({ event, resolve }) => {
   event.locals.user = null;
   const { id } = event.route;
-  if (building || !id || controllerRoutes.includes(id)) return resolve(event);
+  if (building || !id) return resolve(event);
+  if (controllerRoutes.includes(id)) {
+    if (isDirectHttps(event)) error(404, 'Not found');
+    return resolve(event);
+  }
 
   const session = await getAuth().api.getSession({ headers: event.request.headers });
   const user = session?.user;

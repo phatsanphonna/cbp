@@ -1,0 +1,22 @@
+services:
+  web:
+    environment:
+      CBP_WEB_TLS_CERT: /run/cbp/web-fullchain.pem
+      CBP_WEB_TLS_KEY: /run/cbp/web.key
+    volumes:
+      - type: bind
+        source: ${CBP_WEB_TLS_CERT:?Set CBP_WEB_TLS_CERT to the host certificate chain path}
+        target: /run/cbp/web-fullchain.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CBP_WEB_TLS_KEY:?Set CBP_WEB_TLS_KEY to the host private key path}
+        target: /run/cbp/web.key
+        read_only: true
+        bind:
+          create_host_path: false
+
+  controller:
+    environment:
+      CBP_WEB_URL: http://127.0.0.1:3001

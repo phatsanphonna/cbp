@@ -18,7 +18,7 @@ For a fresh install, replace both example addresses and run:
 bash scripts/setup-docker.sh cbp-controller.internal:50051 https://cbp.example.com
 ```
 
-The script creates `.env` with deployment secrets and a proxy token. It reuses the default controller TLS files if they exist and generates a self-signed controller certificate if both are absent. To use existing files at other paths, set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` before running the script. The controller certificate must cover the exact DNS name or IP address in the agent connection address.
+The script creates `.env` with deployment secrets and a proxy token. It reuses the default controller TLS files if they exist and generates a self-signed controller certificate if both are absent. To use existing files at other paths, set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` before running the script. The controller certificate must cover the exact DNS name or IP address in the agent connection address. For direct browser HTTPS, follow [Direct HTTPS with Compose](#direct-https-with-compose).
 
 Add `CBP_ADMIN_EMAILS=admin@example.com` to `.env` with your first administrator's email. This setting accepts a comma-separated list of emails. Other signed-in users have read-only access. After changing the list on a running deployment, apply it with `docker compose up -d`.
 
@@ -60,7 +60,9 @@ docker compose logs --tail=50 db-setup web controller
 
 Expect `db` to be healthy, `db-setup` to exit with code 0, and `web` and `controller` to stay running. The setup job applies the schema and provisions `cbp_web`, the restricted database login used by the web app. The database is stored in the `cbp-db` named volume.
 
-### 3. Configure the HTTPS reverse proxy
+### 3. Configure browser HTTPS
+
+#### HTTPS reverse proxy
 
 Use a browser-trusted TLS certificate for `BETTER_AUTH_URL`. For Nginx running on the Docker host, create a site like the example below. Replace the domain and certificate paths, and copy the value of `CBP_TRUSTED_PROXY_TOKEN` from `.env` into the private Nginx configuration. Keep the three proxy header assignments so Nginx overwrites client-supplied values. This example assumes Nginx receives traffic directly from browsers.
 
@@ -94,6 +96,29 @@ server {
 ```
 
 Test the Nginx configuration with `sudo nginx -t`, then reload it with `sudo systemctl reload nginx`. If another trusted proxy sits in front of Nginx, configure Nginx to resolve the real client IP from that trusted proxy before forwarding `X-CBP-Client-IP`. Agents connect directly to the controller's TLS port.
+
+#### Direct HTTPS with Compose
+
+Use a browser-trusted PEM certificate chain and matching private key. The certificate needs a subject alternative name for the browser-facing DNS name or IP address. For an IP URL, the certificate needs an IP subject alternative name. Keep the private key readable by the web container's `bun` user (UID and GID 1000 in the Bun image). For example, use a root-owned key with group 1000 and mode `0440`.
+
+Set these values in the existing `.env`, replacing the example IP and paths:
+
+```dotenv
+BETTER_AUTH_URL=https://192.0.2.10:3000
+CBP_WEB_BIND=192.0.2.10
+CBP_WEB_PORT=3000
+CBP_WEB_TLS_CERT=./web-fullchain.pem
+CBP_WEB_TLS_KEY=./web.key
+```
+
+Use both Compose files for this deployment:
+
+```sh
+docker compose -f compose.yaml -f compose.https.yaml config --quiet
+docker compose -f compose.yaml -f compose.https.yaml up -d --build
+```
+
+Open the exact `BETTER_AUTH_URL` in your browser. The browser connects to Bun over TLS on the published port. The controller uses HTTP on port 3001 within the shared container network namespace, and Compose leaves that port unpublished. Allow the browser-facing port from your client network.
 
 ### 4. Create the first administrator
 

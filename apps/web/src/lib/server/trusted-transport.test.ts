@@ -28,3 +28,24 @@ test('HTTP development requires a loopback host and peer', () => {
   expect(hasTrustedTransport({ url, request, getClientAddress: () => '127.0.0.1' })).toBe(true);
   expect(hasTrustedTransport({ url, request, getClientAddress: () => '192.0.2.1' })).toBe(false);
 });
+
+test('native HTTPS trusts the TLS listener and keeps the socket client IP', () => {
+  const original = process.env.CBP_TRUSTED_PROXY_TOKEN;
+  const token = 'x'.repeat(64);
+  process.env.CBP_TRUSTED_PROXY_TOKEN = token;
+  try {
+    const url = new URL('https://cbp.example.test');
+    const platform = { server: { url } } as Connection['platform'];
+    const request = new Request(url);
+    const connection = { url, request, platform, getClientAddress: () => '192.0.2.1' };
+    expect(hasTrustedTransport(connection)).toBe(true);
+
+    request.headers.set('x-forwarded-proto', 'https');
+    request.headers.set('x-cbp-proxy-token', token);
+    request.headers.set('x-cbp-client-ip', '192.0.2.2');
+    expect(getTrustedClientAddress(connection)).toBe('192.0.2.1');
+  } finally {
+    if (original === undefined) delete process.env.CBP_TRUSTED_PROXY_TOKEN;
+    else process.env.CBP_TRUSTED_PROXY_TOKEN = original;
+  }
+});

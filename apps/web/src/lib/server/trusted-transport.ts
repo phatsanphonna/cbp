@@ -7,6 +7,10 @@ export type Connection = Pick<RequestEvent, 'url' | 'request' | 'platform' | 'ge
 const loopbackHost = /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
 const loopbackPeers = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
+export function isDirectHttps({ platform }: Connection) {
+  return platform?.server?.url?.protocol === 'https:';
+}
+
 function trustedProxy({ url, request }: Connection) {
   const token = env.CBP_TRUSTED_PROXY_TOKEN ?? '';
   const supplied = request.headers.get('x-cbp-proxy-token') ?? '';
@@ -17,14 +21,14 @@ function trustedProxy({ url, request }: Connection) {
 
 export function hasTrustedTransport(connection: Connection) {
   const { url, request, platform, getClientAddress } = connection;
-  if (url.protocol === 'https:') return platform?.server ? trustedProxy(connection) : true;
+  if (url.protocol === 'https:') return !platform?.server || isDirectHttps(connection) || trustedProxy(connection);
   const host = platform?.server ? request.headers.get('host') ?? '' : url.host;
   return url.protocol === 'http:' && loopbackHost.test(host) && loopbackPeers.includes(getClientAddress());
 }
 
 export function getTrustedClientAddress(connection: Connection) {
   const forwarded = connection.request.headers.get('x-cbp-client-ip') ?? '';
-  return connection.platform?.server && isIP(forwarded) && trustedProxy(connection)
+  return connection.platform?.server && !isDirectHttps(connection) && isIP(forwarded) && trustedProxy(connection)
     ? forwarded
     : connection.getClientAddress() || '';
 }
