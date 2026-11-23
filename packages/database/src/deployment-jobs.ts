@@ -1,52 +1,144 @@
-import { randomInt } from 'node:crypto';
-import { and, asc, desc, eq, exists, gt, inArray, isNotNull, lte, sql } from 'drizzle-orm';
-import { withAgentHost } from './host-agents.js';
-import type { openDatabase } from './index.js';
-import { certificates, deploymentJobs, deploymentRuns, deployments, hostAgents, hosts } from './inventory-schema.js';
+import { randomInt } from "node:crypto";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+} from "drizzle-orm";
+import { withAgentHost } from "./host-agents.js";
+import type { openDatabase } from "./index.js";
+import {
+  certificates,
+  deploymentJobs,
+  deploymentRuns,
+  deployments,
+  hostAgents,
+  hosts,
+} from "./inventory-schema.js";
 
 type Database = ReturnType<typeof openDatabase>;
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Owner = { hostId: string } | { certificateId: string };
 type Job = typeof deploymentJobs.$inferSelect;
-type DeploymentPayload = Pick<Job, 'id' | 'deploymentId' | 'hostId' | 'engine' | 'endpoint' | 'fullchain' | 'sealedKey'>;
-const active = inArray(deploymentJobs.status, ['Queued', 'Running']);
+type DeploymentPayload = Pick<
+  Job,
+  | "id"
+  | "deploymentId"
+  | "hostId"
+  | "engine"
+  | "endpoint"
+  | "fullchain"
+  | "sealedKey"
+>;
+const active = inArray(deploymentJobs.status, ["Queued", "Running"]);
 const unexpired = gt(deploymentJobs.expiresAt, sql`now()`);
 const expired = lte(deploymentJobs.expiresAt, sql`now()`);
 const expiryDetail = sql<string>`case when ${deploymentJobs.status} = 'Queued'
   then 'The job expired before the controller claimed it for the agent.'
   else 'The job expired while waiting for the agent to report a result.' end`;
 const jobStatus = {
-  status: sql<Job['status']>`case when ${active} and ${expired} then 'Expired' else ${deploymentJobs.status} end`,
-  detail: sql<string | null>`case when ${active} and ${expired} then ${expiryDetail} else ${deploymentJobs.detail} end`,
-  expiresIn: sql<number>`extract(epoch from (${deploymentJobs.expiresAt} - now())) * 1000`.mapWith(Number)
+  status: sql<
+    Job["status"]
+  >`case when ${active} and ${expired} then 'Expired' else ${deploymentJobs.status} end`,
+  detail: sql<
+    string | null
+  >`case when ${active} and ${expired} then ${expiryDetail} else ${deploymentJobs.detail} end`,
+  expiresIn:
+    sql<number>`extract(epoch from (${deploymentJobs.expiresAt} - now())) * 1000`.mapWith(
+      Number,
+    ),
 };
 const runOrder = sql`${deploymentRuns.submittedAt} desc nulls last`;
 const slugWords = [
-  ['bold', 'bright', 'calm', 'clever', 'crisp', 'gentle', 'grand', 'lively', 'lucky', 'merry', 'nimble', 'quiet', 'steady', 'swift', 'wild'],
-  ['amber', 'aqua', 'azure', 'bronze', 'coral', 'gold', 'indigo', 'ivory', 'jade', 'lilac', 'mint', 'olive', 'pearl', 'ruby', 'silver'],
-  ['badger', 'bear', 'crane', 'dolphin', 'eagle', 'falcon', 'finch', 'fox', 'gecko', 'hare', 'heron', 'koala', 'otter', 'owl', 'panda', 'raven', 'tiger', 'wolf']
+  [
+    "bold",
+    "bright",
+    "calm",
+    "clever",
+    "crisp",
+    "gentle",
+    "grand",
+    "lively",
+    "lucky",
+    "merry",
+    "nimble",
+    "quiet",
+    "steady",
+    "swift",
+    "wild",
+  ],
+  [
+    "amber",
+    "aqua",
+    "azure",
+    "bronze",
+    "coral",
+    "gold",
+    "indigo",
+    "ivory",
+    "jade",
+    "lilac",
+    "mint",
+    "olive",
+    "pearl",
+    "ruby",
+    "silver",
+  ],
+  [
+    "badger",
+    "bear",
+    "crane",
+    "dolphin",
+    "eagle",
+    "falcon",
+    "finch",
+    "fox",
+    "gecko",
+    "hare",
+    "heron",
+    "koala",
+    "otter",
+    "owl",
+    "panda",
+    "raven",
+    "tiger",
+    "wolf",
+  ],
 ];
-const slugCharacters = 'abcdefghjkmnpqrstuvwxyz23456789';
+const slugCharacters = "abcdefghjkmnpqrstuvwxyz23456789";
 
 function deploymentSlug() {
   const words = slugWords.map((choices) => choices[randomInt(choices.length)]);
-  const suffix = Array.from({ length: 4 }, () => slugCharacters[randomInt(slugCharacters.length)]).join('');
-  return [...words, suffix].join('-');
+  const suffix = Array.from(
+    { length: 4 },
+    () => slugCharacters[randomInt(slugCharacters.length)],
+  ).join("");
+  return [...words, suffix].join("-");
 }
 
 export async function expireDeploymentJobs(db: Database) {
-  await db.update(deploymentJobs)
-    .set({ status: 'Expired', detail: expiryDetail, sealedKey: null })
+  await db
+    .update(deploymentJobs)
+    .set({ status: "Expired", detail: expiryDetail, sealedKey: null })
     .where(and(active, expired));
 }
 
 export function deploymentJobStatuses(db: Database, ids: string[]) {
   if (!ids.length) return [];
-  return db.selectDistinctOn([deploymentJobs.deploymentId], {
-    jobId: deploymentJobs.id,
-    deploymentId: deploymentJobs.deploymentId,
-    ...jobStatus
-  }).from(deploymentJobs).innerJoin(deploymentRuns, eq(deploymentRuns.id, deploymentJobs.runId))
+  return db
+    .selectDistinctOn([deploymentJobs.deploymentId], {
+      jobId: deploymentJobs.id,
+      deploymentId: deploymentJobs.deploymentId,
+      ...jobStatus,
+    })
+    .from(deploymentJobs)
+    .innerJoin(deploymentRuns, eq(deploymentRuns.id, deploymentJobs.runId))
     .where(inArray(deploymentJobs.deploymentId, ids))
     .orderBy(deploymentJobs.deploymentId, runOrder, desc(deploymentRuns.id));
 }
@@ -57,167 +149,329 @@ const runFields = {
   submittedAt: deploymentRuns.submittedAt,
   certificateId: certificates.id,
   domain: certificates.domain,
-  sans: certificates.sans
+  sans: certificates.sans,
 };
 
-export function listDeploymentRuns(db: Database, offset: number, limit: number) {
-  return db.select({
-    ...runFields,
-    targets: sql<number>`count(${deploymentJobs.id})`.mapWith(Number),
-    deployed: sql<number>`count(*) filter (where ${deploymentJobs.status} = 'Deployed')`.mapWith(Number),
-    active: sql<number>`count(*) filter (where ${active} and ${unexpired})`.mapWith(Number),
-    nextExpiryIn: sql<number | null>`extract(epoch from (min(${deploymentJobs.expiresAt}) filter (where ${active} and ${unexpired}) - now())) * 1000`
-      .mapWith((value): number | null => Number(value))
-  }).from(deploymentRuns)
+export function listDeploymentRuns(
+  db: Database,
+  offset: number,
+  limit: number,
+) {
+  return db
+    .select({
+      ...runFields,
+      targets: sql<number>`count(${deploymentJobs.id})`.mapWith(Number),
+      deployed:
+        sql<number>`count(*) filter (where ${deploymentJobs.status} = 'Deployed')`.mapWith(
+          Number,
+        ),
+      active:
+        sql<number>`count(*) filter (where ${active} and ${unexpired})`.mapWith(
+          Number,
+        ),
+      nextExpiryIn: sql<
+        number | null
+      >`extract(epoch from (min(${deploymentJobs.expiresAt}) filter (where ${active} and ${unexpired}) - now())) * 1000`.mapWith(
+        (value): number | null => Number(value),
+      ),
+    })
+    .from(deploymentRuns)
     .innerJoin(certificates, eq(certificates.id, deploymentRuns.certificateId))
     .leftJoin(deploymentJobs, eq(deploymentJobs.runId, deploymentRuns.id))
     .groupBy(deploymentRuns.id, certificates.id)
-    .orderBy(runOrder, desc(deploymentRuns.id)).offset(offset).limit(limit);
+    .orderBy(runOrder, desc(deploymentRuns.id))
+    .offset(offset)
+    .limit(limit);
 }
 
-export async function findDeploymentRun(db: Database, identity: { id: string } | { slug: string }) {
-  const [run] = await db.select(runFields).from(deploymentRuns)
+export async function findDeploymentRun(
+  db: Database,
+  identity: { id: string } | { slug: string },
+) {
+  const [run] = await db
+    .select(runFields)
+    .from(deploymentRuns)
     .innerJoin(certificates, eq(certificates.id, deploymentRuns.certificateId))
-    .where('id' in identity ? eq(deploymentRuns.id, identity.id) : eq(deploymentRuns.slug, identity.slug));
+    .where(
+      "id" in identity
+        ? eq(deploymentRuns.id, identity.id)
+        : eq(deploymentRuns.slug, identity.slug),
+    );
   return run ?? null;
 }
 
-export function listDeploymentTargets(db: Database, filter: { runId: string } | { jobIds: string[] }) {
-  return db.select({
-    id: deploymentJobs.id,
-    runSlug: deploymentRuns.slug,
-    endpoint: deploymentJobs.endpoint,
-    engine: deploymentJobs.engine,
-    hostId: hosts.id,
-    hostName: hosts.name,
-    agentSeenAt: hosts.agentSeenAt,
-    certificateId: certificates.id,
-    domain: certificates.domain,
-    sans: certificates.sans,
-    ...jobStatus
-  }).from(deploymentJobs)
+export function listDeploymentTargets(
+  db: Database,
+  filter: { runId: string } | { jobIds: string[] },
+) {
+  return db
+    .select({
+      id: deploymentJobs.id,
+      runSlug: deploymentRuns.slug,
+      endpoint: deploymentJobs.endpoint,
+      engine: deploymentJobs.engine,
+      hostId: hosts.id,
+      hostName: hosts.name,
+      agentSeenAt: hosts.agentSeenAt,
+      certificateId: certificates.id,
+      domain: certificates.domain,
+      sans: certificates.sans,
+      ...jobStatus,
+    })
+    .from(deploymentJobs)
     .innerJoin(deploymentRuns, eq(deploymentRuns.id, deploymentJobs.runId))
     .innerJoin(deployments, eq(deployments.id, deploymentJobs.deploymentId))
     .innerJoin(hosts, eq(hosts.id, deploymentJobs.hostId))
     .innerJoin(certificates, eq(certificates.id, deployments.certificateId))
-    .where('runId' in filter ? eq(deploymentJobs.runId, filter.runId) : inArray(deploymentJobs.id, filter.jobIds))
+    .where(
+      "runId" in filter
+        ? eq(deploymentJobs.runId, filter.runId)
+        : inArray(deploymentJobs.id, filter.jobIds),
+    )
     .orderBy(hosts.name, deploymentJobs.endpoint, deploymentJobs.id);
 }
 
-export function deploymentSources(db: Pick<Database, 'select'>, owner: Owner, ids: string[]) {
-  const scope = 'hostId' in owner ? eq(deployments.hostId, owner.hostId) : eq(deployments.certificateId, owner.certificateId);
-  return db.select({
-    deploymentId: deployments.id, hostId: deployments.hostId, engine: deployments.engine,
-    endpoint: deployments.endpoint, method: deployments.method, fullchain: certificates.fullchain
-  }).from(deployments).innerJoin(certificates, eq(certificates.id, deployments.certificateId))
+export function deploymentSources(
+  db: Pick<Database, "select">,
+  owner: Owner,
+  ids: string[],
+) {
+  const scope =
+    "hostId" in owner
+      ? eq(deployments.hostId, owner.hostId)
+      : eq(deployments.certificateId, owner.certificateId);
+  return db
+    .select({
+      deploymentId: deployments.id,
+      hostId: deployments.hostId,
+      engine: deployments.engine,
+      endpoint: deployments.endpoint,
+      method: deployments.method,
+      fullchain: certificates.fullchain,
+    })
+    .from(deployments)
+    .innerJoin(certificates, eq(certificates.id, deployments.certificateId))
     .where(and(inArray(deployments.id, ids), scope));
 }
 
 async function agentHash(db: Transaction, hostId: string) {
-  const [agent] = await db.select({ hash: hostAgents.tokenHash }).from(hostAgents)
+  const [agent] = await db
+    .select({ hash: hostAgents.tokenHash })
+    .from(hostAgents)
     .where(eq(hostAgents.hostId, hostId));
   return agent?.hash;
 }
 
 async function createDeploymentRun(tx: Transaction, certificateId: string) {
   for (let attempt = 0; attempt < 5; attempt++) {
-    const [run] = await tx.insert(deploymentRuns)
-      .values({ certificateId, slug: deploymentSlug(), submittedAt: sql`clock_timestamp()` })
+    const [run] = await tx
+      .insert(deploymentRuns)
+      .values({
+        certificateId,
+        slug: deploymentSlug(),
+        submittedAt: sql`clock_timestamp()`,
+      })
       .onConflictDoNothing({ target: deploymentRuns.slug })
       .returning({ id: deploymentRuns.id, slug: deploymentRuns.slug });
     if (run) return run;
   }
-  throw new Error('Could not allocate a unique deployment job ID');
+  throw new Error("Could not allocate a unique deployment job ID");
 }
 
-export async function queueDeployments(db: Database, owner: { certificateId: string }, payloads: DeploymentPayload[]) {
+export async function queueDeployments(
+  db: Database,
+  owner: { certificateId: string },
+  payloads: DeploymentPayload[],
+) {
   const hostIds = [...new Set(payloads.map(({ hostId }) => hostId))];
-  if (!hostIds.length || hostIds.length !== payloads.length) return { status: 'invalid' } as const;
+  if (!hostIds.length || hostIds.length !== payloads.length)
+    return { status: "invalid" } as const;
 
   return db.transaction(async (tx) => {
     // Use the same host locks as claim, completion and deletion, in a consistent order for batches.
-    const eligible = await tx.select({ id: hosts.id }).from(hosts)
-      .where(and(inArray(hosts.id, hostIds), eq(hosts.agentManaged, true))).orderBy(asc(hosts.id)).for('update');
-    const agents = await tx.select({ hostId: hostAgents.hostId, hash: hostAgents.tokenHash }).from(hostAgents)
-      .where(and(inArray(hostAgents.hostId, eligible.map(({ id }) => id)), isNotNull(hostAgents.tokenHash)));
+    const eligible = await tx
+      .select({ id: hosts.id })
+      .from(hosts)
+      .where(and(inArray(hosts.id, hostIds), eq(hosts.agentManaged, true)))
+      .orderBy(asc(hosts.id))
+      .for("update");
+    const agents = await tx
+      .select({ hostId: hostAgents.hostId, hash: hostAgents.tokenHash })
+      .from(hostAgents)
+      .where(
+        and(
+          inArray(
+            hostAgents.hostId,
+            eligible.map(({ id }) => id),
+          ),
+          isNotNull(hostAgents.tokenHash),
+        ),
+      );
     const hashes = new Map(agents.map(({ hostId, hash }) => [hostId, hash]));
-    const busy = await tx.select({ hostId: deploymentJobs.hostId }).from(deploymentJobs)
+    const busy = await tx
+      .select({ hostId: deploymentJobs.hostId })
+      .from(deploymentJobs)
       .where(and(inArray(deploymentJobs.hostId, hostIds), active, unexpired));
     const busyHosts = new Set(busy.map(({ hostId }) => hostId));
     const ids = payloads.map(({ deploymentId }) => deploymentId);
-    const sources = await deploymentSources(tx, owner, ids).for('share', { of: deployments });
-    const current = new Map(sources.map((source) => [source.deploymentId, source]));
+    const sources = await deploymentSources(tx, owner, ids).for("share", {
+      of: deployments,
+    });
+    const current = new Map(
+      sources.map((source) => [source.deploymentId, source]),
+    );
     const expiresAt = sql`now() + interval '10 minutes'`;
-    const rows: (DeploymentPayload & { agentHash: string; status: 'Queued'; expiresAt: typeof expiresAt })[] = [];
+    const rows: (DeploymentPayload & {
+      agentHash: string;
+      status: "Queued";
+      expiresAt: typeof expiresAt;
+    })[] = [];
     for (const payload of payloads) {
       const { deploymentId, hostId, endpoint, engine, fullchain } = payload;
       const hash = hashes.get(hostId);
-      if (!hash) return { status: 'unenrolled', endpoint } as const;
-      if (busyHosts.has(hostId)) return { status: 'busy', endpoint } as const;
+      if (!hash) return { status: "unenrolled", endpoint } as const;
+      if (busyHosts.has(hostId)) return { status: "busy", endpoint } as const;
       const source = current.get(deploymentId);
-      if (!source || source.method !== 'Agent' || source.hostId !== hostId ||
-          source.endpoint !== endpoint || source.engine !== engine || source.fullchain !== fullchain) {
-        return { status: 'changed', endpoint } as const;
+      if (
+        !source ||
+        source.method !== "Agent" ||
+        source.hostId !== hostId ||
+        source.endpoint !== endpoint ||
+        source.engine !== engine ||
+        source.fullchain !== fullchain
+      ) {
+        return { status: "changed", endpoint } as const;
       }
-      rows.push({ ...payload, agentHash: hash, status: 'Queued', expiresAt });
+      rows.push({ ...payload, agentHash: hash, status: "Queued", expiresAt });
     }
-    await tx.update(deploymentJobs).set({ status: 'Expired', detail: expiryDetail, sealedKey: null })
+    await tx
+      .update(deploymentJobs)
+      .set({ status: "Expired", detail: expiryDetail, sealedKey: null })
       .where(and(inArray(deploymentJobs.hostId, hostIds), active, expired));
     const run = await createDeploymentRun(tx, owner.certificateId);
-    await tx.insert(deploymentJobs).values(rows.map((row) => ({ ...row, runId: run.id })));
-    return { status: 'queued', ...run } as const;
+    await tx
+      .insert(deploymentJobs)
+      .values(rows.map((row) => ({ ...row, runId: run.id })));
+    return { status: "queued", ...run } as const;
   });
 }
 
-export function claimDeployment<T>(db: Database, hostId: string, hash: string, materialize: (job: Job) => T) {
+export function claimDeployment<T>(
+  db: Database,
+  hostId: string,
+  hash: string,
+  materialize: (job: Job) => T,
+) {
   return withAgentHost(db, hostId, async (tx) => {
-    if (await agentHash(tx, hostId) !== hash) return 'denied';
-    const [job] = await tx.select().from(deploymentJobs).where(and(
-      eq(deploymentJobs.hostId, hostId), eq(deploymentJobs.agentHash, hash),
-      eq(deploymentJobs.status, 'Queued'), unexpired, isNotNull(deploymentJobs.sealedKey)
-    )).limit(1).for('update');
+    if ((await agentHash(tx, hostId)) !== hash) return "denied";
+    const [job] = await tx
+      .select()
+      .from(deploymentJobs)
+      .where(
+        and(
+          eq(deploymentJobs.hostId, hostId),
+          eq(deploymentJobs.agentHash, hash),
+          eq(deploymentJobs.status, "Queued"),
+          unexpired,
+          isNotNull(deploymentJobs.sealedKey),
+        ),
+      )
+      .limit(1)
+      .for("update");
     if (!job) return null;
-    const [source] = await deploymentSources(tx, { hostId }, [job.deploymentId]).for('share', { of: deployments });
-    if (!source || source.method !== 'Agent' ||
-        source.endpoint !== job.endpoint || source.engine !== job.engine || source.fullchain !== job.fullchain) {
-      await tx.update(deploymentJobs).set({
-        status: 'Failed', detail: 'The linked deployment or certificate changed before the agent picked up the job.', sealedKey: null
-      }).where(eq(deploymentJobs.id, job.id));
+    const [source] = await deploymentSources(tx, { hostId }, [
+      job.deploymentId,
+    ]).for("share", { of: deployments });
+    if (
+      !source ||
+      source.method !== "Agent" ||
+      source.endpoint !== job.endpoint ||
+      source.engine !== job.engine ||
+      source.fullchain !== job.fullchain
+    ) {
+      await tx
+        .update(deploymentJobs)
+        .set({
+          status: "Failed",
+          detail:
+            "The linked deployment or certificate changed before the agent picked up the job.",
+          sealedKey: null,
+        })
+        .where(eq(deploymentJobs.id, job.id));
       return null;
     }
     const payload = materialize(job);
-    await tx.update(deploymentJobs).set({
-      status: 'Running', sealedKey: null, expiresAt: sql`now() + interval '5 minutes'`
-    }).where(eq(deploymentJobs.id, job.id));
+    await tx
+      .update(deploymentJobs)
+      .set({
+        status: "Running",
+        sealedKey: null,
+        expiresAt: sql`now() + interval '5 minutes'`,
+      })
+      .where(eq(deploymentJobs.id, job.id));
     return payload;
   });
 }
 
-export function finishDeployment(db: Database, hostId: string, hash: string, id: string, detail: string | null) {
+export function finishDeployment(
+  db: Database,
+  hostId: string,
+  hash: string,
+  id: string,
+  detail: string | null,
+) {
   return withAgentHost(db, hostId, async (tx) => {
-    if (await agentHash(tx, hostId) !== hash) return 'denied';
-    const owned = and(eq(deploymentJobs.id, id), eq(deploymentJobs.hostId, hostId), eq(deploymentJobs.agentHash, hash));
-    const status = detail ? 'Failed' : 'Deployed';
-    const [job] = await tx.update(deploymentJobs).set({
-      status, detail, sealedKey: null
-    }).where(and(owned, eq(deploymentJobs.status, 'Running'), unexpired))
+    if ((await agentHash(tx, hostId)) !== hash) return "denied";
+    const owned = and(
+      eq(deploymentJobs.id, id),
+      eq(deploymentJobs.hostId, hostId),
+      eq(deploymentJobs.agentHash, hash),
+    );
+    const status = detail ? "Failed" : "Deployed";
+    const [job] = await tx
+      .update(deploymentJobs)
+      .set({
+        status,
+        detail,
+        sealedKey: null,
+      })
+      .where(and(owned, eq(deploymentJobs.status, "Running"), unexpired))
       .returning({
-        deploymentId: deploymentJobs.deploymentId, endpoint: deploymentJobs.endpoint,
-        engine: deploymentJobs.engine, fullchain: deploymentJobs.fullchain
+        deploymentId: deploymentJobs.deploymentId,
+        endpoint: deploymentJobs.endpoint,
+        engine: deploymentJobs.engine,
+        fullchain: deploymentJobs.fullchain,
       });
     if (!job) {
-      const [completed] = await tx.select({ id: deploymentJobs.id }).from(deploymentJobs)
+      const [completed] = await tx
+        .select({ id: deploymentJobs.id })
+        .from(deploymentJobs)
         .where(and(owned, eq(deploymentJobs.status, status)));
-      return completed ? 'ok' : 'missing';
+      return completed ? "ok" : "missing";
     }
-    if (status === 'Deployed') {
-      const currentChain = tx.select({ id: certificates.id }).from(certificates)
-        .where(and(eq(certificates.id, deployments.certificateId), eq(certificates.fullchain, job.fullchain)));
-      await tx.update(deployments).set({ status: 'Verified' }).where(and(
-        eq(deployments.id, job.deploymentId), eq(deployments.hostId, hostId), eq(deployments.endpoint, job.endpoint),
-        eq(deployments.engine, job.engine), exists(currentChain)
-      ));
+    if (status === "Deployed") {
+      const currentChain = tx
+        .select({ id: certificates.id })
+        .from(certificates)
+        .where(
+          and(
+            eq(certificates.id, deployments.certificateId),
+            eq(certificates.fullchain, job.fullchain),
+          ),
+        );
+      await tx
+        .update(deployments)
+        .set({ status: "Verified" })
+        .where(
+          and(
+            eq(deployments.id, job.deploymentId),
+            eq(deployments.hostId, hostId),
+            eq(deployments.endpoint, job.endpoint),
+            eq(deployments.engine, job.engine),
+            exists(currentChain),
+          ),
+        );
     }
-    return 'ok';
+    return "ok";
   });
 }

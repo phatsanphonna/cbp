@@ -22,9 +22,21 @@ Follow the [Docker deployment guide](apps/controller/README.md#run-with-docker-c
 
 ## Develop locally
 
-Use Bun 1.4.5, Go 1.27.4, and a PostgreSQL database. Create a root `.env.local` with a `DATABASE_URL` pointing to a development database, `BETTER_AUTH_URL=http://127.0.0.1:5173`, a random `BETTER_AUTH_SECRET` of at least 32 characters, and your administrator email in `CBP_ADMIN_EMAILS`. Keep `.env.local`, credentials, and private keys out of Git.
+Use Bun 1.4.5 and Docker Compose. The development Compose project runs PostgreSQL on `127.0.0.1:5433` with its own named volume. Run Vite on the host for hot reload.
+
+Set `CBP_DEV_POSTGRES_PASSWORD` in `.cbp-dev/.env` to a random URL-safe password. Create a root `.env.local` with these settings, using the same database password and your administrator email.
+
+```dotenv
+DATABASE_URL=postgresql://cbp:<database-password>@127.0.0.1:5433/cbp
+BETTER_AUTH_URL=http://127.0.0.1:5173
+BETTER_AUTH_SECRET=<random-secret-of-at-least-32-characters>
+CBP_ADMIN_EMAILS=admin@example.com
+```
+
+If you already have a development database, point `DATABASE_URL` at it and skip the Compose command. Keep both environment files, credentials, and private keys out of Git.
 
 ```sh
+docker compose --env-file .cbp-dev/.env -f compose.dev.yaml up --wait
 bun install --frozen-lockfile
 bun --filter @cbp/database db:push
 bun run --filter web dev --host 127.0.0.1 --strictPort
@@ -32,7 +44,9 @@ bun run --filter web dev --host 127.0.0.1 --strictPort
 
 Open `http://127.0.0.1:5173`. To create a local account, set `CBP_USER_NAME`, `CBP_USER_EMAIL`, `CBP_USER_USERNAME`, and `CBP_USER_PASSWORD` in your shell environment, then run `bun run --filter web auth:create-user`. Use the same email you set in `CBP_ADMIN_EMAILS`.
 
-To develop with the controller, follow the [controller setup](apps/controller/README.md#connect-to-the-web-app), configure its TLS files, and use `bun run dev` to start both services.
+To develop with the controller, install Go 1.27.4, follow the [controller setup](apps/controller/README.md#connect-to-the-web-app), configure its TLS files, and use `bun run dev` to start both services.
+
+To stop PostgreSQL and keep its data, run `docker compose --env-file .cbp-dev/.env -f compose.dev.yaml down`.
 
 ## Build and test
 
@@ -49,12 +63,12 @@ The Bun production server is built into `apps/web/dist/`. Start it with `bun run
 
 ## Repository layout
 
-| Path | Purpose |
-| --- | --- |
-| `apps/web/` | SvelteKit routes, UI, and web API |
-| `apps/controller/` | Go controller that connects agents to the web app |
-| `apps/agent/` | Go agent for Linux check-ins and certificate deployment |
-| `packages/agent-rpc/` | Shared gRPC contract |
-| `packages/database/` | PostgreSQL schemas and queries |
+| Path                  | Purpose                                                 |
+| --------------------- | ------------------------------------------------------- |
+| `apps/web/`           | SvelteKit routes, UI, and web API                       |
+| `apps/controller/`    | Go controller that connects agents to the web app       |
+| `apps/agent/`         | Go agent for Linux check-ins and certificate deployment |
+| `packages/agent-rpc/` | Shared gRPC contract                                    |
+| `packages/database/`  | PostgreSQL schemas and queries                          |
 
 See [AGENTS.md](AGENTS.md) for contributor guidelines.

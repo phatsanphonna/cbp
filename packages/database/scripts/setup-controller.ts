@@ -1,9 +1,11 @@
-import { openDatabase } from '../src/index.js';
-import { sql } from 'drizzle-orm';
+import { openDatabase } from "../src/index.js";
+import { sql } from "drizzle-orm";
 
 const webPassword = Bun.env.CBP_DATABASE_WEB_PASSWORD;
 if (webPassword !== undefined && !/^[A-Za-z0-9_-]{32,128}$/.test(webPassword)) {
-  throw new Error('CBP_DATABASE_WEB_PASSWORD must be 32 to 128 URL-safe characters');
+  throw new Error(
+    "CBP_DATABASE_WEB_PASSWORD must be 32 to 128 URL-safe characters",
+  );
 }
 
 const db = openDatabase();
@@ -27,7 +29,9 @@ try {
     alter table cbp_certificates add column if not exists previous_fullchain text
   `;
   await db.transaction(async (tx) => {
-    await tx.execute(sql`alter table cbp_hosts add column if not exists allowed_deployment_services text[]`);
+    await tx.execute(
+      sql`alter table cbp_hosts add column if not exists allowed_deployment_services text[]`,
+    );
     await tx.execute(sql`alter table cbp_deployments
       add column if not exists listener_status text,
       add column if not exists listener_address text,
@@ -71,15 +75,21 @@ try {
       certificate_id uuid not null references cbp_certificates(id) on delete cascade,
       submitted_at timestamp with time zone default now()
     )`);
-    await tx.execute(sql`alter table cbp_deployment_runs add column if not exists slug text`);
-    await tx.execute(sql`alter table cbp_deployment_runs alter column slug drop not null`);
+    await tx.execute(
+      sql`alter table cbp_deployment_runs add column if not exists slug text`,
+    );
+    await tx.execute(
+      sql`alter table cbp_deployment_runs alter column slug drop not null`,
+    );
     await tx.execute(sql`alter table cbp_deployment_jobs add column if not exists run_id uuid
       references cbp_deployment_runs(id) on delete cascade`);
     await tx.execute(sql`insert into cbp_deployment_runs (id, certificate_id, submitted_at)
       select job.id, deployment.certificate_id, null
       from cbp_deployment_jobs job join cbp_deployments deployment on deployment.id = job.deployment_id
       where job.run_id is null on conflict (id) do nothing`);
-    await tx.execute(sql`update cbp_deployment_jobs set run_id = id where run_id is null`);
+    await tx.execute(
+      sql`update cbp_deployment_jobs set run_id = id where run_id is null`,
+    );
     await tx.execute(sql`with previous as (
       select coalesce(max(substring(slug from '^deployment-([0-9]+)$')::bigint), 0) as last_number
       from cbp_deployment_runs
@@ -88,7 +98,9 @@ try {
     )
     update cbp_deployment_runs run set slug = 'deployment-' || (previous.last_number + numbered.number)
     from previous, numbered where run.id = numbered.id`);
-    await tx.execute(sql`alter table cbp_deployment_runs alter column slug set not null`);
+    await tx.execute(
+      sql`alter table cbp_deployment_runs alter column slug set not null`,
+    );
     await tx.execute(sql`do $$ begin
       if not exists (select 1 from pg_constraint where conrelid = 'cbp_deployment_runs'::regclass
         and conname = 'cbp_deployment_runs_slug_unique') then
@@ -101,9 +113,15 @@ try {
       drop constraint if exists cbp_deployment_jobs_deployment_id_unique`);
     await tx.execute(sql`create index if not exists cbp_deployment_runs_submitted_idx
       on cbp_deployment_runs (submitted_at desc nulls last, id desc)`);
-    await tx.execute(sql`create index if not exists cbp_deployment_jobs_run_idx on cbp_deployment_jobs (run_id)`);
-    await tx.execute(sql`create index if not exists cbp_deployment_jobs_deployment_idx on cbp_deployment_jobs (deployment_id)`);
-    await tx.execute(sql`create index if not exists cbp_deployment_jobs_host_idx on cbp_deployment_jobs (host_id)`);
+    await tx.execute(
+      sql`create index if not exists cbp_deployment_jobs_run_idx on cbp_deployment_jobs (run_id)`,
+    );
+    await tx.execute(
+      sql`create index if not exists cbp_deployment_jobs_deployment_idx on cbp_deployment_jobs (deployment_id)`,
+    );
+    await tx.execute(
+      sql`create index if not exists cbp_deployment_jobs_host_idx on cbp_deployment_jobs (host_id)`,
+    );
     await tx.execute(sql`create or replace function cbp_notify_deployment_update() returns trigger language plpgsql as $$
       begin
         perform pg_notify('cbp_deployment_updates', '');
@@ -116,7 +134,9 @@ try {
   });
   if (webPassword) {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('cbp.web_password', ${webPassword}, true)`);
+      await tx.execute(
+        sql`select set_config('cbp.web_password', ${webPassword}, true)`,
+      );
       await tx.execute(sql`do $$ begin
         if not exists (select 1 from pg_roles where rolname = 'cbp_web') then
           create role cbp_web;
@@ -131,7 +151,9 @@ try {
         to cbp_web`);
       await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,
         public.cbp_deployment_jobs, public.cbp_notification_channels to cbp_web`);
-      await tx.execute(sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`);
+      await tx.execute(
+        sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`,
+      );
       await tx.execute(sql`grant select on public.cbp_alerts to cbp_web`);
     });
   }

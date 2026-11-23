@@ -1,5 +1,5 @@
-import { saveControllerHeartbeat } from '@cbp/database/controller-status';
-import { controllerPost } from '../request.js';
+import { saveControllerHeartbeat } from "@cbp/database/controller-status";
+import { controllerPost } from "../request.js";
 
 export const POST = controllerPost(async (db) => {
   await saveControllerHeartbeat(db);

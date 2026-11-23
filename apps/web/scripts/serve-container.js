@@ -1,11 +1,18 @@
-const origin = new URL(Bun.env.BETTER_AUTH_URL ?? 'http://127.0.0.1:3000');
-const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname);
-if (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && loopback)) {
-  throw new Error('BETTER_AUTH_URL must use HTTPS outside loopback development');
+const origin = new URL(Bun.env.BETTER_AUTH_URL ?? "http://127.0.0.1:3000");
+const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
+if (
+  origin.protocol !== "https:" &&
+  !(origin.protocol === "http:" && loopback)
+) {
+  throw new Error(
+    "BETTER_AUTH_URL must use HTTPS outside loopback development",
+  );
 }
 const proxyToken = Bun.env.CBP_TRUSTED_PROXY_TOKEN;
 if (proxyToken && !/^[A-Za-z0-9_-]{43,128}$/.test(proxyToken)) {
-  throw new Error('CBP_TRUSTED_PROXY_TOKEN must be a 43 to 128 character URL-safe token');
+  throw new Error(
+    "CBP_TRUSTED_PROXY_TOKEN must be a 43 to 128 character URL-safe token",
+  );
 }
 
 Bun.env.CBP_BUN_ORIGIN = origin.origin;
@@ -14,35 +21,45 @@ delete Bun.env.CBP_BUN_ADDRESS_HEADER;
 
 const certPath = Bun.env.CBP_WEB_TLS_CERT;
 const keyPath = Bun.env.CBP_WEB_TLS_KEY;
-if ((certPath || keyPath) && (!certPath || !keyPath || origin.protocol !== 'https:')) {
-  throw new Error('Direct HTTPS requires both CBP_WEB_TLS_CERT and CBP_WEB_TLS_KEY and an HTTPS BETTER_AUTH_URL');
+if (
+  (certPath || keyPath) &&
+  (!certPath || !keyPath || origin.protocol !== "https:")
+) {
+  throw new Error(
+    "Direct HTTPS requires both CBP_WEB_TLS_CERT and CBP_WEB_TLS_KEY and an HTTPS BETTER_AUTH_URL",
+  );
 }
 
-const { server_options, server } = await import('../dist/adapter-bun.js');
+const { server_options, server } = await import("../dist/adapter-bun.js");
 if (certPath && keyPath) {
   // The Bun adapter reads these options when its entry point starts the listener.
   server_options.tls = {
     cert: await Bun.file(certPath).text(),
-    key: await Bun.file(keyPath).text()
+    key: await Bun.file(keyPath).text(),
   };
 }
-await import('../dist/index.js');
+await import("../dist/index.js");
 
 if (certPath && keyPath) {
   const controllerApi = Bun.serve({
-    hostname: '127.0.0.1',
+    hostname: "127.0.0.1",
     port: 3001,
     idleTimeout: 10,
     maxRequestBodySize: 512 * 1024,
     fetch(request, listener) {
-      if (request.method !== 'POST' || !new URL(request.url).pathname.startsWith('/api/internal/controller/')) {
+      if (
+        request.method !== "POST" ||
+        !new URL(request.url).pathname.startsWith("/api/internal/controller/")
+      ) {
         return new Response(null, { status: 404 });
       }
       return server.respond(request, {
         platform: { server: listener },
-        getClientAddress: () => listener.requestIP(request)?.address
+        getClientAddress: () => listener.requestIP(request)?.address,
       });
-    }
+    },
   });
-  process.on('sveltekit:shutdown', () => { void controllerApi.stop(true); });
+  process.on("sveltekit:shutdown", () => {
+    void controllerApi.stop(true);
+  });
 }

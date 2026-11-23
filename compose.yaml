@@ -28,7 +28,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["sh", "-ec", "bun --filter @cbp/database db:push && bun --filter @cbp/database db:setup-controller"]
+    command:
+      [
+        "sh",
+        "-ec",
+        "bun --filter @cbp/database db:push && bun --filter @cbp/database db:setup-controller",
+      ]
 
   web:
     image: cbp-web:local

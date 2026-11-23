@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
-  import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
-  import { Button } from '#lib/components/ui/button/index.ts';
-  import * as Table from '#lib/components/ui/table/index.ts';
-  import type { PageProps } from './$types';
+  import { resolve } from "$app/paths";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Table from "#lib/components/ui/table/index.ts";
+  import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
 </script>
@@ -15,7 +15,7 @@
 <section class="px-5 py-6 md:px-8" aria-labelledby="users-heading">
   <header class="flex flex-wrap items-center justify-between gap-4">
     <h1 id="users-heading" class="font-heading text-xl font-semibold">Users</h1>
-    <Button href={resolve('/users/new')}>Create user</Button>
+    <Button href={resolve("/users/new")}>Create user</Button>
   </header>
 
   {#if data.created}
@@ -44,14 +44,19 @@
           <Table.Row>
             <Table.Head scope="row">{user.name}</Table.Head>
             <Table.Cell>{user.email}</Table.Cell>
-            <Table.Cell>{user.username ?? '—'}</Table.Cell>
-            <Table.Cell>{user.isAdmin ? 'Admin' : 'Read-only'}</Table.Cell>
+            <Table.Cell>{user.username ?? "—"}</Table.Cell>
+            <Table.Cell>{user.isAdmin ? "Admin" : "Read-only"}</Table.Cell>
             <Table.Cell class="text-right">
               {#if !user.isCurrentUser}
                 <AlertDialog.Root>
                   <AlertDialog.Trigger>
                     {#snippet child({ props })}
-                      <Button {...props} variant="outline" size="sm" aria-label={`Remove ${user.email}`}>Remove</Button>
+                      <Button
+                        {...props}
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Remove ${user.email}`}>Remove</Button
+                      >
                     {/snippet}
                   </AlertDialog.Trigger>
                   <AlertDialog.Content>
@@ -64,8 +69,12 @@
                     <form method="POST" action="?/remove">
                       <input type="hidden" name="userId" value={user.id} />
                       <AlertDialog.Footer>
-                        <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
-                        <AlertDialog.Action type="submit" variant="destructive">Remove user</AlertDialog.Action>
+                        <AlertDialog.Cancel type="button"
+                          >Cancel</AlertDialog.Cancel
+                        >
+                        <AlertDialog.Action type="submit" variant="destructive"
+                          >Remove user</AlertDialog.Action
+                        >
                       </AlertDialog.Footer>
                     </form>
                   </AlertDialog.Content>
@@ -75,7 +84,11 @@
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={5} class="py-8 text-center text-muted-foreground">No user accounts yet.</Table.Cell>
+            <Table.Cell
+              colspan={5}
+              class="py-8 text-center text-muted-foreground"
+              >No user accounts yet.</Table.Cell
+            >
           </Table.Row>
         {/each}
       </Table.Body>

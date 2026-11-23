@@ -7,19 +7,23 @@
       (() => {
         let theme;
         try {
-          theme = localStorage.getItem('cbp-theme');
+          theme = localStorage.getItem("cbp-theme");
         } catch {
           // Storage may be disabled.
         }
-        const dark = theme === 'dark' ||
-          (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.classList.toggle('dark', dark);
+        const dark =
+          theme === "dark" ||
+          (theme !== "light" &&
+            matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
 
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const preference = 'cbp-time-zone=' + encodeURIComponent(timeZone);
-        if (timeZone && !document.cookie.split('; ').includes(preference)) {
-          document.cookie = preference + '; Path=/; Max-Age=31536000; SameSite=Lax' +
-            (location.protocol === 'https:' ? '; Secure' : '');
+        const preference = "cbp-time-zone=" + encodeURIComponent(timeZone);
+        if (timeZone && !document.cookie.split("; ").includes(preference)) {
+          document.cookie =
+            preference +
+            "; Path=/; Max-Age=31536000; SameSite=Lax" +
+            (location.protocol === "https:" ? "; Secure" : "");
         }
       })();
     </script>
