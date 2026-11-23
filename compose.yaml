@@ -1,0 +1,80 @@
+x-database-url: &database-url "postgresql://cbp:${POSTGRES_PASSWORD:?Set a URL-safe POSTGRES_PASSWORD in .env}@db:5432/cbp"
+x-web-build: &web-build
+  context: .
+  target: web
+
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: cbp
+      POSTGRES_USER: cbp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - cbp-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cbp -d cbp"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  db-setup:
+    image: cbp-web:local
+    build: *web-build
+    environment:
+      DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-ec", "bun --filter @cbp/database db:push && bun --filter @cbp/database db:setup-controller"]
+
+  web:
+    image: cbp-web:local
+    build: *web-build
+    environment:
+      DATABASE_URL: *database-url
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:3000}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      CBP_CONTROLLER_TOKEN: ${CBP_CONTROLLER_TOKEN:?Set CBP_CONTROLLER_TOKEN in .env}
+      CBP_DEPLOYMENT_ENCRYPTION_KEY: ${CBP_DEPLOYMENT_ENCRYPTION_KEY:?Set CBP_DEPLOYMENT_ENCRYPTION_KEY in .env}
+      CBP_AGENT_CONTROLLER_ADDRESS: ${CBP_AGENT_CONTROLLER_ADDRESS:?Set the controller address agents can reach}
+      CBP_AGENT_CA_FILE: ${CBP_AGENT_CA_FILE:-}
+    depends_on:
+      db-setup:
+        condition: service_completed_successfully
+    ports:
+      - "${CBP_WEB_BIND:-127.0.0.1}:${CBP_WEB_PORT:-3000}:3000"
+      - "${CBP_CONTROLLER_PORT:-50051}:50051"
+    restart: unless-stopped
+
+  controller:
+    build:
+      context: .
+      target: controller
+    environment:
+      CBP_CONTROLLER_TOKEN: ${CBP_CONTROLLER_TOKEN:?Set CBP_CONTROLLER_TOKEN in .env}
+      CBP_WEB_URL: http://127.0.0.1:3000
+    # The controller can use plain HTTP on loopback inside this shared namespace.
+    network_mode: service:web
+    depends_on:
+      web:
+        condition: service_started
+        restart: true
+    volumes:
+      - type: bind
+        source: ${CBP_CONTROLLER_TLS_CERT:-./controller-fullchain.pem}
+        target: /run/cbp/controller-fullchain.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${CBP_CONTROLLER_TLS_KEY:-./controller.key}
+        target: /run/cbp/controller.key
+        read_only: true
+        bind:
+          create_host_path: false
+    restart: unless-stopped
+
+volumes:
+  cbp-db:

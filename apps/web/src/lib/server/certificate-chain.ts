@@ -15,7 +15,11 @@ export async function readCertificateChain(fields: FormData) {
     return { message: 'Use a PEM certificate or chain up to 32 KB.' } as const;
   }
 
-  const pem = file ? await file.text() : typeof pasted === 'string' ? pasted : '';
+  return parseCertificateChain(file ? await file.text() : typeof pasted === 'string' ? pasted : '');
+}
+
+export function parseCertificateChain(pem: string) {
+  if (pem.length > maxPemSize) return { message: 'Use a PEM certificate or chain up to 32 KB.' } as const;
   const blocks = pem.match(publicPem);
   if (!blocks?.length || pem.replace(publicPem, '').trim()) {
     return { message: 'Provide a public PEM certificate or fullchain.pem containing only certificates.' } as const;

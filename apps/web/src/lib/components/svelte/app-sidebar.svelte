@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Bell, BookOpen, FileBadge, History, LayoutDashboard, LogIn, LogOut, RefreshCw, Server, ShieldCheck, Users } from '@lucide/svelte';
+  import { Bell, BookOpen, FileBadge, History, LayoutDashboard, LogIn, LogOut, RefreshCw, Send, Server, ShieldCheck } from '@lucide/svelte';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import * as Avatar from '#lib/components/ui/avatar/index.ts';
@@ -13,13 +13,14 @@
     { label: 'Overview', route: '/', icon: LayoutDashboard },
     { label: 'Hosts', route: '/hosts', icon: Server },
     { label: 'Certificates', route: '/certificates', icon: FileBadge },
+    { label: 'Deployments', route: '/deployments', icon: Send },
     { label: 'Alerts', route: '/alerts', icon: Bell },
-    { label: 'Groups', route: '/groups', icon: Users },
-    { label: 'Controller setup', route: '/docs/controller', icon: BookOpen }
+    { label: 'Audit log', route: '/audit', icon: History },
+    { label: 'Controller setup', route: '/docs/controller', icon: BookOpen },
+    { label: 'Agent setup', route: '/docs/agent', icon: BookOpen }
   ] as const;
   const planned = [
-    { label: 'Renewals', icon: RefreshCw },
-    { label: 'Audit log', icon: History }
+    { label: 'Renewals', icon: RefreshCw }
   ];
 </script>
 

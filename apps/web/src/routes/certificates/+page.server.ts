@@ -9,8 +9,8 @@ export const load: PageServerLoad = async ({ url }) => {
   const certificates = await listCertificates(getDatabase(), expiry ?? undefined);
   return {
     expiryLabel: expiry?.label ?? null,
-    certificates: certificates.map(({ id, domain, sans, issuer, groupName, validFrom, validUntil, total, verified }) => ({
-      id, domain, displayDomain: displayCertificateDomain(domain, sans), issuer, groupName: groupName ?? 'Unassigned',
+    certificates: certificates.map(({ id, domain, sans, issuer, validFrom, validUntil, total, verified }) => ({
+      id, domain, displayDomain: displayCertificateDomain(domain, sans), issuer,
       deployments: `${verified} of ${total} verified`,
       status: expiryStatus(validFrom, validUntil)
     }))

@@ -4,6 +4,7 @@
   import ControllerStatus from '#lib/components/svelte/controller-status.svelte';
   import ThemeToggle from '#lib/components/svelte/theme-toggle.svelte';
   import * as Sidebar from '#lib/components/ui/sidebar/index.ts';
+  import { Toaster } from '#lib/components/ui/sonner/index.ts';
   import theme from './layout.css?inline';
 
   const themeMarkup = `<style>${theme}</style>`;
@@ -12,13 +13,16 @@
     '/hosts': 'Hosts',
     '/hosts/new': 'Add host',
     '/hosts/[id]': 'Host details',
-    '/groups': 'Groups',
     '/certificates': 'Certificates',
     '/certificates/[id]': 'Certificate details',
     '/certificates/new': 'Register certificate',
+    '/deployments': 'Deployments',
+    '/deployments/[id]': 'Deployment status',
     '/alerts': 'Alerts',
     '/alerts/channels': 'Notification channels',
-    '/docs/controller': 'Controller setup'
+    '/audit': 'Audit log',
+    '/docs/controller': 'Controller setup',
+    '/docs/agent': 'Agent setup'
   };
   const pageTitle = $derived(page.route.id ? pageTitles[page.route.id] : undefined);
 
@@ -28,6 +32,8 @@
 <svelte:head>
   {@html themeMarkup}
 </svelte:head>
+
+<Toaster richColors />
 
 {#if page.route.id === '/signin'}
   <div class="absolute end-4 top-4 z-10">

@@ -14,4 +14,10 @@ service Controller {
 
   // The report contains hostname, operatingSystem, architecture and collectedAt.
   rpc CheckIn(google.protobuf.Struct) returns (google.protobuf.Empty);
+
+  // A job contains id, engine, endpoint, fullchain and privateKey. An empty reply means no job.
+  rpc ClaimDeployment(google.protobuf.Empty) returns (google.protobuf.Struct);
+
+  // The result contains jobId and outcome.
+  rpc FinishDeployment(google.protobuf.Struct) returns (google.protobuf.Empty);
 }

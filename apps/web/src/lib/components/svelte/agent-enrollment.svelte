@@ -97,7 +97,7 @@
   {#if message}<p class="text-xs" role="status">{message}</p>{/if}
   {#if code && command && status === 'pending'}
     <div class="grid gap-3 border bg-muted/40 p-3">
-      <p class="text-xs">Paste the command into a Linux shell at the CBP repository root. It includes the single-use enrollment code.</p>
+      <p class="text-xs">Run this command as root on the Linux host after installing <code>cbp-agent</code> on its PATH. It enrolls the agent and starts its systemd service.</p>
       <CodeBlock.Root size="sm">
         <CodeBlock.Header>
           <CodeBlock.Title>Linux enrollment command</CodeBlock.Title>
@@ -124,7 +124,7 @@
       <p class="text-xs text-muted-foreground empty:hidden" aria-live="polite">{copyFeedback}</p>
     </div>
   {/if}
-  <a href={`${resolve('/docs/controller')}#agent`} class="justify-self-start text-xs text-primary underline underline-offset-4">
+  <a href={`${resolve('/docs/agent')}#agent`} class="justify-self-start text-xs text-primary underline underline-offset-4">
     Agent setup instructions
   </a>
 </section>

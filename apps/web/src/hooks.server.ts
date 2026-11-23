@@ -2,13 +2,18 @@ import { building } from '$app/env';
 import { resolve as resolvePath } from '$app/paths';
 import { redirect, type Handle } from '@sveltejs/kit';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { auditUserAction } from '#lib/server/audit-action.js';
 import { getAuth } from '#lib/server/auth.js';
 
 const controllerRoutes = [
   '/api/internal/controller/check-in',
+  '/api/internal/controller/deployment-claim',
+  '/api/internal/controller/deployment-result',
   '/api/internal/controller/enroll',
   '/api/internal/controller/heartbeat',
   '/api/internal/controller/invite',
+  '/api/internal/controller/probe-hosts',
+  '/api/internal/controller/probe-results',
   '/api/internal/controller/revoke'
 ];
 
@@ -27,6 +32,7 @@ export const handle: Handle = ({ event, resolve }) => {
 
       const session = await auth.api.getSession({ headers: event.request.headers });
       const user = session?.user;
+      if (user) event.locals.auditActor = { id: user.id, name: user.name };
       event.locals.user = user
         ? { name: user.name, email: user.email, username: user.displayUsername ?? user.username, image: user.image }
         : null;
@@ -36,7 +42,7 @@ export const handle: Handle = ({ event, resolve }) => {
       } else if (!user) {
         redirect(303, resolvePath('/signin'));
       }
-      return resolve(event);
+      return auditUserAction(event, () => resolve(event));
     }
   });
 };

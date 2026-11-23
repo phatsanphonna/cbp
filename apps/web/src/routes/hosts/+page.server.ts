@@ -6,7 +6,8 @@ import { hostIpAddress } from '#lib/server/host-address.js';
 import { pingLabels } from '#lib/server/ping-host.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ cookies }) => {
+export const load: PageServerLoad = async ({ cookies, depends }) => {
+  depends('cbp:host-ping');
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const hosts = await listHosts(getDatabase());
   return {

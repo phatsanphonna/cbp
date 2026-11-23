@@ -13,10 +13,12 @@ import (
 )
 
 const (
-	serviceName   = "cbp.agent.v1.Controller"
-	EnrollMethod  = "/" + serviceName + "/Enroll"
-	CheckInMethod = "/" + serviceName + "/CheckIn"
-	HostHeader    = "cbp-host-id"
+	serviceName            = "cbp.agent.v1.Controller"
+	EnrollMethod           = "/" + serviceName + "/Enroll"
+	CheckInMethod          = "/" + serviceName + "/CheckIn"
+	ClaimDeploymentMethod  = "/" + serviceName + "/ClaimDeployment"
+	FinishDeploymentMethod = "/" + serviceName + "/FinishDeployment"
+	HostHeader             = "cbp-host-id"
 )
 
 var hostIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
@@ -40,6 +42,8 @@ func ValidToken(value string) bool {
 type Controller interface {
 	Enroll(context.Context, *wrapperspb.StringValue) (*emptypb.Empty, error)
 	CheckIn(context.Context, *structpb.Struct) (*emptypb.Empty, error)
+	ClaimDeployment(context.Context, *emptypb.Empty) (*structpb.Struct, error)
+	FinishDeployment(context.Context, *structpb.Struct) (*emptypb.Empty, error)
 }
 
 // The contract uses standard protobuf messages, so only service registration is needed.
@@ -50,11 +54,13 @@ func RegisterController(server *grpc.Server, controller Controller) {
 		Methods: []grpc.MethodDesc{
 			method("Enroll", EnrollMethod, Controller.Enroll),
 			method("CheckIn", CheckInMethod, Controller.CheckIn),
+			method("ClaimDeployment", ClaimDeploymentMethod, Controller.ClaimDeployment),
+			method("FinishDeployment", FinishDeploymentMethod, Controller.FinishDeployment),
 		},
 	}, controller)
 }
 
-func method[T any](name, fullName string, call func(Controller, context.Context, *T) (*emptypb.Empty, error)) grpc.MethodDesc {
+func method[T, R any](name, fullName string, call func(Controller, context.Context, *T) (*R, error)) grpc.MethodDesc {
 	return grpc.MethodDesc{
 		MethodName: name,
 		Handler: func(server any, ctx context.Context, decode func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {

@@ -15,7 +15,6 @@
       cell: ({ row }) => renderSnippet(certificateLink, row.original)
     }),
     column.accessor('issuer', { header: 'Issuer' }),
-    column.accessor('groupName', { header: 'Responsible group' }),
     column.accessor('deployments', { header: 'Deployments' }),
     column.accessor('status', { header: 'Expiry', cell: ({ getValue }) => renderSnippet(status, getValue()) })
   ]);
@@ -29,7 +28,7 @@
   <header class="flex flex-wrap items-end justify-between gap-4">
     <div class="grid gap-1">
       <h1 id="certificates-heading" class="font-heading text-xl font-semibold">Certificates</h1>
-      <p class="text-xs text-muted-foreground">Track TLS expiry, responsible groups, and deployment coverage.</p>
+      <p class="text-xs text-muted-foreground">Track TLS expiry and deployment coverage.</p>
     </div>
     <Button href={resolve('/certificates/new')}>Register certificate</Button>
   </header>

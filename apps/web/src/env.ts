@@ -6,5 +6,6 @@ export const variables = defineEnvVars({
   BETTER_AUTH_SECRET: { schema: (value) => value },
   CBP_CONTROLLER_TOKEN: { schema: (value) => value },
   CBP_AGENT_CONTROLLER_ADDRESS: { schema: (value) => value },
-  CBP_AGENT_CA_FILE: { schema: (value) => value }
+  CBP_AGENT_CA_FILE: { schema: (value) => value },
+  CBP_DEPLOYMENT_ENCRYPTION_KEY: { schema: (value) => value }
 });

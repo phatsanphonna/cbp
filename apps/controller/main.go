@@ -69,6 +69,7 @@ func run(args []string) error {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go web.reportHealth(ctx)
+			go web.probeHosts(ctx)
 		}
 		slog.Info("controller listening", "address", listener.Addr(), "webConnectedMode", web != nil)
 		return server.Serve(listener)

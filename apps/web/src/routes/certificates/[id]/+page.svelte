@@ -2,8 +2,9 @@
   import { enhance } from '$app/forms';
   import { resolve } from '$app/paths';
   import CertificateChainFields from '#lib/components/svelte/certificate-chain-fields.svelte';
-  import CertificateGroupField from '#lib/components/svelte/certificate-group-field.svelte';
+  import DeployCertificateDialog from '#lib/components/svelte/deploy-certificate-dialog.svelte';
   import EditDeploymentEndpointDialog from '#lib/components/svelte/edit-deployment-endpoint-dialog.svelte';
+  import DeploymentStatusBadge from '#lib/components/svelte/deployment-status-badge.svelte';
   import LinkDeploymentDialog from '#lib/components/svelte/link-deployment-dialog.svelte';
   import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
   import { Badge } from '#lib/components/ui/badge/index.ts';
@@ -11,12 +12,29 @@
   import * as Dialog from '#lib/components/ui/dialog/index.ts';
   import { FieldGroup } from '#lib/components/ui/field/index.ts';
   import * as Table from '#lib/components/ui/table/index.ts';
+  import { deploymentServices } from '#lib/deployment-services.js';
+  import { nextDeploymentExpiry, watchDeploymentUpdates } from '#lib/hooks/watch-deployment-updates.svelte.js';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
   let updateOpen = $state(false);
+  let restoreOpen = $state(false);
+  let restorePending = $state(false);
   const certificate = $derived(data.certificate);
   const verified = $derived(certificate.deployments.filter(({ status }) => status === 'Verified').length);
+  const busyHosts = $derived(new Set(certificate.deployments
+    .filter(({ id }) => {
+      const status = data.agentDeployments.statuses[id]?.status;
+      return status === 'Queued' || status === 'Running';
+    })
+    .map(({ hostId }) => hostId)));
+  const deploymentTargets = $derived(certificate.deployments.flatMap(({ id, hostId, hostName, endpoint, engine, method, agentEnrolled }) =>
+    method === 'Agent' && hostId && hostName && agentEnrolled && !busyHosts.has(hostId) && engine &&
+      deploymentServices.some((service) => service === engine)
+      ? [{ id, hostId, hostName, endpoint, engine }] : []
+  ));
+
+  watchDeploymentUpdates(() => nextDeploymentExpiry(Object.values(data.agentDeployments.statuses)));
 </script>
 
 <svelte:head>
@@ -43,7 +61,7 @@
           <Dialog.Header>
             <Dialog.Title>Update fullchain</Dialog.Title>
             <Dialog.Description>
-              Replace the public certificate chain in CBP. Deploy the replacement separately to your servers.
+              CBP saves the current public chain for rollback. Deploy the replacement separately to your servers.
             </Dialog.Description>
           </Dialog.Header>
           <form
@@ -72,6 +90,41 @@
           </form>
         </Dialog.Content>
       </Dialog.Root>
+      {#if certificate.previousChainRevision}
+        <AlertDialog.Root bind:open={restoreOpen}>
+          <AlertDialog.Trigger>
+            {#snippet child({ props })}
+              <Button {...props} variant="outline">Restore previous fullchain</Button>
+            {/snippet}
+          </AlertDialog.Trigger>
+          <AlertDialog.Content>
+            <AlertDialog.Header>
+              <AlertDialog.Title>Restore previous fullchain?</AlertDialog.Title>
+              <AlertDialog.Description>
+                CBP will swap the current and previous public chains. Deploy the restored chain with its matching private key to update your hosts.
+              </AlertDialog.Description>
+            </AlertDialog.Header>
+            <form method="POST" action="?/restoreChain" use:enhance={() => {
+              restorePending = true;
+              return async ({ result, update }) => {
+                try {
+                  await update();
+                  if (result.type === 'success') restoreOpen = false;
+                } finally {
+                  restorePending = false;
+                }
+              };
+            }}>
+              <input type="hidden" name="previousChainRevision" value={certificate.previousChainRevision} />
+              {#if form?.restoreError}<p role="alert" class="mb-3 text-xs text-destructive">{form.restoreError}</p>{/if}
+              <AlertDialog.Footer>
+                <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
+                <Button type="submit" disabled={restorePending}>Restore fullchain</Button>
+              </AlertDialog.Footer>
+            </form>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      {/if}
       <AlertDialog.Root>
         <AlertDialog.Trigger>
           {#snippet child({ props })}
@@ -95,12 +148,16 @@
       </AlertDialog.Root>
     </div>
   </header>
+  {#if form?.restoreMessage}
+    <p class="mt-3 text-xs" role="status">{form.restoreMessage}</p>
+  {:else if form?.restoreError && !restoreOpen}
+    <p class="mt-3 text-xs text-destructive" role="alert">{form.restoreError}</p>
+  {/if}
 
   <section class="mt-6 border" aria-labelledby="metadata-heading">
     <h2 id="metadata-heading" class="border-b bg-muted px-4 py-3 text-sm font-medium">Certificate details</h2>
     <dl class="grid gap-4 px-4 py-4 text-xs sm:grid-cols-2 lg:grid-cols-3">
       <div><dt class="text-muted-foreground">Issuer</dt><dd class="mt-1">{certificate.issuer}</dd></div>
-      <div><dt class="text-muted-foreground">Responsible group</dt><dd class="mt-1 wrap-anywhere">{certificate.groupName ?? 'Unassigned'}</dd></div>
       <div class="min-w-0">
         <dt class="text-muted-foreground">Serial number</dt>
         <dd class="mt-1 break-all">{certificate.serial}</dd>
@@ -124,17 +181,6 @@
         </dd>
       </div>
     </dl>
-    <form method="POST" action="?/assignGroup" class="border-t p-4">
-      <div class="flex flex-wrap items-end gap-3">
-        <div class="min-w-56 max-w-full">
-          <CertificateGroupField groups={data.groups} selected={certificate.groupId} />
-        </div>
-        <Button type="submit" variant="outline">Save group</Button>
-      </div>
-      {#if form?.groupMessage}
-        <p role="alert" class="mt-2 text-xs text-destructive">{form.groupMessage}</p>
-      {/if}
-    </form>
   </section>
 
   <section class="mt-6" aria-labelledby="deployments-heading">
@@ -143,22 +189,33 @@
         <h2 id="deployments-heading" class="text-sm font-medium">Deployments</h2>
         <p class="text-xs text-muted-foreground">{verified} of {certificate.deployments.length} verified</p>
       </div>
-      {#if data.hostOptions.length}
-        <LinkDeploymentDialog target="host" options={data.hostOptions} message={form?.linkError} />
-      {:else}
-        <Button href={resolve('/hosts/new')} variant="outline" size="sm">Add a host</Button>
-      {/if}
+      <div class="flex flex-wrap gap-2">
+        {#key certificate.id}
+          <DeployCertificateDialog targets={deploymentTargets}
+            canDeploy={!data.agentDeployments.blocked} />
+        {/key}
+        {#if data.hostOptions.length}
+          <LinkDeploymentDialog target="host" options={data.hostOptions} message={form?.linkError} />
+        {:else}
+          <Button href={resolve('/hosts/new')} variant="outline" size="sm">Add a host</Button>
+        {/if}
+      </div>
     </div>
-    {#if form?.linkMessage || form?.endpointMessage}
-      <p class="mb-3 text-xs" role="status">{form.linkMessage ?? form.endpointMessage}</p>
+    {#if form?.linkMessage || form?.endpointMessage || form?.removeDeploymentMessage}
+      <p class="mb-3 text-xs" role="status">{form.linkMessage ?? form.endpointMessage ?? form.removeDeploymentMessage}</p>
+    {/if}
+    {#if data.agentDeployments.httpsRequired && deploymentTargets.length}
+      <p class="mb-3 text-xs text-muted-foreground">Open CBP over HTTPS to deploy.</p>
     {/if}
     <div class="border">
       <Table.Root>
         <Table.Caption class="sr-only">Certificate deployment endpoints</Table.Caption>
         <Table.Header class="bg-muted">
           <Table.Row>
+            <Table.Head scope="col">Status</Table.Head>
             <Table.Head scope="col">Endpoint</Table.Head>
             <Table.Head scope="col">Host</Table.Head>
+            <Table.Head scope="col">Web service</Table.Head>
             <Table.Head scope="col">Method</Table.Head>
             <Table.Head scope="col">Verification</Table.Head>
             <Table.Head scope="col" class="text-right">Actions</Table.Head>
@@ -166,7 +223,17 @@
         </Table.Header>
         <Table.Body>
           {#each certificate.deployments as deployment (deployment.id)}
+            {@const job = data.agentDeployments.statuses[deployment.id]}
             <Table.Row>
+              <Table.Cell>
+                <div role="status">
+                  {#if job}
+                    <DeploymentStatusBadge status={job.status} detail={job.detail} />
+                  {:else}
+                    <span class="text-muted-foreground">—</span>
+                  {/if}
+                </div>
+              </Table.Cell>
               <Table.Head scope="row">{deployment.endpoint}</Table.Head>
               <Table.Cell>
                 {#if deployment.hostId && deployment.hostName}
@@ -175,18 +242,22 @@
                   <span class="text-muted-foreground">Unlinked</span>
                 {/if}
               </Table.Cell>
+              <Table.Cell>{deployment.engine ?? 'Not specified'}</Table.Cell>
               <Table.Cell>{deployment.method}</Table.Cell>
               <Table.Cell><span class:text-destructive={deployment.status === 'Failed'}>{deployment.status}</span></Table.Cell>
               <Table.Cell class="text-right">
                 <EditDeploymentEndpointDialog
                   deploymentId={deployment.id}
                   endpoint={deployment.endpoint}
+                  engine={deployment.engine}
+                  method={deployment.method}
                   message={form?.deploymentId === deployment.id ? form?.endpointError : undefined}
+                  removeMessage={form?.deploymentId === deployment.id ? form.removeDeploymentError : undefined}
                 />
               </Table.Cell>
             </Table.Row>
           {:else}
-            <Table.Row><Table.Cell colspan={5} class="py-8 text-center text-muted-foreground">No deployments recorded for this certificate.</Table.Cell></Table.Row>
+            <Table.Row><Table.Cell colspan={7} class="py-8 text-center text-muted-foreground">No deployments recorded for this certificate.</Table.Cell></Table.Row>
           {/each}
         </Table.Body>
       </Table.Root>

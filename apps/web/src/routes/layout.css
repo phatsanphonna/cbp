@@ -127,8 +127,14 @@
 	button:enabled:not([aria-disabled="true"]) {
 		@apply cursor-pointer;
 	}
+	input:is(:autofill, :-webkit-autofill) {
+		@apply inset-shadow-[0_0_0_100vmax_var(--background)];
+		-webkit-text-fill-color: var(--foreground);
+		caret-color: var(--foreground);
+	}
 	html {
     color-scheme: light;
+		scrollbar-color: var(--muted-foreground) var(--background);
 		@apply font-mono;
 	}
   html.dark {

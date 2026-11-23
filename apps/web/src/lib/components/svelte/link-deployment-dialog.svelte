@@ -4,6 +4,7 @@
   import { Button } from '#lib/components/ui/button/index.ts';
   import * as Dialog from '#lib/components/ui/dialog/index.ts';
   import { Field, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import { deploymentMethods, deploymentServices } from '#lib/deployment-services.js';
 
   let { target, options, message }: {
     target: 'host' | 'certificate';
@@ -41,7 +42,7 @@
     }}>
       <FieldGroup>
         <Field>
-          <FieldLabel for="{id}-target">{label}</FieldLabel>
+          <FieldLabel for="{id}-target" required>{label}</FieldLabel>
           <select id="{id}-target" name={target === 'host' ? 'hostId' : 'certificateId'} class="h-8 w-full border border-input bg-background px-2 text-xs" required>
             <option value="">Choose a {target}</option>
             {#each options as option (option.id)}
@@ -51,11 +52,20 @@
         </Field>
         <DeploymentEndpointFields useHostAddress />
         <Field>
-          <FieldLabel for="{id}-method">Deployment method</FieldLabel>
+          <FieldLabel for="{id}-engine">Web service</FieldLabel>
+          <select id="{id}-engine" name="engine" class="h-8 w-full border border-input bg-background px-2 text-xs">
+            <option value="">Not specified</option>
+            {#each deploymentServices as service (service)}
+              <option value={service}>{service}</option>
+            {/each}
+          </select>
+        </Field>
+        <Field>
+          <FieldLabel for="{id}-method" required>Deployment method</FieldLabel>
           <select id="{id}-method" name="method" class="h-8 w-full border border-input bg-background px-2 text-xs" required>
-            <option value="Manual">Manual</option>
-            <option value="Agent">Agent</option>
-            <option value="Ansible">Ansible</option>
+            {#each deploymentMethods as method (method)}
+              <option value={method}>{method}</option>
+            {/each}
           </select>
         </Field>
         {#if message}

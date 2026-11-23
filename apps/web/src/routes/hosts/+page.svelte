@@ -5,9 +5,11 @@
   import DataTable from '#lib/components/svelte/data-table.svelte';
   import { createColumnHelper, renderSnippet } from '@tanstack/svelte-table';
   import type { DataTableFeatures } from '#lib/components/svelte/data-table-features.js';
+  import { refreshHostPing } from '#lib/hooks/refresh-host-ping.js';
 
 
   let { data }: PageProps = $props();
+  refreshHostPing();
   type Host = PageProps['data']['hosts'][number];
   const column = createColumnHelper<DataTableFeatures, Host>();
   const columns = column.columns([
@@ -46,7 +48,7 @@
   <header class="flex flex-wrap items-end justify-between gap-4">
     <div class="grid gap-1">
       <h1 id="hosts-heading" class="font-heading text-xl font-semibold">Hosts</h1>
-      <p class="text-xs text-muted-foreground">Agent check-ins and Ansible runs across your servers.</p>
+      <p class="text-xs text-muted-foreground">Ping results, agent check-ins, and Ansible runs across your servers.</p>
     </div>
     <Button href={resolve('/hosts/new')}>Add host</Button>
   </header>

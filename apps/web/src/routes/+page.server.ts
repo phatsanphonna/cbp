@@ -6,7 +6,8 @@ import { displayCertificateDomain } from './certificates/display-domain.js';
 import { dayInMilliseconds, expiryFilters } from './certificates/expiry.js';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ cookies }) => {
+export const load: PageServerLoad = async ({ cookies, depends }) => {
+  depends('cbp:host-ping');
   const now = Date.now();
   const nextWeek = new Date(now + expiryFilters['7d'].days * dayInMilliseconds);
   const nextMonth = new Date(now + expiryFilters['30d'].days * dayInMilliseconds);
@@ -17,10 +18,9 @@ export const load: PageServerLoad = async ({ cookies }) => {
   return {
     counts: overview.counts,
     reachability: overview.reachability,
-    attention: overview.attention.map(({ id, domain, sans, groupName, validUntil, failedDeployments }) => ({
+    attention: overview.attention.map(({ id, domain, sans, validUntil, failedDeployments }) => ({
       id,
       domain: displayCertificateDomain(domain, sans),
-      groupName: groupName ?? 'Unassigned',
       expiry: { iso: validUntil.toISOString(), label: format.format(validUntil) },
       expired: validUntil.getTime() <= now,
       expiring: validUntil.getTime() > now && validUntil <= nextMonth,

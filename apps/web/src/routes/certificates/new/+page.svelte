@@ -1,12 +1,11 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import CertificateChainFields from '#lib/components/svelte/certificate-chain-fields.svelte';
-  import CertificateGroupField from '#lib/components/svelte/certificate-group-field.svelte';
   import { Button } from '#lib/components/ui/button/index.ts';
   import { FieldGroup } from '#lib/components/ui/field/index.ts';
   import type { PageProps } from './$types';
 
-  let { data, form }: PageProps = $props();
+  let { form }: PageProps = $props();
 </script>
 
 <svelte:head>
@@ -24,7 +23,6 @@
 
   <form class="mt-6 border p-4 sm:p-5" method="POST" enctype="multipart/form-data">
     <FieldGroup>
-      <CertificateGroupField groups={data.groups} selected={form?.groupId} />
       <CertificateChainFields />
       {#if form?.message}
         <p role="alert" class="text-xs text-destructive">{form.message}</p>

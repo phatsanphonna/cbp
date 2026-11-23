@@ -1,0 +1,16 @@
+.git
+.agents
+.agent-local
+.turbo
+.vscode
+controller-state
+cbp-agent-linux
+**/node_modules
+**/.svelte-kit
+**/.turbo
+**/dist
+**/.env*
+**/*.key
+**/*.pem
+**/*.pfx
+**/*.token

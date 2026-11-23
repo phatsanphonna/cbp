@@ -1,26 +1,48 @@
 <script lang="ts">
-  import Moon from '@lucide/svelte/icons/moon';
-  import Sun from '@lucide/svelte/icons/sun';
   import { onMount } from 'svelte';
-  import { Button } from '#lib/components/ui/button/index.ts';
+  import * as Select from '#lib/components/ui/select/index.ts';
 
-  let dark = $state(false);
+  type Theme = 'system' | 'light' | 'dark';
+  const labels = { system: 'System', light: 'Light', dark: 'Dark' };
+  let theme = $state<Theme>('system');
+  let systemTheme: MediaQueryList;
+
+  function applyTheme() {
+    document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === 'system' && systemTheme.matches));
+  }
 
   onMount(() => {
-    dark = document.documentElement.classList.contains('dark');
+    systemTheme = matchMedia('(prefers-color-scheme: dark)');
+    try {
+      const saved = localStorage.getItem('cbp-theme');
+      if (saved === 'light' || saved === 'dark') theme = saved;
+    } catch {
+      // Use the system preference when storage is unavailable.
+    }
+    applyTheme();
+    systemTheme.addEventListener('change', applyTheme);
+    return () => systemTheme.removeEventListener('change', applyTheme);
   });
 
-  function toggleTheme() {
-    dark = document.documentElement.classList.toggle('dark');
+  function selectTheme(value: string) {
+    if (value !== 'system' && value !== 'light' && value !== 'dark') return;
+    theme = value;
+    applyTheme();
     try {
-      localStorage.setItem('cbp-theme', dark ? 'dark' : 'light');
+      localStorage.setItem('cbp-theme', theme);
     } catch {
       // The current page still reflects the selected theme.
     }
   }
 </script>
 
-<Button type="button" variant="ghost" size="icon" aria-label="Dark mode" aria-pressed={dark} onclick={toggleTheme}>
-  <Moon class="dark:hidden" aria-hidden="true" />
-  <Sun class="hidden dark:block" aria-hidden="true" />
-</Button>
+<Select.Root type="single" value={theme} onValueChange={selectTheme}>
+  <Select.Trigger size="sm" aria-label="Color theme">{labels[theme]}</Select.Trigger>
+  <Select.Content align="end">
+    <Select.Group>
+      {#each Object.entries(labels) as [value, label] (value)}
+        <Select.Item {value} {label} />
+      {/each}
+    </Select.Group>
+  </Select.Content>
+</Select.Root>

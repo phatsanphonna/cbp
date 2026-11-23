@@ -3,10 +3,12 @@
   import { Badge } from '#lib/components/ui/badge/index.ts';
   import { Button } from '#lib/components/ui/button/index.ts';
   import * as Table from '#lib/components/ui/table/index.ts';
+  import { refreshHostPing } from '#lib/hooks/refresh-host-ping.js';
   import { expiryFilters } from './certificates/expiry.js';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
+  refreshHostPing();
   const inventory = resolve('/certificates');
   const counts = $derived([
     { label: 'Total certificates', value: data.counts.total, href: inventory, urgent: false },
@@ -48,7 +50,6 @@
       <Table.Header class="bg-muted">
         <Table.Row>
           <Table.Head scope="col" class="px-4">Certificate</Table.Head>
-          <Table.Head scope="col" class="px-4">Responsible group</Table.Head>
           <Table.Head scope="col" class="px-4">Issue</Table.Head>
           <Table.Head scope="col" class="px-4">Expires</Table.Head>
         </Table.Row>
@@ -59,7 +60,6 @@
             <Table.Head scope="row" class="px-4">
               <a href={resolve('/certificates/[id]', { id: item.id })} class="text-primary underline underline-offset-4">{item.domain}</a>
             </Table.Head>
-            <Table.Cell class="px-4">{item.groupName}</Table.Cell>
             <Table.Cell class="px-4">
               <div class="flex flex-wrap gap-1.5">
                 {#if item.expired}
@@ -76,7 +76,7 @@
           </Table.Row>
         {:else}
           <Table.Row>
-            <Table.Cell colspan={4} class="px-4 py-6 text-center text-muted-foreground">
+            <Table.Cell colspan={3} class="px-4 py-6 text-center text-muted-foreground">
               {data.counts.total ? 'No expiry or deployment issues need attention.' : 'No certificates have been registered yet.'}
             </Table.Cell>
           </Table.Row>

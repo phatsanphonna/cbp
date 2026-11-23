@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	rpc "cbp/agent-rpc"
@@ -37,7 +38,7 @@ func (c agentCredential) GetRequestMetadata(context.Context, ...string) (map[str
 func (agentCredential) RequireTransportSecurity() bool { return true }
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:]); err != nil {
 		slog.Error("agent stopped", "error", err)
@@ -47,17 +48,35 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("agent", flag.ContinueOnError)
+	configPath := flags.String("config", "", "agent YAML config file (defaults to "+defaultConfig+" or "+alternateConfig+")")
 	address := flags.String("controller", "localhost:50051", "controller host and port")
 	host := flags.String("host", "", "registered host ID")
 	ca := flags.String("ca", "", "private controller CA certificate in PEM format")
 	credentialFile := flags.String("credential-file", "", "private file for the agent credential")
 	interval := flags.Duration("interval", time.Minute, "time between check-ins")
 	once := flags.Bool("once", false, "check in once and exit")
+	installService := flags.Bool("install-service", false, "install and start the systemd service after check-in (Linux root)")
 	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	config, err := readConfig(*configPath)
+	if err != nil {
+		return err
+	}
+	if err := applyConfig(flags, config); err != nil {
+		return err
+	}
+	if err := config.validateDeployments(); err != nil {
 		return err
 	}
 	if !rpc.ValidHostID(*host) || *credentialFile == "" || *interval <= 0 {
 		return errors.New("provide a valid -host, -credential-file and positive -interval")
+	}
+	if *installService {
+		if err := checkAgentServiceSupport(); err != nil {
+			return err
+		}
+		*once = true
 	}
 	code := os.Getenv("CBP_AGENT_ENROLLMENT_CODE")
 	if code != "" && !rpc.ValidToken(code) {
@@ -96,9 +115,17 @@ func run(ctx context.Context, args []string) error {
 		if err == nil {
 			code = ""
 			slog.Info("check-in accepted")
+			if !*once && config.deploymentEnabled() {
+				if err := deployPending(ctx, conn, config); err != nil && ctx.Err() == nil {
+					slog.Warn("deployment RPC failed", "code", status.Code(err))
+				}
+			}
 		}
 		if ctx.Err() != nil {
 			return nil
+		}
+		if *once && *installService && err == nil {
+			return installAgentService(ctx, flags)
 		}
 		if *once || status.Code(err) == codes.Unauthenticated || status.Code(err) == codes.InvalidArgument {
 			return err

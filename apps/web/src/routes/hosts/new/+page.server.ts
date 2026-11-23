@@ -6,7 +6,7 @@ import { normalizeHostAddress } from '#lib/server/host-address.js';
 import type { Actions } from './$types';
 
 export const actions: Actions = {
-  default: async ({ request }) => {
+  default: async ({ request, locals }) => {
     const fields = await request.formData();
     const value = fields.get('name');
     const name = typeof value === 'string' ? value.trim() : '';
@@ -22,6 +22,7 @@ export const actions: Actions = {
       ansibleManaged: true
     });
     if (!saved) return fail(409, { message: 'This host is already registered.', values });
+    locals.auditTargetId = saved.id;
     redirect(303, resolve('/hosts'));
   }
 };

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,10 +28,14 @@ type webClient struct {
 }
 
 type webRequest struct {
-	HostID string      `json:"hostId,omitempty"`
-	Code   string      `json:"code,omitempty"`
-	Token  string      `json:"token,omitempty"`
-	Report *hostReport `json:"report,omitempty"`
+	HostID  string      `json:"hostId,omitempty"`
+	Code    string      `json:"code,omitempty"`
+	Token   string      `json:"token,omitempty"`
+	Report  *hostReport `json:"report,omitempty"`
+	JobID   string      `json:"jobId,omitempty"`
+	Outcome string      `json:"outcome,omitempty"`
+	After   string      `json:"after,omitempty"`
+	Probes  []hostProbe `json:"probes,omitempty"`
 }
 
 type hostReport struct {
@@ -108,6 +113,10 @@ func (e webStatusError) Error() string {
 }
 
 func (w *webClient) send(ctx context.Context, operation string, payload webRequest) error {
+	return w.request(ctx, operation, payload, nil)
+}
+
+func (w *webClient) request(ctx context.Context, operation string, payload webRequest, reply any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -124,6 +133,9 @@ func (w *webClient) send(ctx context.Context, operation string, payload webReque
 		return err
 	}
 	defer response.Body.Close()
+	if response.StatusCode == http.StatusOK && reply != nil {
+		return json.NewDecoder(io.LimitReader(response.Body, 128*1024)).Decode(reply)
+	}
 	if response.StatusCode != http.StatusNoContent {
 		return webStatusError(response.StatusCode)
 	}

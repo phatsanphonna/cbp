@@ -10,7 +10,7 @@ const severities = ['Info', 'Warning', 'High', 'Critical'] as const;
 export const load: PageServerLoad = async () => ({ channels: await listChannels(getDatabase()) });
 
 export const actions: Actions = {
-  add: async ({ request }) => {
+  add: async ({ request, locals }) => {
     const fields = await request.formData();
     const provider = providers.find((value) => value === fields.get('provider'));
     const severity = severities.find((value) => value === fields.get('severity'));
@@ -25,15 +25,17 @@ export const actions: Actions = {
 
     const [channel] = await addChannel(getDatabase(), { provider, severity, destination });
     if (!channel) return fail(409, { message: 'This destination already exists for that provider.' });
+    locals.auditTargetId = String(channel.id);
     redirect(303, resolve('/alerts/channels'));
   },
-  setEnabled: async ({ request }) => {
+  setEnabled: async ({ request, locals }) => {
     const fields = await request.formData();
     const id = Number(fields.get('id'));
     const enabled = fields.get('enabled');
     if (!Number.isInteger(id) || id < 1 || id > 2_147_483_647 || (enabled !== 'true' && enabled !== 'false')) {
       return fail(400, { message: 'Invalid channel update.' });
     }
+    locals.auditTargetId = String(id);
     const [channel] = await setChannelEnabled(getDatabase(), id, enabled === 'true');
     if (!channel) return fail(404, { message: 'Notification channel not found.' });
     redirect(303, resolve('/alerts/channels'));

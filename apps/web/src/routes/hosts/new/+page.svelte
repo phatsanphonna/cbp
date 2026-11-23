@@ -24,7 +24,7 @@
   <form method="POST" class="mt-6 border p-4 sm:p-5">
     <FieldGroup>
       <Field>
-        <FieldLabel for="host-name">Hostname or IP address</FieldLabel>
+        <FieldLabel for="host-name" required>Hostname or IP address</FieldLabel>
         <Input id="host-name" name="name" value={form?.values?.name} placeholder="edge-01.example.com" required maxlength={253} spellcheck={false} autocapitalize="none" />
       </Field>
       {#if form?.message}

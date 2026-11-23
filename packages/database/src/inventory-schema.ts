@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { user } from './auth-schema.js';
 
 const instant = (name: string) => timestamp(name, { withTimezone: true });
@@ -55,6 +55,7 @@ export const certificates = pgTable('cbp_certificates', {
   serial: text().notNull(),
   fingerprint: text().unique(),
   fullchain: text(),
+  previousFullchain: text('previous_fullchain'),
   sans: text().array().notNull().default([])
 });
 
@@ -67,6 +68,43 @@ export const deployments = pgTable('cbp_deployments', {
   method: text({ enum: ['Agent', 'Ansible', 'Manual'] }).notNull(),
   status: text({ enum: ['Pending', 'Verified', 'Failed'] }).notNull().default('Pending')
 }, (table) => [unique().on(table.certificateId, table.endpoint)]);
+
+export const deploymentRuns = pgTable('cbp_deployment_runs', {
+  id: uuid().defaultRandom().primaryKey(),
+  slug: text().notNull().unique(),
+  certificateId: uuid('certificate_id').notNull().references(() => certificates.id, { onDelete: 'cascade' }),
+  submittedAt: instant('submitted_at').defaultNow()
+}, (table) => [index('cbp_deployment_runs_submitted_idx').on(table.submittedAt.desc().nullsLast(), table.id.desc())]);
+
+export const deploymentJobs = pgTable('cbp_deployment_jobs', {
+  id: uuid().defaultRandom().primaryKey(),
+  runId: uuid('run_id').notNull().references(() => deploymentRuns.id, { onDelete: 'cascade' }),
+  deploymentId: uuid('deployment_id').notNull().references(() => deployments.id, { onDelete: 'cascade' }),
+  hostId: uuid('host_id').notNull().references(() => hosts.id, { onDelete: 'cascade' }),
+  agentHash: text('agent_hash').notNull(),
+  endpoint: text().notNull(),
+  engine: text().notNull(),
+  fullchain: text().notNull(),
+  sealedKey: text('sealed_key'),
+  status: text({ enum: ['Queued', 'Running', 'Deployed', 'Failed', 'Expired'] }).notNull(),
+  detail: text(),
+  expiresAt: instant('expires_at').notNull()
+}, (table) => [
+  index('cbp_deployment_jobs_run_idx').on(table.runId),
+  index('cbp_deployment_jobs_deployment_idx').on(table.deploymentId),
+  index('cbp_deployment_jobs_host_idx').on(table.hostId)
+]);
+
+export const auditEvents = pgTable('cbp_audit_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  occurredAt: instant('occurred_at').notNull().defaultNow(),
+  actorId: text('actor_id'),
+  actorName: text('actor_name'),
+  action: text().notNull(),
+  route: text().notNull(),
+  targetId: text('target_id'),
+  status: integer().notNull()
+}, (table) => [index('cbp_audit_events_occurred_at_idx').on(table.occurredAt, table.id)]);
 
 export const alerts = pgTable('cbp_alerts', {
   id: uuid().defaultRandom().primaryKey(),

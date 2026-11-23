@@ -1,6 +1,6 @@
-import { asc, count, desc, eq, gt, gte, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { asc, count, desc, gt, gte, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { openDatabase } from './index.js';
-import { alerts, certificates, deployments, hosts, userGroups } from './inventory-schema.js';
+import { alerts, certificates, deployments, hosts } from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 type OverviewWindow = { now: Date; nextWeek: Date; nextMonth: Date; recentPingCutoff: Date };
@@ -20,9 +20,8 @@ export async function loadOverview(db: Database, { now, nextWeek, nextMonth, rec
     }).from(certificates),
     db.select({
       id: certificates.id, domain: certificates.domain, sans: certificates.sans,
-      groupName: userGroups.name, validUntil: certificates.validUntil, failedDeployments
+      validUntil: certificates.validUntil, failedDeployments
     }).from(certificates)
-      .leftJoin(userGroups, eq(certificates.groupId, userGroups.id))
       .where(or(lte(certificates.validUntil, nextMonth), sql`${failedDeployments} > 0`))
       .orderBy(sql`case when ${lte(certificates.validUntil, now)} then 0
         when ${failedDeployments} > 0 then 1 when ${lte(certificates.validUntil, nextWeek)} then 2 else 3 end`,

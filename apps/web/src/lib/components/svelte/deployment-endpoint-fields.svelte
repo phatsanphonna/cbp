@@ -12,7 +12,7 @@
 
 <div class="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_6rem]">
   <Field>
-    <FieldLabel for="{id}-address">Endpoint hostname or IP</FieldLabel>
+    <FieldLabel for="{id}-address" required={!useHostAddress}>Endpoint hostname or IP</FieldLabel>
     <Input
       id="{id}-address"
       name="endpointHost"
@@ -29,7 +29,7 @@
     {/if}
   </Field>
   <Field>
-    <FieldLabel for="{id}-port">Port</FieldLabel>
+    <FieldLabel for="{id}-port" required>Port</FieldLabel>
     <Input id="{id}-port" name="port" type="number" value={port} min={1} max={65535} required />
   </Field>
 </div>

@@ -7,7 +7,7 @@ type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 // Lock the host first so revocation, check-ins and host deletion serialize.
-async function withAgentHost<T>(db: Database, hostId: string, work: (tx: Transaction) => Promise<T>, allowUnmanaged = false) {
+export async function withAgentHost<T>(db: Database, hostId: string, work: (tx: Transaction) => Promise<T>, allowUnmanaged = false) {
   if (!hostIdPattern.test(hostId)) return 'missing' as const;
   return db.transaction(async (tx) => {
     const [host] = await tx.select({ agentManaged: hosts.agentManaged })

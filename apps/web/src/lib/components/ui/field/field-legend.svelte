@@ -7,9 +7,11 @@
 		class: className,
 		variant = "legend",
 		children,
+		required = false,
 		...restProps
 	}: WithElementRef<HTMLAttributes<HTMLLegendElement>> & {
 		variant?: "legend" | "label";
+		required?: boolean;
 	} = $props();
 </script>
 
@@ -21,4 +23,5 @@
 	{...restProps}
 >
 	{@render children?.()}
+	{#if required}<span aria-hidden="true" class="ms-0.5 text-destructive">*</span>{/if}
 </legend>

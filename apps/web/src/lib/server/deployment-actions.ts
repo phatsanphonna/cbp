@@ -1,5 +1,6 @@
-import { findHostAddress, linkDeployment, updateDeploymentEndpoint } from '@cbp/database/inventory';
+import { findHostAddress, linkDeployment, removeDeployment, updateDeploymentEndpoint } from '@cbp/database/inventory';
 import { fail } from '@sveltejs/kit';
+import { deploymentMethods, deploymentServices } from '#lib/deployment-services.js';
 import { getDatabase } from './database.js';
 import { normalizeHostAddress } from './host-address.js';
 
@@ -9,13 +10,18 @@ export async function linkDeploymentAction(request: Request, current: Deployment
   const fields = await request.formData();
   const hostId = 'hostId' in current ? current.hostId : fields.get('hostId');
   const certificateId = 'certificateId' in current ? current.certificateId : fields.get('certificateId');
-  const method = fields.get('method');
+  const method = deploymentMethods.find((value) => value === fields.get('method'));
+  const selectedService = fields.get('engine');
+  const engine = deploymentServices.find((service) => service === selectedService) ?? null;
 
   if (typeof hostId !== 'string' || !hostId || typeof certificateId !== 'string' || !certificateId) {
     return fail(400, { linkError: 'Choose a host and certificate.' });
   }
-  if (method !== 'Manual' && method !== 'Agent' && method !== 'Ansible') {
+  if (!method) {
     return fail(400, { linkError: 'Choose a deployment method.' });
+  }
+  if (selectedService !== null && selectedService !== '' && !engine) {
+    return fail(400, { linkError: 'Choose a web service or leave it unspecified.' });
   }
   const database = getDatabase();
   const hostAddress = await findHostAddress(database, hostId);
@@ -24,7 +30,7 @@ export async function linkDeploymentAction(request: Request, current: Deployment
   const parsed = parseEndpoint(fields, hostAddress);
   if ('message' in parsed) return fail(400, { linkError: parsed.message });
   const { endpoint } = parsed;
-  const result = await linkDeployment(database, { hostId, certificateId, endpoint, method });
+  const result = await linkDeployment(database, { hostId, certificateId, endpoint, method, engine });
   if (result === 'missing') return fail(404, { linkError: 'The selected host or certificate no longer exists.' });
   if (result === 'duplicate') return fail(409, { linkError: 'This certificate already has a linked deployment at that endpoint.' });
   return { linkMessage: `Deployment linked at ${endpoint}.` };
@@ -40,10 +46,32 @@ export async function updateDeploymentEndpointAction(request: Request, owner: De
   const parsed = parseEndpoint(fields);
   if ('message' in parsed) return fail(400, { deploymentId, endpointError: parsed.message });
 
-  const result = await updateDeploymentEndpoint(getDatabase(), owner, deploymentId, parsed.endpoint);
+  const service = fields.get('engine');
+  const engine = service === '' ? null : deploymentServices.find((value) => value === service);
+  if (service !== null && service !== 'keep' && engine === undefined) {
+    return fail(400, { deploymentId, endpointError: 'Choose a supported web service.' });
+  }
+  const selectedMethod = fields.get('method');
+  const method = deploymentMethods.find((value) => value === selectedMethod);
+  if (selectedMethod !== null && !method) {
+    return fail(400, { deploymentId, endpointError: 'Choose a deployment method.' });
+  }
+  const result = await updateDeploymentEndpoint(getDatabase(), owner, deploymentId, parsed.endpoint, engine, method);
   if (result === 'missing') return fail(404, { deploymentId, endpointError: 'This deployment could not be found.' });
   if (result === 'duplicate') return fail(409, { deploymentId, endpointError: 'This certificate already has a deployment at that endpoint.' });
-  return { endpointMessage: `Endpoint saved as ${parsed.endpoint}.` };
+  return { endpointMessage: `Deployment saved at ${parsed.endpoint}.` };
+}
+
+export async function removeDeploymentAction(request: Request, owner: DeploymentOwner) {
+  const deploymentId = (await request.formData()).get('deploymentId');
+  if (typeof deploymentId !== 'string' || !deploymentId) {
+    return fail(400, { removeDeploymentError: 'Choose an endpoint to delete.' });
+  }
+  const result = await removeDeployment(getDatabase(), owner, deploymentId);
+  if (result === 'missing') return fail(404, { deploymentId, removeDeploymentError: 'This endpoint could not be found.' });
+  if (result === 'changed') return fail(409, { deploymentId, removeDeploymentError: 'This endpoint changed. Refresh the page and try again.' });
+  if (result === 'busy') return fail(409, { deploymentId, removeDeploymentError: 'Wait for the current deployment to finish before deleting this endpoint.' });
+  return { removeDeploymentMessage: 'Endpoint deleted.' };
 }
 
 function parseEndpoint(fields: FormData, fallback = '') {

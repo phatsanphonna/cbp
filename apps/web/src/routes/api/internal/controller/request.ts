@@ -7,7 +7,7 @@ const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/;
 export const digest = (value: string) => createHash('sha256').update(value).digest();
 
 export function controllerPost(
-  handle: (db: ReturnType<typeof getDatabase>, body: Record<string, unknown>) => Promise<number>
+  handle: (db: ReturnType<typeof getDatabase>, body: Record<string, unknown>) => Promise<number | Response>
 ): RequestHandler {
   return async ({ request, route }) => {
     const controllerToken = getControllerToken();
@@ -22,7 +22,8 @@ export function controllerPost(
     if (!body) return response(400);
 
     try {
-      return response(await handle(getDatabase(), body));
+      const result = await handle(getDatabase(), body);
+      return typeof result === 'number' ? response(result) : result;
     } catch {
       console.error('Controller API database operation failed', { route: route.id });
       return response(503);

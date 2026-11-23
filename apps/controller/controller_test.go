@@ -6,8 +6,11 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"math/big"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -40,7 +43,7 @@ func TestEnrollmentOverTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn := connectTestController(t, dir)
+	conn := connectTestController(t, &controller{stateDir: dir})
 
 	call := func(host, credential, method string, req any, want codes.Code) {
 		t.Helper()
@@ -69,7 +72,60 @@ func TestEnrollmentOverTLS(t *testing.T) {
 	call(host, token, rpc.CheckInMethod, report, codes.Unauthenticated)
 }
 
-func connectTestController(t *testing.T, dir string) *grpc.ClientConn {
+func TestDeploymentRPCOverTLS(t *testing.T) {
+	const host = "host-a"
+	agentToken, controllerToken := rpc.NewToken(), rpc.NewToken()
+	webServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var payload webRequest
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil ||
+			r.Header.Get("Authorization") != "Bearer "+controllerToken {
+			t.Error("invalid controller request")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if payload.HostID != host || payload.Token != agentToken {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		switch r.URL.Path {
+		case "/api/internal/controller/deployment-claim":
+			json.NewEncoder(w).Encode(map[string]string{"id": "job", "privateKey": "test key"})
+		case "/api/internal/controller/deployment-result":
+			if payload.JobID != "job" || payload.Outcome != "ok" {
+				t.Error("incorrect deployment result")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer webServer.Close()
+	web, err := newWebClient(webServer.URL, controllerToken, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := connectTestController(t, &controller{web: web})
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	authorized := metadata.AppendToOutgoingContext(ctx, rpc.HostHeader, host, "authorization", "Bearer "+agentToken)
+	otherHost := metadata.AppendToOutgoingContext(ctx, rpc.HostHeader, "host-b", "authorization", "Bearer "+agentToken)
+	var reply structpb.Struct
+	if err := conn.Invoke(otherHost, rpc.ClaimDeploymentMethod, &emptypb.Empty{}, &reply); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("unauthorized claim: %v", err)
+	}
+	if err := conn.Invoke(authorized, rpc.ClaimDeploymentMethod, &emptypb.Empty{}, &reply); err != nil {
+		t.Fatal(err)
+	}
+	if reply.GetFields()["privateKey"].GetStringValue() != "test key" {
+		t.Fatal("deployment material was not returned to the intended host")
+	}
+	result, _ := structpb.NewStruct(map[string]any{"jobId": "job", "outcome": "ok"})
+	if err := conn.Invoke(authorized, rpc.FinishDeploymentMethod, result, &emptypb.Empty{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func connectTestController(t *testing.T, implementation *controller) *grpc.ClientConn {
 	t.Helper()
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -94,7 +150,7 @@ func connectTestController(t *testing.T, dir string) *grpc.ClientConn {
 	server := grpc.NewServer(grpc.Creds(credentials.NewTLS(&tls.Config{
 		Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: private}},
 	})))
-	rpc.RegisterController(server, &controller{stateDir: dir})
+	rpc.RegisterController(server, implementation)
 	listener := bufconn.Listen(1024 * 1024)
 	go server.Serve(listener)
 	t.Cleanup(server.Stop)

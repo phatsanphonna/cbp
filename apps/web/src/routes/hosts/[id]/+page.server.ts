@@ -5,24 +5,29 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { hostAgentEnrollment, inviteHostAgent, revokeHostAgent } from '@cbp/database/host-agents';
 import { findHost, findHostAddress, listCertificateOptions, removeHost, saveHostPing, saveHostReport } from '@cbp/database/inventory';
 import { linuxAgentEnrollmentCommand, normalizeAgentControllerAddress } from '#lib/server/agent-enrollment-command.js';
+import { loadAgentDeployments } from '#lib/server/agent-deployment.js';
 import { getDatabase } from '#lib/server/database.js';
 import { dateFormatter } from '#lib/server/date-formatter.js';
 import { hostIpAddress } from '#lib/server/host-address.js';
 import { parseHostReport } from '#lib/server/host-report.js';
-import { linkDeploymentAction, updateDeploymentEndpointAction } from '#lib/server/deployment-actions.js';
+import { linkDeploymentAction, removeDeploymentAction, updateDeploymentEndpointAction } from '#lib/server/deployment-actions.js';
 import { pingHost, pingLabels } from '#lib/server/ping-host.js';
 import { displayCertificateDomain } from '../../certificates/display-domain.js';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params, cookies }) => {
+export const load: PageServerLoad = async ({ params, cookies, depends, url }) => {
+  depends('cbp:agent-deployments', 'cbp:host-ping');
   const database = getDatabase();
   const host = await findHost(database, params.id);
   if (!host) error(404, 'Host not found');
 
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const timestamp = (date: Date | null) => date ? { iso: date.toISOString(), label: format.format(date) } : null;
-  const enrollment = await hostAgentEnrollment(database, host.id);
+  const [enrollment, agentDeployments] = await Promise.all([
+    hostAgentEnrollment(database, host.id), loadAgentDeployments(host.deployments.map(({ id }) => id), url)
+  ]);
   return {
+    agentDeployments,
     enrollment: {
       configured: Boolean(normalizeAgentControllerAddress(CBP_AGENT_CONTROLLER_ADDRESS)),
       status: enrollment.status,
@@ -34,7 +39,6 @@ export const load: PageServerLoad = async ({ params, cookies }) => {
     host: {
       ...host,
       ipAddress: hostIpAddress(host),
-      lastProbedAt: timestamp(host.lastProbedAt),
       lastPingAt: timestamp(host.lastPingAt),
       lastPingLabel: host.lastPingStatus ? pingLabels[host.lastPingStatus] : 'Not checked',
       agentSeenAt: timestamp(host.agentSeenAt),
@@ -64,6 +68,7 @@ export const actions: Actions = {
   },
   linkDeployment: ({ params, request }) => linkDeploymentAction(request, { hostId: params.id }),
   updateEndpoint: ({ params, request }) => updateDeploymentEndpointAction(request, { hostId: params.id }),
+  removeDeployment: ({ params, request }) => removeDeploymentAction(request, { hostId: params.id }),
   importReport: async ({ params, request }) => {
     const report = parseHostReport((await request.formData()).get('report'));
     if (!report) return fail(400, { importError: 'Paste a valid JSON report from the collector. Check that the host clock is correct.' });

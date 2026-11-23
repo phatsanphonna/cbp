@@ -13,12 +13,12 @@ export function linuxAgentEnrollmentCommand(hostId: string, code: string, addres
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
   const args = [
     `CBP_AGENT_ENROLLMENT_CODE=${quote(code)}`,
-    'go run ./apps/agent',
+    'cbp-agent',
     `-host ${quote(hostId)}`,
     `-controller ${quote(address)}`,
-    `-credential-file ${quote(`./.agent-local/${hostId}.token`)}`
+    `-credential-file ${quote('/var/lib/cbp/agent.credential')}`
   ];
   if (caFile) args.push(`-ca ${quote(caFile)}`);
-  args.push('-once');
+  args.push('-install-service');
   return args.join(' ');
 }

@@ -26,7 +26,7 @@ export const load: PageServerLoad = ({ cookies }) => {
 };
 
 export const actions: Actions = {
-  default: async ({ request }) => {
+  default: async ({ request, locals }) => {
     const fields = await request.formData();
     const identifier = fields.get('identifier');
     const password = fields.get('password');
@@ -37,11 +37,10 @@ export const actions: Actions = {
     try {
       const login = identifier.trim().toLowerCase();
       const { api } = getAuth();
-      if (login.includes('@')) {
-        await api.signInEmail({ headers: request.headers, body: { email: login, password } });
-      } else {
-        await api.signInUsername({ headers: request.headers, body: { username: login, password } });
-      }
+      const { user } = login.includes('@')
+        ? await api.signInEmail({ headers: request.headers, body: { email: login, password } })
+        : await api.signInUsername({ headers: request.headers, body: { username: login, password } });
+      locals.auditActor = { id: user.id, name: user.name };
     } catch (error) {
       if (error instanceof APIError && [400, 401, 403].includes(error.statusCode)) {
         return fail(400, { message: 'Username, email, or password is incorrect.' });

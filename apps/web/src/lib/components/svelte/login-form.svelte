@@ -10,6 +10,7 @@
 
 <Card.Root class="mx-auto w-full max-w-sm">
   <Card.Header>
+    <p class="text-sm font-medium">Certified by Pat</p>
     <Card.Title class="text-left font-sans text-2xl" lang={greeting.lang} dir="auto">{greeting.text}</Card.Title>
     <Card.Description>
       Enter your username or email and password.
@@ -19,11 +20,11 @@
     <form method="POST">
       <FieldGroup>
         <Field>
-          <FieldLabel for="identifier-{id}">Username or email</FieldLabel>
+          <FieldLabel for="identifier-{id}" required>Username or email</FieldLabel>
           <Input id="identifier-{id}" name="identifier" type="text" autocomplete="username" autocapitalize="none" spellcheck={false} required />
         </Field>
         <Field>
-          <FieldLabel for="password-{id}">Password</FieldLabel>
+          <FieldLabel for="password-{id}" required>Password</FieldLabel>
           <Input id="password-{id}" name="password" type="password" autocomplete="current-password" required />
         </Field>
         {#if message}

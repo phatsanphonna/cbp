@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { Button } from '#lib/components/ui/button/index.ts';
+  import { Field, FieldLabel } from '#lib/components/ui/field/index.ts';
   import { Input } from '#lib/components/ui/input/index.ts';
   import * as Table from '#lib/components/ui/table/index.ts';
   import type { PageProps } from './$types';
@@ -37,29 +38,29 @@
   {/if}
 
   <form class="mt-6 grid gap-4 border p-4 sm:grid-cols-2 xl:grid-cols-[1fr_2fr_1fr_auto] xl:items-end" method="POST" action="?/add">
-    <label class="grid gap-2 text-xs">
-      Provider
-      <select name="provider" class="h-8 w-full border border-input bg-background px-2" bind:value={provider}>
+    <Field>
+      <FieldLabel for="channel-provider" required>Provider</FieldLabel>
+      <select id="channel-provider" name="provider" class="h-8 w-full border border-input bg-background px-2 text-xs" bind:value={provider} required>
         {#each Object.keys(providers) as option (option)}
           <option value={option}>{option}</option>
         {/each}
       </select>
-    </label>
+    </Field>
 
-    <label class="grid gap-2 text-xs">
-      {providers[provider].label}
-      <Input name="destination" type={provider === 'Email' ? 'email' : 'text'} placeholder={providers[provider].placeholder} required maxlength={120} />
-    </label>
+    <Field>
+      <FieldLabel for="channel-destination" required>{providers[provider].label}</FieldLabel>
+      <Input id="channel-destination" name="destination" type={provider === 'Email' ? 'email' : 'text'} placeholder={providers[provider].placeholder} required maxlength={120} />
+    </Field>
 
-    <label class="grid gap-2 text-xs">
-      Minimum severity
-      <select name="severity" class="h-8 w-full border border-input bg-background px-2">
+    <Field>
+      <FieldLabel for="channel-severity" required>Minimum severity</FieldLabel>
+      <select id="channel-severity" name="severity" class="h-8 w-full border border-input bg-background px-2 text-xs" required>
         <option>Info</option>
         <option selected>Warning</option>
         <option>High</option>
         <option>Critical</option>
       </select>
-    </label>
+    </Field>
 
     <Button type="submit">Add channel</Button>
   </form>

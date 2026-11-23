@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { subscribeToLiveEvents } from '#lib/hooks/subscribe-to-live-events.js';
 
   const labels = {
     checking: 'Checking controller',
@@ -13,29 +13,28 @@
   let status = $state<keyof typeof labels>('checking');
 
   onMount(() => {
-    const stop = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
-
-    async function refresh() {
+    const unavailable = () => {
+      clearTimeout(timer);
+      status = 'unavailable';
+    };
+    const unsubscribe = subscribeToLiveEvents('controller', (event) => {
+      clearTimeout(timer);
       try {
-        const response = await fetch(resolve('/api/controller-status'), {
-          cache: 'no-store',
-          signal: AbortSignal.any([stop.signal, AbortSignal.timeout(6_000)])
-        });
-        if (!response.ok) throw new Error('Status request failed');
-        const { status: reported } = await response.json();
-        status = reported === 'online' || reported === 'offline' || reported === 'not-configured'
-          ? reported
-          : 'unavailable';
+        const { status: reported, remaining } = JSON.parse((event as MessageEvent<string>).data);
+        if (reported === 'online' && Number.isFinite(remaining) && remaining > 0) {
+          status = 'online';
+          timer = setTimeout(() => { status = 'offline'; }, remaining);
+        } else {
+          status = reported === 'offline' || reported === 'not-configured' ? reported : 'unavailable';
+        }
       } catch {
-        if (!stop.signal.aborted) status = 'unavailable';
+        unavailable();
       }
-      if (!stop.signal.aborted) timer = setTimeout(refresh, 10_000);
-    }
+    }, unavailable);
 
-    refresh();
     return () => {
-      stop.abort();
+      unsubscribe();
       clearTimeout(timer);
     };
   });
