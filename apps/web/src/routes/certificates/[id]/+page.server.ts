@@ -64,6 +64,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
   deploy: (event) => deployCertificateAction(event, event.params.id),
+  deployAnsible: (event) => deployCertificateAction(event, event.params.id, 'Ansible'),
   linkDeployment: ({ params, request }) =>
     linkDeploymentAction(request, { certificateId: params.id }),
   updateEndpoint: ({ params, request }) =>

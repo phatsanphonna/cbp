@@ -16,7 +16,6 @@
 <Sonner
   theme={mode.current}
   class="toaster group"
-  style="--normal-bg: var(--color-popover); --normal-text: var(--color-popover-foreground); --normal-border: var(--color-border);"
   toastOptions={{
     classes: {
       toast: "cn-toast",
@@ -40,3 +39,30 @@
     <TriangleAlertIcon class="size-4" />
   {/snippet}
 </Sonner>
+
+<style>
+  :global(.toaster[data-sonner-toaster][data-sonner-theme]) {
+    --border-radius: var(--radius);
+    --normal-bg: var(--popover);
+    --normal-text: var(--popover-foreground);
+    --normal-border: var(--border);
+    font-family: inherit;
+  }
+
+  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]) {
+    border-color: var(--border);
+    border-radius: var(--radius);
+    color: var(--popover-foreground);
+  }
+
+  :global(.toaster [data-sonner-toast][data-styled='true']:hover [data-close-button]:hover) {
+    background: var(--accent);
+    border-color: var(--border);
+    color: var(--accent-foreground);
+  }
+
+  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+</style>

@@ -1,4 +1,5 @@
 import {
+  CBP_ANSIBLE_TOKEN,
   CBP_CONTROLLER_TOKEN,
   CBP_DEPLOYMENT_ENCRYPTION_KEY,
 } from "$app/env/private";
@@ -9,6 +10,11 @@ export function getControllerToken() {
     controllerTokenPattern.test(CBP_CONTROLLER_TOKEN)
     ? CBP_CONTROLLER_TOKEN
     : null;
+}
+
+export function getAnsibleToken() {
+  const token = CBP_ANSIBLE_TOKEN;
+  return token && controllerTokenPattern.test(token) && token !== getControllerToken() ? token : null;
 }
 
 export function deploymentEncryptionKey() {

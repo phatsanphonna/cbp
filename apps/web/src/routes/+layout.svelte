@@ -39,7 +39,7 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster richColors />
+<Toaster position="top-center" closeButton />
 
 {#if page.route.id === "/signin"}
   <div class="absolute end-4 top-4 z-10">

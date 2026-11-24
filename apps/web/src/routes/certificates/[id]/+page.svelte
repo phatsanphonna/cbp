@@ -38,6 +38,14 @@
         .map(({ hostId }) => hostId),
     ),
   );
+  const ansibleTargets = $derived(
+    certificate.deployments.flatMap(({ id, hostId, hostName, endpoint, engine, method, ansibleManaged }) =>
+      method === 'Ansible' && ansibleManaged && hostId && hostName &&
+      engine === 'Nginx' && !busyHosts.has(hostId)
+        ? [{ id, hostId, hostName, endpoint, engine }]
+        : []
+    )
+  );
   const deploymentTargets = $derived(
     certificate.deployments.flatMap(
       ({ id, hostId, hostName, endpoint, engine, method, agentEnrolled }) =>
@@ -52,6 +60,7 @@
           : [],
     ),
   );
+  const canDeployAnsible = $derived(data.agentDeployments.ansibleEnabled && !data.agentDeployments.httpsRequired);
 
   watchDeploymentUpdates(() =>
     nextDeploymentExpiry(Object.values(data.agentDeployments.statuses)),
@@ -280,12 +289,16 @@
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        {#key certificate.id}
-          <DeployCertificateDialog
-            targets={deploymentTargets}
-            canDeploy={!data.agentDeployments.blocked}
-          />
-        {/key}
+        {#if data.user?.isAdmin}
+          {#key certificate.id}
+            <DeployCertificateDialog
+              agentTargets={deploymentTargets}
+              {ansibleTargets}
+              canDeployAgent={!data.agentDeployments.blocked}
+              {canDeployAnsible}
+            />
+          {/key}
+        {/if}
         {#if data.hostOptions.length}
           <LinkDeploymentDialog
             target="host"
@@ -299,16 +312,14 @@
         {/if}
       </div>
     </div>
-    {#if form?.linkMessage || form?.endpointMessage || form?.removeDeploymentMessage}
-      <p class="mb-3 text-xs" role="status">
-        {form.linkMessage ??
-          form.endpointMessage ??
-          form.removeDeploymentMessage}
-      </p>
-    {/if}
-    {#if data.agentDeployments.httpsRequired && deploymentTargets.length}
+    {#if data.agentDeployments.httpsRequired && (deploymentTargets.length || ansibleTargets.length)}
       <p class="mb-3 text-xs text-muted-foreground">
         Private-key uploads require a trusted HTTPS connection.
+      </p>
+    {/if}
+    {#if data.user?.isAdmin && ansibleTargets.length && !data.agentDeployments.ansibleEnabled}
+      <p class="mb-3 text-xs text-muted-foreground">
+        Configure the Ansible runner token and deployment encryption key to enable Ansible deployments.
       </p>
     {/if}
     <div class="border">

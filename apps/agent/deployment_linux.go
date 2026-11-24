@@ -74,7 +74,8 @@ func (f deploymentFile) restore() error {
 }
 
 // Return a diagnostic error only when it comes from verifying the public certificate chain.
-func installDeployment(ctx context.Context, target deploymentTarget, chain, key string) (string, error) {
+func installDeployment(ctx context.Context, target deploymentTarget, chain, key string, logStep func(string)) (string, error) {
+	logStep("Validating certificate and private key")
 	cert, err := tls.X509KeyPair([]byte(chain), []byte(key))
 	if err != nil {
 		return "certificate", nil
@@ -87,6 +88,7 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 		return "install", nil
 	}
 	if target.managedDir != "" {
+		logStep("Checking managed certificate directory")
 		if err := protectedDirectory(target.managedDir, true); err != nil {
 			logrus.WithError(err).Warn("managed TLS directory unavailable")
 			return "install", nil
@@ -124,6 +126,7 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	if ctx.Err() != nil {
 		return "install", nil
 	}
+	logStep("Installing certificate files")
 	if err := certFile.write([]byte(chain), certMode); err != nil {
 		return "install", nil
 	}
@@ -137,12 +140,15 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	}
 
 	outcome := "reload"
+	logStep("Validating service configuration")
 	if validateService(ctx, target) == nil && reloadService(ctx, target.Engine) == nil {
+		logStep("Reloaded service; verifying the served certificate")
 		if verifyCertificate(ctx, target, cert.Certificate[0]) {
 			return "ok", nil
 		}
 		outcome = "verify"
 	}
+	logStep("Restoring previous certificate files")
 	restoreErr := certFile.restore()
 	if target.KeyFile != "" {
 		restoreErr = errors.Join(restoreErr, keyFile.restore())

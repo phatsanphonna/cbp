@@ -63,6 +63,29 @@ To develop with the controller, install Go 1.27.4, follow the [controller setup]
 
 To stop PostgreSQL and keep its data, run `docker compose --env-file .cbp-dev/.env -f compose.dev.yaml down`.
 
+### Linux agent downloads
+
+Open `/agent/download` or select **Download Linux agent** in the **Agent enrollment** panel before enrolling a host. Choose **Linux (x86-64)** for `uname -m` output `x86_64` or **Linux (ARM64)** for `aarch64`. The download page includes the install and enrollment steps. The Docker web image builds both binaries.
+
+For Windows development, build the binaries from the repository root in PowerShell:
+
+```powershell
+New-Item -ItemType Directory -Force apps/web/.agent-downloads | Out-Null
+$env:GOOS = 'linux'
+$env:CGO_ENABLED = '0'
+foreach ($arch in 'amd64', 'arm64') {
+  $env:GOARCH = $arch
+  go build -mod=readonly -trimpath -o "apps/web/.agent-downloads/cbp-agent-linux-$arch" ./apps/agent
+}
+Remove-Item Env:GOOS, Env:GOARCH, Env:CGO_ENABLED
+```
+
+For a custom binary directory, set `CBP_AGENT_DOWNLOAD_DIR` to its absolute path.
+
+### Ansible deployments
+
+Run the [Ansible deployment worker](scripts/ansible/README.md) for Nginx hosts managed through SSH.
+
 ## Build and test
 
 ```sh

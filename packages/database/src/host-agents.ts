@@ -15,18 +15,18 @@ const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 export async function withAgentHost<T>(
   db: Database,
   hostId: string,
-  work: (tx: Transaction, name: string) => Promise<T>,
+  work: (tx: Transaction, name: string, applianceType: string | null) => Promise<T>,
   allowUnmanaged = false,
 ) {
   if (!hostIdPattern.test(hostId)) return "missing" as const;
   return db.transaction(async (tx) => {
     const [host] = await tx
-      .select({ agentManaged: hosts.agentManaged, name: hosts.name })
+      .select({ agentManaged: hosts.agentManaged, name: hosts.name, applianceType: hosts.applianceType })
       .from(hosts)
       .where(eq(hosts.id, hostId))
       .for("update");
     return host && (host.agentManaged || allowUnmanaged)
-      ? work(tx, host.name)
+      ? work(tx, host.name, host.applianceType)
       : ("missing" as const);
   });
 }
@@ -55,7 +55,8 @@ export function inviteHostAgent(
   return withAgentHost(
     db,
     hostId,
-    async (tx) => {
+    async (tx, _name, applianceType) => {
+      if (applianceType !== 'Linux') return 'unsupported';
       const now = new Date();
       const invite = {
         inviteHash,
@@ -93,7 +94,8 @@ export function enrollHostAgent(
   tokenHash: string,
   address?: string,
 ) {
-  return withAgentHost(db, hostId, async (tx, name) => {
+  return withAgentHost(db, hostId, async (tx, name, applianceType) => {
+    if (applianceType !== 'Linux') return 'unsupported';
     const pendingInvite = and(
       eq(hostAgents.hostId, hostId),
       eq(hostAgents.inviteHash, inviteHash),
@@ -142,8 +144,9 @@ export type AgentReadiness = {
     id: string;
     endpoint: string;
     engine: string;
-    status: NonNullable<typeof deployments.$inferSelect.listenerStatus>;
+    status: 'ready' | 'unreachable' | 'tls-error' | 'not-allowed';
     address: string | null;
+    fingerprint: string | null;
   }[];
 };
 
@@ -182,12 +185,24 @@ export function saveAgentCheckIn(
     if (!readiness) return "ok";
 
     for (const result of readiness.results) {
+      const [deployment] = await tx.select({ fingerprint: deployments.expectedFingerprint })
+        .from(deployments)
+        .where(and(eq(deployments.id, result.id), eq(deployments.hostId, hostId)));
+      const expectedFingerprint = deployment?.fingerprint
+        ?.replace(/^sha256:/i, "")
+        .replaceAll(":", "")
+        .toLowerCase();
+      const listenerStatus = result.status === 'ready' && result.fingerprint && expectedFingerprint &&
+        result.fingerprint.toLowerCase() !== expectedFingerprint
+        ? 'drifted'
+        : result.status;
       await tx
         .update(deployments)
         .set({
-          listenerStatus: result.status,
+          listenerStatus,
           listenerAddress: result.address,
           listenerCheckedAt: report.lastProbedAt,
+          listenerFingerprint: result.fingerprint,
         })
         .where(
           and(
@@ -256,10 +271,12 @@ export function revokeHostAgent(
           detail:
             "Agent enrollment was revoked before the deployment could be confirmed.",
           sealedKey: null,
+          finishedAt: sql`now()`,
         })
         .where(
           and(
             eq(deploymentJobs.hostId, hostId),
+            eq(deploymentJobs.method, 'Agent'),
             inArray(deploymentJobs.status, ["Queued", "Running"]),
           ),
         );
@@ -273,8 +290,9 @@ export function revokeHostAgent(
           listenerStatus: null,
           listenerAddress: null,
           listenerCheckedAt: null,
+          listenerFingerprint: null,
         })
-        .where(eq(deployments.hostId, hostId));
+        .where(and(eq(deployments.hostId, hostId), eq(deployments.method, 'Agent')));
       return "ok";
     },
     true,

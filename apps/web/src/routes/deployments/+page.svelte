@@ -55,13 +55,12 @@
                 >
               </Table.Head>
               <Table.Cell class="max-w-60 whitespace-normal wrap-anywhere">
-                <a
-                  href={resolve("/certificates/[id]", {
-                    id: run.certificateId,
-                  })}
-                  class="text-primary underline underline-offset-4"
-                  >{run.certificateName}</a
-                >
+                {#if run.certificateId}
+                  <a href={resolve("/certificates/[id]", { id: run.certificateId })}
+                    class="text-primary underline underline-offset-4">{run.certificateName}</a>
+                {:else}
+                  {run.certificateName} <span class="text-muted-foreground">(removed)</span>
+                {/if}
               </Table.Cell>
               <Table.Cell>
                 {#if run.submittedAt}<time datetime={run.submittedAt}

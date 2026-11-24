@@ -36,6 +36,7 @@ type webRequest struct {
 	JobID      string      `json:"jobId,omitempty"`
 	Outcome    string      `json:"outcome,omitempty"`
 	Diagnostic string      `json:"diagnostic,omitempty"`
+	Message    string      `json:"message,omitempty"`
 	After      string      `json:"after,omitempty"`
 	Probes     []hostProbe `json:"probes,omitempty"`
 }

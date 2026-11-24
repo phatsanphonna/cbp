@@ -1,0 +1,137 @@
+---
+- name: Rotate the Nginx certificate
+  hosts: all
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Check the inventory selection and certificate paths
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all == [cbp_inventory_host]
+          - cbp_nginx_certificate is match('^/')
+          - cbp_nginx_key is match('^/')
+          - cbp_nginx_certificate != cbp_nginx_key
+
+    - name: Inspect the current certificate and key
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        get_checksum: false
+      loop: ["{{ cbp_nginx_certificate }}", "{{ cbp_nginx_key }}"]
+      register: cbp_current
+
+    - name: Require existing regular files
+      ansible.builtin.assert:
+        that: item.stat.isreg | default(false)
+      loop: "{{ cbp_current.results }}"
+
+    - name: Save the current files and install the new pair
+      block:
+        - name: Create a private rollback directory
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: cbp-nginx-
+          register: cbp_backup
+
+        - name: Back up the current files
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ item.path }}"
+            dest: "{{ cbp_backup.path }}/{{ item.name }}"
+            mode: preserve
+          loop:
+            - { path: "{{ cbp_nginx_certificate }}", name: certificate }
+            - { path: "{{ cbp_nginx_key }}", name: key }
+
+        - name: Install the certificate and verify Nginx
+          block:
+            - name: Install the full chain
+              ansible.builtin.copy:
+                content: "{{ cbp_fullchain }}"
+                dest: "{{ cbp_nginx_certificate }}"
+                owner: root
+                group: root
+                mode: '0644'
+              register: cbp_certificate_write
+
+            - name: Install the private key
+              ansible.builtin.copy:
+                content: "{{ cbp_private_key }}"
+                dest: "{{ cbp_nginx_key }}"
+                owner: root
+                group: root
+                mode: '0600'
+              register: cbp_key_write
+              no_log: true
+              diff: false
+
+            - name: Validate Nginx configuration
+              ansible.builtin.command: nginx -t
+              changed_when: false
+
+            - name: Reload Nginx after changes
+              ansible.builtin.service:
+                name: nginx
+                state: reloaded
+              when: cbp_certificate_write.changed or cbp_key_write.changed
+
+            - name: Verify the served certificate over TLS
+              ansible.builtin.command:
+                argv:
+                  - /usr/bin/python3
+                  - -c
+                  - |
+                    import hashlib, socket, ssl, sys
+                    address, port, name, expected, ca_file = sys.argv[1:]
+                    context = ssl.create_default_context(cafile=ca_file or None)
+                    with socket.create_connection((address, int(port)), timeout=3) as connection:
+                        with context.wrap_socket(connection, server_hostname=name) as tls:
+                            if hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest() != expected:
+                                raise SystemExit("Nginx did not serve the uploaded certificate.")
+                  - "{{ cbp_tls_address | default('127.0.0.1') }}"
+                  - "{{ cbp_tls_port }}"
+                  - "{{ cbp_server_name }}"
+                  - "{{ cbp_fingerprint }}"
+                  - "{{ cbp_tls_ca_file | default('') }}"
+              changed_when: false
+              register: cbp_tls_check
+              until: cbp_tls_check.rc == 0
+              retries: 5
+              delay: 2
+          rescue:
+            - name: Retain the backup if rollback cannot complete
+              ansible.builtin.set_fact:
+                cbp_rollback_pending: true
+
+            - name: Restore the previous files
+              ansible.builtin.copy:
+                remote_src: true
+                src: "{{ cbp_backup.path }}/{{ item.name }}"
+                dest: "{{ item.original.stat.path }}"
+                owner: "{{ item.original.stat.uid | string }}"
+                group: "{{ item.original.stat.gid | string }}"
+                mode: "{{ item.original.stat.mode }}"
+              loop:
+                - { original: "{{ cbp_current.results[0] }}", name: certificate }
+                - { original: "{{ cbp_current.results[1] }}", name: key }
+              no_log: true
+              diff: false
+
+            - name: Reload Nginx with the previous files
+              ansible.builtin.service:
+                name: nginx
+                state: reloaded
+
+            - name: Mark rollback complete
+              ansible.builtin.set_fact:
+                cbp_rollback_pending: false
+
+            - name: Report the failed deployment
+              ansible.builtin.fail:
+                msg: Nginx deployment failed and the previous files were restored.
+      always:
+        - name: Remove the private rollback directory
+          ansible.builtin.file:
+            path: "{{ cbp_backup.path }}"
+            state: absent
+          when: cbp_backup.path is defined and not (cbp_rollback_pending | default(false))

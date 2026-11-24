@@ -6,6 +6,7 @@ dist/
 .env.local
 controller-state/
 .agent-local/
+.agent-downloads/
 /controller.key
 /controller-fullchain.pem
 /controller-ca.pem

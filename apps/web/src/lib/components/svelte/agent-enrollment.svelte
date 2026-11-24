@@ -11,7 +11,9 @@
   let {
     hostId,
     agentManaged,
+    canEnroll,
     configured,
+    canDownloadAgent,
     caDownloadSource,
     status,
     expiresAt,
@@ -22,7 +24,9 @@
   }: {
     hostId: string;
     agentManaged: boolean;
+    canEnroll: boolean;
     configured: boolean;
+    canDownloadAgent: boolean;
     caDownloadSource: string | null;
     status: "not-enrolled" | "pending" | "enrolled";
     expiresAt: { iso: string; label: string } | null;
@@ -55,7 +59,7 @@
   class="grid scroll-mt-4 gap-3 border-t p-4"
   aria-labelledby="agent-enrollment-heading"
 >
-  <div class="flex flex-wrap items-start justify-between gap-3">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="grid min-w-0 gap-2">
       <div class="flex flex-wrap items-center gap-2">
         <h3 id="agent-enrollment-heading" class="text-sm font-medium">
@@ -65,7 +69,11 @@
           >{labels[status]}</Badge
         >
       </div>
-      {#if status === "pending" && expiresAt}
+      {#if !canEnroll}
+        <p class="text-xs text-muted-foreground">
+          Agent enrollment is available for Linux hosts only.
+        </p>
+      {:else if status === "pending" && expiresAt}
         <p class="text-xs text-muted-foreground">
           The code expires <time datetime={expiresAt.iso}
             >{expiresAt.label}</time
@@ -95,7 +103,7 @@
       >
         <Button
           type="submit"
-          disabled={pending || !configured}
+          disabled={pending || !configured || !canEnroll}
           aria-busy={pending}
         >
           {#if pending}<Spinner
@@ -132,32 +140,33 @@
       </AlertDialog.Root>
     {/if}
   </div>
-  {#if !configured && status === "not-enrolled"}
+  {#if canEnroll && !configured && status === "not-enrolled"}
     <p class="text-xs text-muted-foreground">
       Set <code>CBP_AGENT_CONTROLLER_ADDRESS</code> in the web app to enable enrollment
       commands.
     </p>
   {/if}
-  {#if caDownloadSource}
+  {#if canEnroll && status !== 'enrolled' && (canDownloadAgent || caDownloadSource)}
     <div class="flex flex-wrap items-center gap-2">
-      <Button
-        href={resolve("/api/agent-ca")}
-        download
-        variant="outline"
-        size="sm"
-      >
-        <Download data-icon="inline-start" aria-hidden="true" /> Download controller
-        CA
-      </Button>
-      <p class="text-xs text-muted-foreground">
-        Copy it to <code>{caDownloadSource}</code> on the Linux host before running
-        the enrollment command.
-      </p>
+      {#if canDownloadAgent}
+        <Button href={resolve('/agent/download')} variant="outline" size="sm">
+          <Download data-icon="inline-start" aria-hidden="true" /> Download Linux agent
+        </Button>
+      {/if}
+      {#if caDownloadSource}
+        <Button href={resolve('/api/agent-ca')} download variant="outline" size="sm">
+          <Download data-icon="inline-start" aria-hidden="true" /> Download controller CA
+        </Button>
+        <p class="text-xs text-muted-foreground">
+          Copy it to <code>{caDownloadSource}</code> on the Linux host before running
+          the enrollment command.
+        </p>
+      {/if}
     </div>
   {/if}
   {#if error}<p class="text-xs text-destructive" role="alert">{error}</p>{/if}
   {#if message}<p class="text-xs" role="status">{message}</p>{/if}
-  {#if code && command && status === "pending"}
+  {#if canEnroll && code && command && status === "pending"}
     <div class="grid gap-3 border bg-muted/40 p-3">
       <p class="text-xs">
         Run this command as root on the Linux host. If the agent is missing,
@@ -206,10 +215,12 @@
       </p>
     </div>
   {/if}
-  <a
-    href={`${resolve("/docs/agent")}#agent`}
-    class="justify-self-start text-xs text-primary underline underline-offset-4"
-  >
-    Agent setup instructions
-  </a>
+  {#if canEnroll && status !== 'enrolled'}
+    <a
+      href={`${resolve('/docs/agent')}#agent`}
+      class="justify-self-start text-xs text-primary underline underline-offset-4"
+    >
+      Agent setup instructions
+    </a>
+  {/if}
 </section>

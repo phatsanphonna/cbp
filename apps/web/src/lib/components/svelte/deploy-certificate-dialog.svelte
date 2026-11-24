@@ -13,25 +13,41 @@
     FieldSet,
   } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
+  import * as Select from '#lib/components/ui/select/index.ts';
+
+  type Target = {
+    id: string;
+    hostId: string;
+    hostName: string;
+    endpoint: string;
+    engine: string;
+  };
 
   let {
-    targets,
-    canDeploy,
+    agentTargets,
+    ansibleTargets,
+    canDeployAgent,
+    canDeployAnsible,
   }: {
-    targets: {
-      id: string;
-      hostId: string;
-      hostName: string;
-      endpoint: string;
-      engine: string;
-    }[];
-    canDeploy: boolean;
+    agentTargets: Target[];
+    ansibleTargets: Target[];
+    canDeployAgent: boolean;
+    canDeployAnsible: boolean;
   } = $props();
   const id = $props.id();
   let pending = $state(false);
   let selected = $state<string[]>([]);
+  let preferredMethod = $state('');
+  const methods = $derived([
+    { value: 'Agent', targets: agentTargets, enabled: canDeployAgent },
+    { value: 'Ansible', targets: ansibleTargets, enabled: canDeployAnsible }
+  ].filter(({ targets }) => targets.length));
+  const method = $derived(
+    methods.find(({ value, enabled }) => enabled && value === preferredMethod) ??
+    methods.find(({ enabled }) => enabled)
+  );
   const choices = $derived(
-    targets.map((target) => ({
+    (method?.targets ?? []).map((target) => ({
       ...target,
       value: JSON.stringify([
         target.id,
@@ -50,10 +66,15 @@
 </script>
 
 <Dialog.Root>
-  {#if canDeploy && choices.length}
+  {#if methods.length}
     <Dialog.Trigger>
       {#snippet child({ props })}
-        <Button {...props} variant="outline" size="sm">Deploy</Button>
+        <Button
+          {...props}
+          variant="outline"
+          size="sm"
+          disabled={!method}
+        >Deploy</Button>
       {/snippet}
     </Dialog.Trigger>
   {/if}
@@ -67,7 +88,7 @@
     </Dialog.Header>
     <form
       method="POST"
-      action="?/deploy"
+      action={method?.value === 'Ansible' ? '?/deployAnsible' : '?/deploy'}
       enctype="multipart/form-data"
       use:enhance={() => {
         pending = true;
@@ -86,8 +107,28 @@
       }}
     >
       <FieldGroup>
+        {#if methods.length > 1}
+          <Field>
+            <FieldLabel for="{id}-method">Deployment method</FieldLabel>
+            <Select.Root type="single" value={method?.value ?? ''} disabled={pending}
+              onValueChange={(value) => {
+                preferredMethod = value;
+                selected = [];
+              }}
+            >
+              <Select.Trigger id="{id}-method">{method?.value}</Select.Trigger>
+              <Select.Content>
+                <Select.Group>
+                  {#each methods as { value, enabled } (value)}
+                    <Select.Item {value} label={enabled ? value : `${value} (unavailable)`} disabled={!enabled} />
+                  {/each}
+                </Select.Group>
+              </Select.Content>
+            </Select.Root>
+          </Field>
+        {/if}
         <FieldSet>
-          <FieldLegend variant="label" required>Hosts</FieldLegend>
+          <FieldLegend variant="label" required>{methods.length === 1 && method ? `${method.value} hosts` : 'Hosts'}</FieldLegend>
           <FieldGroup class="gap-2">
             {#each choices as choice (choice.id)}
               <Field orientation="horizontal">
@@ -154,6 +195,22 @@
             </Field>
           </FieldGroup>
         </FieldSet>
+        {#if method?.value === 'Ansible'}
+          <FieldSet>
+            <FieldLegend variant="label">SSH and su credentials</FieldLegend>
+            <FieldDescription>Leave both blank to use the runner’s SSH key and sudo settings.</FieldDescription>
+            <FieldGroup>
+              <Field>
+                <FieldLabel for="{id}-ssh-password">SSH password</FieldLabel>
+                <Input id="{id}-ssh-password" name="sshPassword" type="password" autocomplete="new-password" maxlength={1024} />
+              </Field>
+              <Field>
+                <FieldLabel for="{id}-su-password">Root su password</FieldLabel>
+                <Input id="{id}-su-password" name="suPassword" type="password" autocomplete="new-password" maxlength={1024} />
+              </Field>
+            </FieldGroup>
+          </FieldSet>
+        {/if}
         <Dialog.Footer>
           <Dialog.Close>
             {#snippet child({ props })}

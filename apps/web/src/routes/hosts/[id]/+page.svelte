@@ -29,11 +29,15 @@
   const facts = $derived([
     { label: "Discovered hostname", value: host.hostname },
     { label: "IP address", value: host.ipAddress },
-    { label: "Operating system", value: host.operatingSystem },
-    { label: "Architecture", value: host.architecture },
+    { label: 'Appliance type', value: host.applianceType ?? 'Not specified' },
+    {
+      label: 'Platform',
+      value: [host.operatingSystem, host.architecture].filter(Boolean).join(' · ') || null
+    },
   ]);
   const listenerLabels = {
-    ready: "TLS ready",
+    ready: "TLS healthy",
+    drifted: "Certificate mismatch",
     unreachable: "Listener unreachable",
     "tls-error": "TLS handshake failed",
     "not-allowed": "Target not enabled",
@@ -179,6 +183,7 @@
       <AgentEnrollment
         hostId={host.id}
         agentManaged={host.agentManaged}
+        canEnroll={host.applianceType === 'Linux'}
         {...data.enrollment}
         code={form?.enrollmentCode}
         command={form?.enrollmentCommand}
@@ -205,13 +210,6 @@
         >
       {/if}
     </div>
-    {#if form?.linkMessage || form?.endpointMessage || form?.removeDeploymentMessage}
-      <p class="mb-3 text-xs" role="status">
-        {form.linkMessage ??
-          form.endpointMessage ??
-          form.removeDeploymentMessage}
-      </p>
-    {/if}
     <div class="border">
       <Table.Root>
         <Table.Caption class="sr-only"
@@ -258,12 +256,12 @@
               <Table.Cell>{deployment.engine ?? "Not specified"}</Table.Cell>
               <Table.Cell>{deployment.method}</Table.Cell>
               <Table.Cell>
-                {#if deployment.listenerStatus}
+                {#if deployment.method !== 'Ansible' && deployment.listenerStatus}
                   {#if deployment.listenerStatus === "ready"}
                     <Tooltip.Root>
                       <Tooltip.Trigger
                         class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
-                        aria-label="TLS ready. Show listener details"
+                        aria-label="TLS ready. Show check time"
                       >
                         <Badge variant="secondary">
                           {listenerLabels.ready}
@@ -271,22 +269,25 @@
                         </Badge>
                       </Tooltip.Trigger>
                       <Tooltip.Content sideOffset={4} class="max-w-xs">
-                        {#if deployment.listenerAddress}<p class="font-mono">
-                            {deployment.listenerAddress}
-                          </p>{/if}
                         {#if deployment.listenerCheckedAt}
                           <time
                             class="block"
                             datetime={deployment.listenerCheckedAt.iso}
                             >{deployment.listenerCheckedAt.label}</time
                           >
-                        {:else if !deployment.listenerAddress}
-                          Listener details unavailable.
+                        {:else}
+                          Check time unavailable.
+                        {/if}
+                        {#if deployment.listenerFingerprint}
+                          <p class="break-all">Served: <code>{deployment.listenerFingerprint}</code></p>
+                        {/if}
+                        {#if deployment.expectedFingerprint}
+                          <p class="break-all">Expected: <code>{deployment.expectedFingerprint}</code></p>
                         {/if}
                       </Tooltip.Content>
                     </Tooltip.Root>
                   {:else}
-                    <Badge variant="outline"
+                    <Badge variant={deployment.listenerStatus === 'drifted' ? "destructive" : "outline"}
                       >{listenerLabels[deployment.listenerStatus]}</Badge
                     >
                     {#if deployment.listenerAddress}
@@ -300,6 +301,18 @@
                         datetime={deployment.listenerCheckedAt.iso}
                         >{deployment.listenerCheckedAt.label}</time
                       >
+                    {/if}
+                    {#if deployment.listenerStatus === 'drifted'}
+                      {#if deployment.listenerFingerprint}
+                        <p class="mt-1 max-w-64 break-all text-muted-foreground">
+                          Served: <code>{deployment.listenerFingerprint}</code>
+                        </p>
+                      {/if}
+                      {#if deployment.expectedFingerprint}
+                        <p class="max-w-64 break-all text-muted-foreground">
+                          Expected: <code>{deployment.expectedFingerprint}</code>
+                        </p>
+                      {/if}
                     {/if}
                   {/if}
                 {:else}

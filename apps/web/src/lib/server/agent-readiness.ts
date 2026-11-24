@@ -6,6 +6,7 @@ import { deploymentServices } from "#lib/deployment-services.js";
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const states = ["ready", "unreachable", "tls-error", "not-allowed"] as const;
+const fingerprintPattern = /^[\da-f]{64}$/i;
 
 export function parseAgentReadiness(
   report: Record<string, unknown>,
@@ -34,7 +35,7 @@ export function parseAgentReadiness(
   const seen = new Set<string>();
   for (const result of listenerResults) {
     if (!result || typeof result !== "object") return null;
-    const { id, endpoint, engine, status, address } = result as Record<
+    const { id, endpoint, engine, status, address, fingerprint } = result as Record<
       string,
       unknown
     >;
@@ -49,6 +50,8 @@ export function parseAgentReadiness(
       endpoint.length > 261 ||
       !service ||
       !state ||
+      (fingerprint !== undefined && fingerprint !== null &&
+        (typeof fingerprint !== "string" || !fingerprintPattern.test(fingerprint))) ||
       (state === "not-allowed"
         ? address != null
         : typeof address !== "string" ||
@@ -64,6 +67,7 @@ export function parseAgentReadiness(
       engine: service,
       status: state,
       address: typeof address === "string" ? address : null,
+      fingerprint: typeof fingerprint === "string" ? fingerprint.toLowerCase() : null,
     });
   }
   return {

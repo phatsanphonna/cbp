@@ -4,6 +4,6 @@ package main
 
 import "context"
 
-func installDeployment(context.Context, deploymentTarget, string, string) (string, error) {
+func installDeployment(context.Context, deploymentTarget, string, string, func(string)) (string, error) {
 	return "configuration", nil
 }

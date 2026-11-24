@@ -1,6 +1,7 @@
 .git
 .agents
 .agent-local
+**/.agent-downloads
 .turbo
 .vscode
 controller-state

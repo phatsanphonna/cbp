@@ -30,12 +30,26 @@ try {
   `;
   await db.transaction(async (tx) => {
     await tx.execute(
-      sql`alter table cbp_hosts add column if not exists allowed_deployment_services text[]`,
+      sql`alter table cbp_hosts
+        add column if not exists allowed_deployment_services text[],
+        add column if not exists appliance_type text`,
     );
     await tx.execute(sql`alter table cbp_deployments
       add column if not exists listener_status text,
       add column if not exists listener_address text,
-      add column if not exists listener_checked_at timestamp with time zone`);
+      add column if not exists listener_checked_at timestamp with time zone,
+      add column if not exists listener_fingerprint text,
+      add column if not exists expected_fingerprint text`);
+    await tx.execute(sql`update cbp_deployments deployment
+      set expected_fingerprint = certificate.fingerprint
+      from cbp_certificates certificate
+      where deployment.certificate_id = certificate.id
+        and deployment.expected_fingerprint is null`);
+    await tx.execute(sql`update cbp_deployments
+      set listener_status = null, listener_address = null, listener_checked_at = null,
+          listener_fingerprint = null
+      where method = 'Ansible'
+        and (listener_status is not null or listener_address is not null or listener_checked_at is not null or listener_fingerprint is not null)`);
   });
   await db.$client`
     create table if not exists cbp_host_agents (
@@ -56,8 +70,10 @@ try {
   await db.$client`
     create table if not exists cbp_deployment_jobs (
       id uuid primary key default gen_random_uuid(),
-      deployment_id uuid not null references cbp_deployments(id) on delete cascade,
-      host_id uuid not null references cbp_hosts(id) on delete cascade,
+      deployment_id uuid references cbp_deployments(id) on delete set null,
+      host_id uuid references cbp_hosts(id) on delete set null,
+      host_name text not null default 'Unknown host',
+      recovery boolean not null default false,
       agent_hash text not null,
       endpoint text not null,
       engine text not null,
@@ -65,6 +81,8 @@ try {
       sealed_key text,
       status text not null,
       detail text,
+      started_at timestamp with time zone,
+      finished_at timestamp with time zone,
       expires_at timestamp with time zone not null
     )
   `;
@@ -72,17 +90,39 @@ try {
     await tx.execute(sql`create table if not exists cbp_deployment_runs (
       id uuid primary key default gen_random_uuid(),
       slug text,
-      certificate_id uuid not null references cbp_certificates(id) on delete cascade,
+      certificate_id uuid references cbp_certificates(id) on delete set null,
+      certificate_name text not null default 'Unknown certificate',
+      certificate_sans text[] not null default '{}',
+      certificate_fingerprint text,
       submitted_at timestamp with time zone default now()
     )`);
     await tx.execute(
       sql`alter table cbp_deployment_runs add column if not exists slug text`,
     );
+    await tx.execute(sql`alter table cbp_deployment_runs
+      add column if not exists certificate_name text not null default 'Unknown certificate',
+      add column if not exists certificate_sans text[] not null default '{}',
+      add column if not exists certificate_fingerprint text`);
+    await tx.execute(sql`update cbp_deployment_runs run
+      set certificate_name = certificate.domain,
+          certificate_sans = certificate.sans,
+          certificate_fingerprint = certificate.fingerprint
+      from cbp_certificates certificate
+      where run.certificate_id = certificate.id
+        and run.certificate_name = 'Unknown certificate'`);
     await tx.execute(
       sql`alter table cbp_deployment_runs alter column slug drop not null`,
     );
     await tx.execute(sql`alter table cbp_deployment_jobs add column if not exists run_id uuid
       references cbp_deployment_runs(id) on delete cascade`);
+    await tx.execute(sql`alter table cbp_deployment_jobs
+      add column if not exists host_name text not null default 'Unknown host',
+      add column if not exists recovery boolean not null default false,
+      add column if not exists started_at timestamp with time zone,
+      add column if not exists finished_at timestamp with time zone,
+      add column if not exists log text not null default ''`);
+    await tx.execute(sql`update cbp_deployment_jobs job set host_name = host.name
+      from cbp_hosts host where job.host_id = host.id and job.host_name = 'Unknown host'`);
     await tx.execute(sql`insert into cbp_deployment_runs (id, certificate_id, submitted_at)
       select job.id, deployment.certificate_id, null
       from cbp_deployment_jobs job join cbp_deployments deployment on deployment.id = job.deployment_id
@@ -108,9 +148,28 @@ try {
       end if;
     end $$`);
     await tx.execute(sql`alter table cbp_deployment_jobs
+      add column if not exists method text not null default 'Agent',
+      alter column agent_hash drop not null,
       alter column run_id set not null,
       drop constraint if exists cbp_deployment_jobs_deployment_id_key,
       drop constraint if exists cbp_deployment_jobs_deployment_id_unique`);
+    await tx.execute(sql`alter table cbp_deployment_runs
+      alter column certificate_id drop not null,
+      drop constraint if exists cbp_deployment_runs_certificate_id_cbp_certificates_id_fk,
+      drop constraint if exists cbp_deployment_runs_certificate_id_fkey,
+      add constraint cbp_deployment_runs_certificate_id_cbp_certificates_id_fk
+        foreign key (certificate_id) references cbp_certificates(id) on delete set null`);
+    await tx.execute(sql`alter table cbp_deployment_jobs
+      alter column deployment_id drop not null,
+      alter column host_id drop not null,
+      drop constraint if exists cbp_deployment_jobs_deployment_id_cbp_deployments_id_fk,
+      drop constraint if exists cbp_deployment_jobs_deployment_id_fkey,
+      drop constraint if exists cbp_deployment_jobs_host_id_cbp_hosts_id_fk,
+      drop constraint if exists cbp_deployment_jobs_host_id_fkey,
+      add constraint cbp_deployment_jobs_deployment_id_cbp_deployments_id_fk
+        foreign key (deployment_id) references cbp_deployments(id) on delete set null,
+      add constraint cbp_deployment_jobs_host_id_cbp_hosts_id_fk
+        foreign key (host_id) references cbp_hosts(id) on delete set null`);
     await tx.execute(sql`create index if not exists cbp_deployment_runs_submitted_idx
       on cbp_deployment_runs (submitted_at desc nulls last, id desc)`);
     await tx.execute(
@@ -129,7 +188,7 @@ try {
       end;
     $$`);
     await tx.execute(sql`create or replace trigger cbp_deployment_updates
-      after insert or update of status, detail or delete on cbp_deployment_jobs
+      after insert or update of status, detail, log or delete on cbp_deployment_jobs
       for each row execute function cbp_notify_deployment_update()`);
   });
   if (webPassword) {
@@ -151,6 +210,7 @@ try {
         to cbp_web`);
       await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,
         public.cbp_deployment_jobs, public.cbp_notification_channels to cbp_web`);
+      await tx.execute(sql`grant delete on public.cbp_deployment_jobs, public.cbp_deployment_runs to cbp_web`);
       await tx.execute(
         sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`,
       );

@@ -54,3 +54,22 @@ func (c *controller) FinishDeployment(ctx context.Context, req *structpb.Struct)
 	}
 	return &emptypb.Empty{}, nil
 }
+
+func (c *controller) AppendDeploymentLog(ctx context.Context, req *structpb.Struct) (*emptypb.Empty, error) {
+	host, token, err := identity(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if c.web == nil {
+		return nil, status.Error(codes.Unimplemented, "deployment requires the CBP web app")
+	}
+	fields := req.GetFields()
+	jobID, message := fields["jobId"].GetStringValue(), fields["message"].GetStringValue()
+	if !validField(jobID, 36) || !rpc.ValidDeploymentLog(message) {
+		return nil, status.Error(codes.InvalidArgument, "invalid deployment log entry")
+	}
+	if err := c.web.send(ctx, "deployment-log", webRequest{HostID: host, Token: token, JobID: jobID, Message: message}); err != nil {
+		return nil, webRPCError("deployment-log", host, err)
+	}
+	return &emptypb.Empty{}, nil
+}

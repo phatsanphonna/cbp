@@ -26,6 +26,7 @@ const actionLabels: Record<string, Record<string, string>> = {
   "/certificates/[id]": {
     ...deploymentActions,
     deploy: "Deploy certificate",
+    deployAnsible: 'Deploy certificate via Ansible',
     updateChain: "Update fullchain",
     restoreChain: "Restore fullchain",
     remove: "Remove certificate",

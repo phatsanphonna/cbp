@@ -22,8 +22,10 @@ const (
 	CheckInMethod                = "/" + serviceName + "/CheckIn"
 	ClaimDeploymentMethod        = "/" + serviceName + "/ClaimDeployment"
 	FinishDeploymentMethod       = "/" + serviceName + "/FinishDeployment"
+	AppendDeploymentLogMethod    = "/" + serviceName + "/AppendDeploymentLog"
 	HostHeader                   = "cbp-host-id"
 	MaxDeploymentDiagnosticBytes = 512
+	MaxDeploymentLogBytes        = 1024
 )
 
 var hostIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
@@ -32,6 +34,11 @@ func ValidHostID(value string) bool { return hostIDPattern.MatchString(value) }
 
 func ValidDeploymentDiagnostic(value string) bool {
 	return len(value) <= MaxDeploymentDiagnosticBytes && utf8.ValidString(value) &&
+		strings.TrimSpace(value) != "" && !strings.ContainsFunc(value, unicode.IsControl)
+}
+
+func ValidDeploymentLog(value string) bool {
+	return len(value) > 0 && len(value) <= MaxDeploymentLogBytes && utf8.ValidString(value) &&
 		strings.TrimSpace(value) != "" && !strings.ContainsFunc(value, unicode.IsControl)
 }
 
@@ -54,6 +61,7 @@ type Controller interface {
 	Unregister(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
 	CheckIn(context.Context, *structpb.Struct) (*structpb.Struct, error)
 	ClaimDeployment(context.Context, *emptypb.Empty) (*structpb.Struct, error)
+	AppendDeploymentLog(context.Context, *structpb.Struct) (*emptypb.Empty, error)
 	FinishDeployment(context.Context, *structpb.Struct) (*emptypb.Empty, error)
 }
 
@@ -67,6 +75,7 @@ func RegisterController(server *grpc.Server, controller Controller) {
 			method("Unregister", UnregisterMethod, Controller.Unregister),
 			method("CheckIn", CheckInMethod, Controller.CheckIn),
 			method("ClaimDeployment", ClaimDeploymentMethod, Controller.ClaimDeployment),
+			method("AppendDeploymentLog", AppendDeploymentLogMethod, Controller.AppendDeploymentLog),
 			method("FinishDeployment", FinishDeploymentMethod, Controller.FinishDeployment),
 		},
 	}, controller)

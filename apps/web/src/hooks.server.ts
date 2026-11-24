@@ -20,29 +20,39 @@ const controllerRoutes = [
   "/api/internal/controller/unregister",
 ];
 
-let expiryTimer: ReturnType<typeof setInterval> | undefined;
+type ExpiryTimer = ReturnType<typeof setInterval>;
+const cleanup = globalThis as typeof globalThis & { cbpDeploymentExpiryTimer?: ExpiryTimer };
+let expiryTimer: ExpiryTimer | undefined;
 let expiringJobs = false;
 
 export function init() {
   if (building || expiryTimer) return;
+  // Vite can replace the hooks module while the previous interval is still running.
+  clearInterval(cleanup.cbpDeploymentExpiryTimer);
   const expire = async () => {
     if (expiringJobs) return;
     expiringJobs = true;
     try {
       await expireDeploymentJobs(getDatabase());
-    } catch {
-      console.error("Could not clear expired certificate deployment jobs");
+    } catch (failure) {
+      const cause = failure instanceof Error ? failure.cause ?? failure : failure;
+      console.error('Could not clear expired certificate deployment jobs', cause);
     } finally {
       expiringJobs = false;
     }
   };
   void expire();
   expiryTimer = setInterval(expire, 10_000);
+  cleanup.cbpDeploymentExpiryTimer = expiryTimer;
   expiryTimer.unref();
 }
 
 import.meta.hot?.dispose(() => {
   clearInterval(expiryTimer);
+  if (cleanup.cbpDeploymentExpiryTimer === expiryTimer) {
+    delete cleanup.cbpDeploymentExpiryTimer;
+  }
+  expiryTimer = undefined;
 });
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -53,6 +63,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (isDirectHttps(event)) error(404, "Not found");
     return resolve(event);
   }
+  if (id === '/api/internal/ansible') return resolve(event);
 
   const session = await getAuth().api.getSession({
     headers: event.request.headers,

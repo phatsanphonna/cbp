@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "@sveltejs/kit";
 import { getControllerToken } from "#lib/server/controller-config.js";
 import { getDatabase } from "#lib/server/database.js";
+import type { RequestEvent } from '@sveltejs/kit';
 
 const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/;
 export const digest = (value: string) =>
@@ -13,9 +14,11 @@ export function controllerPost(
     body: Record<string, unknown>,
   ) => Promise<number | Response>,
   maxBodySize = 4096,
+  getToken: (event: RequestEvent) => string | null = getControllerToken,
 ): RequestHandler {
-  return async ({ request, route }) => {
-    const controllerToken = getControllerToken();
+  return async (event) => {
+    const { request, route } = event;
+    const controllerToken = getToken(event);
     if (!controllerToken) return response(503);
     const supplied = request.headers
       .get("authorization")

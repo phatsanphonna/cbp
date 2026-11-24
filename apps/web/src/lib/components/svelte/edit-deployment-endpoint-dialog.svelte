@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { toast } from 'svelte-sonner';
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
   import RemoveDeploymentDialog from "#lib/components/svelte/remove-deployment-dialog.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -69,7 +70,12 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === "success") open = false;
+            if (result.type === 'success') {
+              open = false;
+              if (typeof result.data?.endpointMessage === 'string') {
+                toast.success(result.data.endpointMessage);
+              }
+            }
           } finally {
             pending = false;
           }

@@ -7,6 +7,7 @@
     FieldLabel,
   } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
+  import { hostApplianceTypes } from '#lib/host-appliance-types.js';
   import type { PageProps } from "./$types";
 
   let { form }: PageProps = $props();
@@ -26,7 +27,7 @@
         Add host
       </h1>
       <p class="text-xs text-muted-foreground">
-        Register an Ansible-managed server in the host inventory.
+        Register a server or appliance in the host inventory.
       </p>
     </div>
     <Button href={resolve("/hosts")} variant="outline">Back to hosts</Button>
@@ -46,6 +47,21 @@
           spellcheck={false}
           autocapitalize="none"
         />
+      </Field>
+      <Field>
+        <FieldLabel for="appliance-type" required>Appliance type</FieldLabel>
+        <select
+          id="appliance-type"
+          name="applianceType"
+          class="h-8 w-full border border-input bg-background px-2 text-xs"
+          required
+        >
+          {#each hostApplianceTypes as type (type)}
+            <option value={type} selected={type === (form?.values?.applianceType ?? 'Linux')}>
+              {type}
+            </option>
+          {/each}
+        </select>
       </Field>
       {#if form?.message}
         <p role="alert" class="text-xs text-destructive">{form.message}</p>

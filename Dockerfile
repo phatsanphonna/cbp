@@ -14,6 +14,16 @@ EXPOSE 50051
 ENTRYPOINT ["cbp-controller"]
 CMD ["serve", "-listen", "0.0.0.0:50051", "-tls-cert", "/run/cbp/controller-fullchain.pem", "-tls-key", "/run/cbp/controller.key"]
 
+FROM golang:1.27.4-bookworm AS agent-build
+WORKDIR /src
+COPY go.work go.work.sum ./
+COPY apps/agent/ apps/agent/
+COPY apps/controller/go.mod apps/controller/go.mod
+COPY packages/agent-rpc/ packages/agent-rpc/
+RUN for arch in amd64 arm64; do \
+      CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -mod=readonly -trimpath -o "/out/cbp-agent-linux-$arch" ./apps/agent || exit 1; \
+    done
+
 FROM oven/bun:1.4.5 AS web
 USER root
 WORKDIR /app
@@ -24,6 +34,8 @@ RUN umask 022 && bun install --frozen-lockfile --ignore-scripts
 COPY apps/web/ apps/web/
 COPY packages/database/ packages/database/
 RUN umask 022 && bun run --filter web build && chmod -R a+rX /app
+COPY --from=agent-build /out/ /opt/cbp/agent-downloads/
+ENV CBP_AGENT_DOWNLOAD_DIR=/opt/cbp/agent-downloads
 ENV NODE_ENV=production
 EXPOSE 3000
 USER bun

@@ -17,8 +17,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	rpc "cbp/agent-rpc"
 	"github.com/sirupsen/logrus"
+
+	rpc "cbp/agent-rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -239,13 +240,22 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 	if id == "" {
 		return nil
 	}
+	appendLog := func(message string) {
+		logContext, stop := context.WithTimeout(ctx, 5*time.Second)
+		defer stop()
+		entry, _ := structpb.NewStruct(map[string]any{"jobId": id, "message": message})
+		if err := conn.Invoke(logContext, rpc.AppendDeploymentLogMethod, entry, &emptypb.Empty{}); err != nil {
+			logrus.WithError(err).Warn("could not append deployment log")
+		}
+	}
+	appendLog("Agent claimed deployment")
 	endpoint := fields["endpoint"].GetStringValue()
 	target, targetErr := config.deploymentTarget(endpoint, fields["engine"].GetStringValue())
 	outcome := "configuration"
 	var verificationErr error
 	if targetErr == nil {
 		installContext, stop := context.WithTimeout(ctx, 90*time.Second)
-		outcome, verificationErr = installDeployment(installContext, target, fields["fullchain"].GetStringValue(), fields["privateKey"].GetStringValue())
+		outcome, verificationErr = installDeployment(installContext, target, fields["fullchain"].GetStringValue(), fields["privateKey"].GetStringValue(), appendLog)
 		stop()
 	} else {
 		logrus.WithError(targetErr).Warn("deployment target rejected")
@@ -253,6 +263,11 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 	result := map[string]any{"jobId": id, "outcome": outcome}
 	if verificationErr != nil {
 		result["diagnostic"] = certificateDiagnostic(verificationErr, time.Now())
+	}
+	if outcome == "ok" {
+		appendLog("Deployment succeeded")
+	} else {
+		appendLog("Deployment failed during " + outcome)
 	}
 	reply, _ := structpb.NewStruct(result)
 	reportContext, stop := context.WithTimeout(context.WithoutCancel(ctx), 25*time.Second)

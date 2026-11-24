@@ -6,7 +6,9 @@ import {
   eq,
   getTableColumns,
   gt,
+  inArray,
   isNull,
+  notExists,
   lte,
   or,
   sql,
@@ -17,6 +19,7 @@ import {
   certificates,
   channels,
   deploymentJobs,
+  deploymentRuns,
   deployments,
   hostAgents,
   hosts,
@@ -99,7 +102,7 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
       .for("key share");
     if (!host) return "missing";
     const [certificate] = await tx
-      .select({ id: certificates.id })
+      .select({ id: certificates.id, fingerprint: certificates.fingerprint })
       .from(certificates)
       .where(eq(certificates.id, values.certificateId))
       .for("key share");
@@ -107,7 +110,7 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
 
     const [linked] = await tx
       .insert(deployments)
-      .values(values)
+      .values({ ...values, expectedFingerprint: certificate.fingerprint })
       .onConflictDoUpdate({
         target: [deployments.certificateId, deployments.endpoint],
         set: {
@@ -118,6 +121,8 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
           listenerStatus: null,
           listenerAddress: null,
           listenerCheckedAt: null,
+          listenerFingerprint: null,
+          expectedFingerprint: certificate.fingerprint,
         },
         setWhere: isNull(deployments.hostId),
       })
@@ -159,6 +164,7 @@ export async function updateDeploymentEndpoint(
         listenerStatus: sql`case when ${targetChanged} then null else ${deployments.listenerStatus} end`,
         listenerAddress: sql`case when ${targetChanged} then null else ${deployments.listenerAddress} end`,
         listenerCheckedAt: sql`case when ${targetChanged} then null else ${deployments.listenerCheckedAt} end`,
+        listenerFingerprint: sql`case when ${targetChanged} then null else ${deployments.listenerFingerprint} end`,
       })
       .where(and(eq(deployments.id, id), eq(ownerColumn, ownerId)))
       .returning({ id: deployments.id });
@@ -225,6 +231,17 @@ export async function removeDeployment(
           ),
         );
       if (running) return "busy";
+      await tx.update(deploymentJobs).set({
+        status: "Failed",
+        detail: "The linked deployment was removed.",
+        sealedKey: null,
+        finishedAt: sql`now()`,
+      }).where(and(
+        eq(deploymentJobs.deploymentId, id),
+        inArray(deploymentJobs.status, ["Queued", "Running"]),
+      ));
+      await tx.update(deploymentJobs).set({ sealedKey: null })
+        .where(eq(deploymentJobs.deploymentId, id));
     }
     await tx.delete(deployments).where(scope);
     return "removed";
@@ -235,7 +252,7 @@ export function registerHost(
   db: Database,
   values: Pick<
     typeof hosts.$inferInsert,
-    "name" | "agentManaged" | "ansibleManaged"
+    "name" | "agentManaged" | "ansibleManaged" | "applianceType"
   >,
 ) {
   return db
@@ -291,11 +308,23 @@ export function saveHostPing(db: Database, id: string, ping: HostPing) {
 
 export async function removeHost(db: Database, id: string) {
   if (!inventoryId.test(id)) return false;
-  const [removed] = await db
-    .delete(hosts)
-    .where(eq(hosts.id, id))
-    .returning({ id: hosts.id });
-  return Boolean(removed);
+  return db.transaction(async (tx) => {
+    const [host] = await tx.select({ id: hosts.id }).from(hosts)
+      .where(eq(hosts.id, id)).for("update");
+    if (!host) return false;
+    const runIds = await tx.selectDistinct({ runId: deploymentJobs.runId })
+      .from(deploymentJobs).where(eq(deploymentJobs.hostId, id));
+    await tx.delete(deploymentJobs).where(eq(deploymentJobs.hostId, id));
+    for (const { runId } of runIds) {
+      await tx.delete(deploymentRuns).where(and(
+        eq(deploymentRuns.id, runId),
+        notExists(tx.select({ id: deploymentJobs.id }).from(deploymentJobs)
+          .where(eq(deploymentJobs.runId, runId))),
+      ));
+    }
+    await tx.delete(hosts).where(eq(hosts.id, id));
+    return true;
+  });
 }
 
 export async function findHostAddress(db: Database, id: string) {
@@ -322,6 +351,9 @@ export async function findHost(db: Database, id: string) {
       listenerStatus: deployments.listenerStatus,
       listenerAddress: deployments.listenerAddress,
       listenerCheckedAt: deployments.listenerCheckedAt,
+      listenerFingerprint: deployments.listenerFingerprint,
+      certificateFingerprint: certificates.fingerprint,
+      expectedFingerprint: deployments.expectedFingerprint,
       certificateId: certificates.id,
       domain: certificates.domain,
     })
@@ -333,7 +365,11 @@ export async function findHost(db: Database, id: string) {
       asc(certificates.domain),
       asc(deployments.id),
     );
-  return { ...host, deployments: endpoints };
+  return { ...host, deployments: endpoints.map((deployment) =>
+    deployment.method === 'Ansible'
+      ? { ...deployment, listenerStatus: null, listenerAddress: null, listenerCheckedAt: null, listenerFingerprint: null }
+      : deployment
+  ) };
 }
 
 export function listCertificates(
@@ -377,6 +413,7 @@ export async function findCertificate(db: Database, id: string) {
       ...getTableColumns(deployments),
       hostName: hosts.name,
       agentEnrolled: sql<boolean>`${hostAgents.tokenHash} is not null`,
+      ansibleManaged: hosts.ansibleManaged,
     })
     .from(deployments)
     .leftJoin(hosts, eq(deployments.hostId, hosts.id))
@@ -464,7 +501,14 @@ export async function updateCertificateChain(
       if (chainChanged || current.fingerprint !== replacement.fingerprint) {
         await tx
           .update(deployments)
-          .set({ status: "Pending" })
+          .set({
+            status: "Pending",
+            listenerStatus: null,
+            listenerAddress: null,
+            listenerCheckedAt: null,
+            listenerFingerprint: null,
+            expectedFingerprint: replacement.fingerprint,
+          })
           .where(eq(deployments.certificateId, id));
       }
       return true;
@@ -489,11 +533,30 @@ function violatesConstraint(error: unknown, name: string) {
 
 export async function removeCertificate(db: Database, id: string) {
   if (!inventoryId.test(id)) return false;
-  const [removed] = await db
-    .delete(certificates)
-    .where(eq(certificates.id, id))
-    .returning({ id: certificates.id });
-  return Boolean(removed);
+  return db.transaction(async (tx) => {
+    const [certificate] = await tx.select({ id: certificates.id }).from(certificates)
+      .where(eq(certificates.id, id)).for("update");
+    if (!certificate) return false;
+    const linked = await tx.select({ id: deployments.id }).from(deployments)
+      .where(eq(deployments.certificateId, id));
+    if (linked.length) {
+      await tx.update(deploymentJobs).set({ sealedKey: null }).where(
+        inArray(deploymentJobs.deploymentId, linked.map(({ id: deploymentId }) => deploymentId)),
+      );
+      await tx.update(deploymentJobs).set({
+        status: "Failed",
+        detail: "The certificate was removed.",
+        sealedKey: null,
+        finishedAt: sql`now()`,
+      }).where(and(
+        inArray(deploymentJobs.deploymentId, linked.map(({ id: deploymentId }) => deploymentId)),
+        inArray(deploymentJobs.status, ["Queued", "Running"]),
+      ));
+    }
+    await tx.delete(deploymentRuns).where(eq(deploymentRuns.certificateId, id));
+    await tx.delete(certificates).where(eq(certificates.id, id));
+    return true;
+  });
 }
 
 export function listAlerts(db: Database, openOnly = false) {

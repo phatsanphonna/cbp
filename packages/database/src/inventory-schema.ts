@@ -34,6 +34,7 @@ export const userGroupMembers = pgTable(
 export const hosts = pgTable("cbp_hosts", {
   id: uuid().defaultRandom().primaryKey(),
   name: text().notNull().unique(),
+  applianceType: text('appliance_type'),
   hostname: text(),
   fqdn: text(),
   operatingSystem: text("operating_system"),
@@ -101,10 +102,12 @@ export const deployments = pgTable(
       .notNull()
       .default("Pending"),
     listenerStatus: text("listener_status", {
-      enum: ["ready", "unreachable", "tls-error", "not-allowed"],
+      enum: ["ready", "drifted", "unreachable", "tls-error", "not-allowed"],
     }),
     listenerAddress: text("listener_address"),
     listenerCheckedAt: instant("listener_checked_at"),
+    listenerFingerprint: text("listener_fingerprint"),
+    expectedFingerprint: text("expected_fingerprint"),
   },
   (table) => [unique().on(table.certificateId, table.endpoint)],
 );
@@ -114,9 +117,12 @@ export const deploymentRuns = pgTable(
   {
     id: uuid().defaultRandom().primaryKey(),
     slug: text().notNull().unique(),
-    certificateId: uuid("certificate_id")
-      .notNull()
-      .references(() => certificates.id, { onDelete: "cascade" }),
+    certificateId: uuid("certificate_id").references(() => certificates.id, {
+      onDelete: "set null",
+    }),
+    certificateName: text("certificate_name").notNull().default("Unknown certificate"),
+    certificateSans: text("certificate_sans").array().notNull().default([]),
+    certificateFingerprint: text("certificate_fingerprint"),
     submittedAt: instant("submitted_at").defaultNow(),
   },
   (table) => [
@@ -134,13 +140,14 @@ export const deploymentJobs = pgTable(
     runId: uuid("run_id")
       .notNull()
       .references(() => deploymentRuns.id, { onDelete: "cascade" }),
-    deploymentId: uuid("deployment_id")
-      .notNull()
-      .references(() => deployments.id, { onDelete: "cascade" }),
-    hostId: uuid("host_id")
-      .notNull()
-      .references(() => hosts.id, { onDelete: "cascade" }),
-    agentHash: text("agent_hash").notNull(),
+    deploymentId: uuid("deployment_id").references(() => deployments.id, {
+      onDelete: "set null",
+    }),
+    hostId: uuid("host_id").references(() => hosts.id, { onDelete: "set null" }),
+    hostName: text("host_name").notNull().default("Unknown host"),
+    agentHash: text("agent_hash"),
+    method: text({ enum: ['Agent', 'Ansible'] }).notNull().default('Agent'),
+    recovery: boolean().notNull().default(false),
     endpoint: text().notNull(),
     engine: text().notNull(),
     fullchain: text().notNull(),
@@ -149,6 +156,9 @@ export const deploymentJobs = pgTable(
       enum: ["Queued", "Running", "Deployed", "Failed", "Expired"],
     }).notNull(),
     detail: text(),
+    log: text().notNull().default(""),
+    startedAt: instant("started_at"),
+    finishedAt: instant("finished_at"),
     expiresAt: instant("expires_at").notNull(),
   },
   (table) => [

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { toast } from 'svelte-sonner';
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
@@ -51,7 +52,12 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === "success") open = false;
+            if (result.type === 'success') {
+              open = false;
+              if (typeof result.data?.linkMessage === 'string') {
+                toast.success(result.data.linkMessage);
+              }
+            }
           } finally {
             pending = false;
           }

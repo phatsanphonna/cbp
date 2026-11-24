@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { findAuthUserId, user } from "./auth-schema.js";
-import { expireDeploymentJobs } from "./deployment-jobs.js";
+import { claimDeployment, expireDeploymentJobs, finishDeployment, queueDeployments } from "./deployment-jobs.js";
 import { revokeHostAgent } from "./host-agents.js";
 import { openDatabase } from "./index.js";
 import {
@@ -15,6 +15,47 @@ import {
 } from "./inventory-schema.js";
 
 const databaseURL = Bun.env.CBP_TEST_DATABASE_URL;
+
+test.skipIf(!databaseURL)('Ansible jobs require the matching endpoint and survive agent revocation', async () => {
+  const db = openDatabase(databaseURL);
+  const hostId = randomUUID();
+  const certificateId = randomUUID();
+  const endpoint = `${hostId}.example.test:443`;
+  const id = randomUUID();
+  const worker = { method: 'Ansible', endpoint } as const;
+  try {
+    await db.insert(hosts).values({ id: hostId, name: endpoint, agentManaged: true, ansibleManaged: true });
+    await db.insert(hostAgents).values({ hostId, tokenHash: 'agent-hash' });
+    await db.insert(certificates).values({
+      id: certificateId, domain: endpoint, issuer: 'test', serial: certificateId,
+      fullchain: 'chain', validFrom: new Date(0), validUntil: new Date('2099-01-01')
+    });
+    const [deployment] = await db.insert(deployments).values({
+      certificateId, hostId, endpoint, engine: 'Nginx', method: 'Ansible'
+    }).returning({ id: deployments.id });
+    const job = { id, deploymentId: deployment.id, hostId, endpoint, engine: 'Nginx', fullchain: 'chain', sealedKey: 'sealed' };
+    expect((await queueDeployments(db, { certificateId }, [job], 'Ansible')).status).toBe('queued');
+    expect(await claimDeployment(db, hostId, 'agent-hash', (row) => row.id)).toBeNull();
+    expect(await revokeHostAgent(db, hostId, 'agent-hash')).toBe('ok');
+    expect(await claimDeployment(db, hostId, { ...worker, endpoint: 'other.example.test:443' }, (row) => row.id)).toBeNull();
+    expect(await claimDeployment(db, hostId, worker, (row) => row.sealedKey)).toBe('sealed');
+    expect(await claimDeployment(db, hostId, worker, (row) => row.id)).toBeNull();
+    expect(await finishDeployment(db, hostId, worker, id, null)).toBe('ok');
+    expect(await finishDeployment(db, hostId, worker, id, null)).toBe('ok');
+    const [host] = await db.select().from(hosts).where(eq(hosts.id, hostId));
+    const [result] = await db.select().from(deploymentJobs).where(eq(deploymentJobs.id, id));
+    expect(host.ansibleSucceeded).toBe(true);
+    expect(host.ansibleRunAt).toBeInstanceOf(Date);
+    expect(result).toMatchObject({ method: 'Ansible', status: 'Deployed', sealedKey: 'sealed' });
+  } finally {
+    try {
+      await db.delete(certificates).where(eq(certificates.id, certificateId));
+      await db.delete(hosts).where(eq(hosts.id, hostId));
+    } finally {
+      await db.$client.close();
+    }
+  }
+});
 
 test.skipIf(!databaseURL)(
   "deployment expiry and enrollment revocation clear queued keys",

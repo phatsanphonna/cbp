@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { toast } from 'svelte-sonner';
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
 
@@ -46,7 +47,12 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === "success") open = false;
+            if (result.type === 'success') {
+              open = false;
+              if (typeof result.data?.removeDeploymentMessage === 'string') {
+                toast.success(result.data.removeDeploymentMessage);
+              }
+            }
           } finally {
             pending = false;
           }

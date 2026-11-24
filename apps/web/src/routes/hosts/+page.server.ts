@@ -14,9 +14,11 @@ export const load: PageServerLoad = async ({ cookies, depends }) => {
     hosts: hosts.map((host) => ({
       id: host.id,
       name: host.name,
+      applianceType: host.applianceType,
       hostname:
         host.hostname ?? host.fqdn ?? (isIP(host.name) ? null : host.name),
       ipAddress: hostIpAddress(host),
+      pingStatus: host.lastPingStatus,
       ping: host.lastPingStatus
         ? pingLabels[host.lastPingStatus]
         : "Not checked",
@@ -30,12 +32,12 @@ export const load: PageServerLoad = async ({ cookies, depends }) => {
           : "Unmanaged",
       agent: host.agentManaged
         ? host.agentSeenAt
-          ? format.format(host.agentSeenAt)
+          ? `Checked in ${format.format(host.agentSeenAt)}`
           : "Never checked in"
         : null,
       ansible: host.ansibleManaged
         ? host.ansibleRunAt
-          ? `${host.ansibleSucceeded === false ? "Failed" : host.ansibleSucceeded ? "Succeeded" : "Result unknown"} · ${format.format(host.ansibleRunAt)}`
+          ? `${host.ansibleSucceeded === false ? "Failed" : host.ansibleSucceeded ? "Succeeded" : "Result unknown"} ${format.format(host.ansibleRunAt)}`
           : "Never run"
         : null,
       certificates: host.certificates,

@@ -13,5 +13,5 @@ export const POST = controllerPost(async (db, { hostId, code }) => {
     hostId,
     digest(code).toString("hex"),
   );
-  return result === "ok" ? 204 : result === "conflict" ? 409 : 404;
+  return result === "ok" ? 204 : result === "conflict" || result === 'unsupported' ? 409 : 404;
 });

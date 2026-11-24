@@ -22,6 +22,9 @@ service Controller {
   // A job contains id, engine, endpoint, fullchain and privateKey. An empty reply means no job.
   rpc ClaimDeployment(google.protobuf.Empty) returns (google.protobuf.Struct);
 
+  // Appends one progress line to a running deployment job.
+  rpc AppendDeploymentLog(google.protobuf.Struct) returns (google.protobuf.Empty);
+
   // The result contains jobId and outcome, with an optional certificate diagnostic.
   rpc FinishDeployment(google.protobuf.Struct) returns (google.protobuf.Empty);
 }
