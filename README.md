@@ -6,21 +6,34 @@ CBP is a web application for managing TLS certificates and deploying them to Lin
 
 The Compose stack runs the Bun web app, Go controller, and PostgreSQL. This setup serves browser traffic over HTTPS directly from the web container. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL.
 
-The Compose stack runs the Bun web app, Go controller, and PostgreSQL. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL. For a fresh deployment, run the setup script from the repository root with the controller address your agents will use and the HTTPS URL your users will open.
+For a fresh deployment, run the setup script from the repository root. Replace the example controller address and browser URL with yours.
 
 ```sh
-bash scripts/setup-docker.sh cbp-controller.internal:50051 https://cbp.example.com
+bash scripts/setup-docker.sh cbp-controller.internal:50051 https://192.0.2.10:3000
 ```
 
-Replace both example addresses with your own. The script generates `.env` and prepares the controller TLS files. Set `CBP_ADMIN_EMAILS` in `.env`. For remote agents, set `CBP_CONTROLLER_BIND` to the Docker host's agent-facing IP address, then build and start the stack.
+Set these values in `.env` for your browser-facing IP and TLS files. The certificate must be trusted by your browser and cover the URL's IP address or hostname. The web container's `bun` user needs read access to the private key. [Direct HTTPS setup](apps/controller/README.md#direct-https-with-compose)
+
+```dotenv
+BETTER_AUTH_URL=https://192.0.2.10:3000
+CBP_WEB_BIND=192.0.2.10
+CBP_WEB_PORT=3000
+CBP_WEB_TLS_CERT=./web-fullchain.pem
+CBP_WEB_TLS_KEY=./web.key
+CBP_ADMIN_EMAILS=admin@example.com
+```
+
+For remote agents, set `CBP_CONTROLLER_BIND` to the Docker host's agent-facing IP address. Use both Compose files to start or upgrade the direct HTTPS deployment.
 
 ```sh
-docker compose config --quiet
-docker compose up -d --build
-docker compose ps --all
+docker compose -f compose.yaml -f compose.https.yaml config --quiet
+docker compose -f compose.yaml -f compose.https.yaml up -d --build
+docker compose -f compose.yaml -f compose.https.yaml ps --all
 ```
 
-Follow the [Docker deployment guide](apps/controller/README.md#run-with-docker-compose) to configure the HTTPS reverse proxy, create the first administrator, and verify enrollment and certificate delivery. If you already run CBP, follow the [upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment) before recreating containers.
+Create the first administrator, then open `BETTER_AUTH_URL` and verify enrollment and certificate delivery. [Docker deployment guide](apps/controller/README.md#4-create-the-first-administrator)
+
+If you already run CBP, back up the database before recreating containers. For deployments that terminate TLS at a reverse proxy, use the proxy setup in the guide. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment) · [HTTPS reverse proxy](apps/controller/README.md#https-reverse-proxy)
 
 ## Develop locally
 
