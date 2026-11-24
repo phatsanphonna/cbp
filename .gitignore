@@ -10,3 +10,4 @@ controller-state/
 /controller-fullchain.pem
 /controller-ca.pem
 /cbp-agent-linux
+.cbp-dev

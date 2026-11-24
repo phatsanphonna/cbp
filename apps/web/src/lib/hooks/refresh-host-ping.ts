@@ -1,5 +1,5 @@
-import { invalidate } from '$app/navigation';
-import { onMount } from 'svelte';
+import { invalidate } from "$app/navigation";
+import { onMount } from "svelte";
 
 export function refreshHostPing() {
   onMount(() => {
@@ -8,7 +8,7 @@ export function refreshHostPing() {
       if (document.hidden || refreshing) return;
       refreshing = true;
       try {
-        await invalidate('cbp:host-ping');
+        await invalidate("cbp:host-ping");
       } catch {
         // A later refresh can recover after navigation or a temporary connection failure.
       } finally {
@@ -17,10 +17,10 @@ export function refreshHostPing() {
     };
 
     const timer = setInterval(refresh, 30_000);
-    document.addEventListener('visibilitychange', refresh);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       clearInterval(timer);
-      document.removeEventListener('visibilitychange', refresh);
+      document.removeEventListener("visibilitychange", refresh);
     };
   });
 }

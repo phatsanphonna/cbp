@@ -1,8 +1,13 @@
 <script lang="ts" generics="Row extends RowData">
-  import { createTable, FlexRender, type ColumnDef, type RowData } from '@tanstack/svelte-table';
-  import { Input } from '#lib/components/ui/input/index.ts';
-  import * as Table from '#lib/components/ui/table/index.ts';
-  import { features, type DataTableFeatures } from './data-table-features.js';
+  import {
+    createTable,
+    FlexRender,
+    type ColumnDef,
+    type RowData,
+  } from "@tanstack/svelte-table";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import * as Table from "#lib/components/ui/table/index.ts";
+  import { features, type DataTableFeatures } from "./data-table-features.js";
 
   let {
     caption,
@@ -11,8 +16,8 @@
     rowKey,
     rowHeader,
     filter,
-    emptyMessage = 'No records to display.',
-    tableClass = ''
+    emptyMessage = "No records to display.",
+    tableClass = "",
   }: {
     caption: string;
     columns: ColumnDef<DataTableFeatures, Row>[];
@@ -26,12 +31,18 @@
 
   const table = createTable({
     features,
-    get data() { return data; },
-    get columns() { return columns; },
-    getRowId: (item) => rowKey(item)
+    get data() {
+      return data;
+    },
+    get columns() {
+      return columns;
+    },
+    getRowId: (item) => rowKey(item),
   });
 
-  const filterColumn = $derived(filter ? table.getColumn(filter.column) : undefined);
+  const filterColumn = $derived(
+    filter ? table.getColumn(filter.column) : undefined,
+  );
   const rows = $derived(table.getRowModel().rows);
 </script>
 
@@ -42,9 +53,13 @@
       aria-label={filter.label}
       placeholder={filter.label}
       class="max-w-64"
-      oninput={(event) => filterColumn?.setFilterValue(event.currentTarget.value.trim())}
+      oninput={(event) =>
+        filterColumn?.setFilterValue(event.currentTarget.value.trim())}
     />
-    <p class="text-xs text-muted-foreground" aria-live="polite">{rows.length} of {data.length} {data.length === 1 ? 'record' : 'records'}</p>
+    <p class="text-xs text-muted-foreground" aria-live="polite">
+      {rows.length} of {data.length}
+      {data.length === 1 ? "record" : "records"}
+    </p>
   </div>
 {/if}
 
@@ -55,7 +70,11 @@
       {#each table.getHeaderGroups() as group (group.id)}
         <Table.Row>
           {#each group.headers as header (header.id)}
-            <Table.Head scope={header.colSpan > 1 ? 'colgroup' : 'col'} colspan={header.colSpan} class="px-4 text-muted-foreground">
+            <Table.Head
+              scope={header.colSpan > 1 ? "colgroup" : "col"}
+              colspan={header.colSpan}
+              class="px-4 text-muted-foreground"
+            >
               {#if !header.isPlaceholder}
                 <FlexRender {header} />
               {/if}
@@ -81,7 +100,10 @@
         </Table.Row>
       {:else}
         <Table.Row>
-          <Table.Cell colspan={table.getAllLeafColumns().length} class="py-8 text-center text-muted-foreground">
+          <Table.Cell
+            colspan={table.getAllLeafColumns().length}
+            class="py-8 text-center text-muted-foreground"
+          >
             {emptyMessage}
           </Table.Cell>
         </Table.Row>

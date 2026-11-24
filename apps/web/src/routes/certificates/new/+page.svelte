@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resolve } from '$app/paths';
-  import CertificateChainFields from '#lib/components/svelte/certificate-chain-fields.svelte';
-  import { Button } from '#lib/components/ui/button/index.ts';
-  import { FieldGroup } from '#lib/components/ui/field/index.ts';
-  import type { PageProps } from './$types';
+  import { resolve } from "$app/paths";
+  import CertificateChainFields from "#lib/components/svelte/certificate-chain-fields.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { FieldGroup } from "#lib/components/ui/field/index.ts";
+  import type { PageProps } from "./$types";
 
   let { form }: PageProps = $props();
 </script>
@@ -12,16 +12,29 @@
   <title>Register certificate | Certified by Pat</title>
 </svelte:head>
 
-<section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="register-heading">
+<section
+  class="w-full flex-1 px-5 py-6 md:px-8"
+  aria-labelledby="register-heading"
+>
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="grid gap-1">
-      <h1 id="register-heading" class="font-heading text-xl font-semibold">Register certificate</h1>
-      <p class="text-xs text-muted-foreground">CBP reads the hostname from the certificate, including wildcard names.</p>
+      <h1 id="register-heading" class="font-heading text-xl font-semibold">
+        Register certificate
+      </h1>
+      <p class="text-xs text-muted-foreground">
+        CBP reads the hostname from the certificate, including wildcard names.
+      </p>
     </div>
-    <Button href={resolve('/certificates')} variant="outline">Back to certificates</Button>
+    <Button href={resolve("/certificates")} variant="outline"
+      >Back to certificates</Button
+    >
   </header>
 
-  <form class="mt-6 border p-4 sm:p-5" method="POST" enctype="multipart/form-data">
+  <form
+    class="mt-6 border p-4 sm:p-5"
+    method="POST"
+    enctype="multipart/form-data"
+  >
     <FieldGroup>
       <CertificateChainFields />
       {#if form?.message}

@@ -5,21 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <script>
       (() => {
-        let theme;
         try {
-          theme = localStorage.getItem('cbp-theme');
+          const saved = localStorage.getItem("cbp-theme");
+          if (
+            (saved === "light" || saved === "dark" || saved === "system") &&
+            localStorage.getItem("mode-watcher-mode") === null
+          ) {
+            localStorage.setItem("mode-watcher-mode", saved);
+          }
         } catch {
-          // Storage may be disabled.
+          // Keep initializing the time zone when storage is unavailable.
         }
-        const dark = theme === 'dark' ||
-          (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.classList.toggle('dark', dark);
 
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const preference = 'cbp-time-zone=' + encodeURIComponent(timeZone);
-        if (timeZone && !document.cookie.split('; ').includes(preference)) {
-          document.cookie = preference + '; Path=/; Max-Age=31536000; SameSite=Lax' +
-            (location.protocol === 'https:' ? '; Secure' : '');
+        const preference = "cbp-time-zone=" + encodeURIComponent(timeZone);
+        if (timeZone && !document.cookie.split("; ").includes(preference)) {
+          document.cookie =
+            preference +
+            "; Path=/; Max-Age=31536000; SameSite=Lax" +
+            (location.protocol === "https:" ? "; Secure" : "");
         }
       })();
     </script>

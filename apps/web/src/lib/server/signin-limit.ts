@@ -1,6 +1,13 @@
 const minute = 60_000;
 // shortcut: counters are per web process, so share them across replicas if the web app scales out.
-const clients = new Map<string, { expiresAt: number; attempts: number; logins: Map<string, { attempts: number; nextAt: number }> }>();
+const clients = new Map<
+  string,
+  {
+    expiresAt: number;
+    attempts: number;
+    logins: Map<string, { attempts: number; nextAt: number }>;
+  }
+>();
 let sweepAt = 0;
 type AccountAttempts = { expiresAt: number; attempts: number };
 const accounts = new Map<string, AccountAttempts>();
@@ -11,10 +18,16 @@ let credentialChecks = 0;
 export function reserveCredentialCheck() {
   if (credentialChecks >= 4) return null;
   credentialChecks++;
-  return () => { credentialChecks--; };
+  return () => {
+    credentialChecks--;
+  };
 }
 
-export function allowAccountSignIn(accountId: string | undefined, login: string, now = Date.now()) {
+export function allowAccountSignIn(
+  accountId: string | undefined,
+  login: string,
+  now = Date.now(),
+) {
   if (now >= accountSweepAt) {
     for (const attempts of [accounts, unknownLogins]) {
       for (const [key, bucket] of attempts) {

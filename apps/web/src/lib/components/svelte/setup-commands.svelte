@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as CodeBlock from '#lib/components/ui/code-block/index.ts';
+  import * as CodeBlock from "#lib/components/ui/code-block/index.ts";
 
   let { label, command }: { label: string; command: string } = $props();
 </script>
