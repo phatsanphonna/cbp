@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { dev } from "$app/environment";
 import { resolve } from "$app/paths";
 import {
   deploymentJobStatuses,
@@ -11,12 +12,12 @@ import { fail, redirect, type RequestEvent } from "@sveltejs/kit";
 import { deploymentServices } from "#lib/deployment-services.js";
 import { packAnsibleDeployment, readAnsibleCredentials } from './ansible-deployment-payload.js';
 import {
-  deploymentEncryptionKey,
   getAnsibleToken,
   getControllerToken,
 } from "./controller-config.js";
 import { getDatabase } from "./database.js";
-import { openDeploymentKey, readDeploymentKey, sealDeploymentKey } from "./deployment-key.js";
+import { readDeploymentKey } from "./deployment-key.js";
+import { discardDeploymentSecret, keepDeploymentSecret } from "./deployment-secrets.js";
 import { hasTrustedTransport, type Connection } from "./trusted-transport.js";
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -31,9 +32,8 @@ export async function loadAgentDeployments(
   ids: string[],
   connection: Connection,
 ) {
-  const encryption = deploymentEncryptionKey();
-  const agentEnabled = Boolean(encryption && getControllerToken());
-  const ansibleEnabled = Boolean(encryption && getAnsibleToken());
+  const agentEnabled = Boolean(getControllerToken());
+  const ansibleEnabled = Boolean(getAnsibleToken());
   const statuses = await deploymentJobStatuses(getDatabase(), ids);
   const httpsRequired = (agentEnabled || ansibleEnabled) && !hasTrustedTransport(connection);
   return {
@@ -41,7 +41,11 @@ export async function loadAgentDeployments(
     ansibleEnabled,
     httpsRequired,
     statuses: Object.fromEntries(
-      statuses.map(({ deploymentId, ...job }) => [deploymentId, job]),
+      statuses.map(({ deploymentId, ...job }) => [deploymentId, {
+        ...job,
+        startedAt: job.startedAt?.toISOString(),
+        finishedAt: job.finishedAt?.toISOString(),
+      }]),
     ),
   };
 }
@@ -61,8 +65,7 @@ export async function deployCertificateAction(
       "A trusted HTTPS connection is required to submit a private key.",
     );
   }
-  const encryptionKey = deploymentEncryptionKey();
-  if (!encryptionKey || !(method === 'Agent' ? getControllerToken() : getAnsibleToken()))
+  if (!(method === 'Agent' ? getControllerToken() : getAnsibleToken()))
     return reject(503, `${method} deployment is unavailable.`);
   const fields = await request.formData().catch(() => null);
   const selected = fields && readDeploymentTargets(fields);
@@ -133,16 +136,19 @@ export async function deployCertificateAction(
 
   let runId: string;
   let runSlug: string;
+  let secretIds: string[] = [];
   try {
     const jobs = targets.map((target) => {
       const id = randomUUID();
+      keepDeploymentSecret(id, payload);
+      secretIds.push(id);
       return {
         ...target,
         id,
-        sealedKey: sealDeploymentKey(encryptionKey, id, payload),
       };
     });
     const result = await queueDeployments(database, owner, jobs, method);
+    if (result.status !== "queued") jobs.forEach(({ id }) => discardDeploymentSecret(id));
     if (result.status === "busy")
       return reject(
         409,
@@ -165,6 +171,7 @@ export async function deployCertificateAction(
     runId = result.id;
     runSlug = result.slug;
   } catch {
+    secretIds.forEach(discardDeploymentSecret);
     console.error("Could not queue certificate deployment");
     return reject(503, "Could not queue the deployment.");
   }
@@ -178,27 +185,50 @@ export async function recoverDeploymentAction(
   const { request, setHeaders, locals } = event;
   setHeaders({ "cache-control": "no-store" });
   const reject = (status: number, message: string) => fail(status, { recoverError: message });
+  if (!hasTrustedTransport(event)) return reject(400, "A trusted HTTPS connection is required to submit a private key.");
   const form = await request.formData().catch(() => null);
   const sourceId = form?.get("jobId");
   if (typeof sourceId !== "string" || !idPattern.test(sourceId))
     return reject(400, "Choose a deployment to recover.");
-  const encryptionKey = deploymentEncryptionKey();
-  if (!encryptionKey) return reject(503, "Deployment recovery is unavailable.");
-  const database = getDatabase();
-  const source = await findRecoverableDeployment(database, sourceId);
-  if (!source?.sealedKey) return reject(409, "Encrypted recovery data is unavailable for this deployment.");
+  let database: ReturnType<typeof getDatabase>;
+  let source: Awaited<ReturnType<typeof findRecoverableDeployment>>;
+  try {
+    database = getDatabase();
+    source = await findRecoverableDeployment(database, sourceId);
+  } catch (error) {
+    console.error("Could not load certificate deployment for recovery", error);
+    const reason = error instanceof Error ? error.message : "Unknown database error";
+    return reject(
+      503,
+      dev
+        ? `Could not load this deployment for recovery: ${reason}`
+        : "Could not load this deployment for recovery.",
+    );
+  }
+  if (!source) return reject(409, "This deployment is no longer available for recovery.");
   if (!(source.method === "Agent" ? getControllerToken() : getAnsibleToken()))
     return reject(503, `${source.method} deployment is unavailable.`);
-
-  const id = randomUUID();
-  let sealedKey: string;
+  let key: Awaited<ReturnType<typeof readDeploymentKey>>;
   try {
-    const payload = openDeploymentKey(encryptionKey, source.id, source.sealedKey);
-    sealedKey = sealDeploymentKey(encryptionKey, id, payload);
-  } catch {
-    return reject(409, "Recovery data cannot be opened. Check the deployment encryption key.");
+    key = await readDeploymentKey(form!, source.fullchain);
+  } catch (error) {
+    console.error("Could not read private key for deployment recovery", error);
+    return reject(400, "Could not read the uploaded private key. Choose the file again and retry.");
   }
-  const result = await queueDeploymentRecovery(database, source.id, id, sealedKey);
+  if ("message" in key) return reject(400, key.message);
+  const ansible = source.method === "Ansible" ? readAnsibleCredentials(form!) : undefined;
+  if (ansible?.message) return reject(400, ansible.message);
+  const id = randomUUID();
+  keepDeploymentSecret(id, packAnsibleDeployment(key.pem, ansible?.credentials));
+  let result;
+  try {
+    result = await queueDeploymentRecovery(database, source.id, id);
+  } catch (error) {
+    discardDeploymentSecret(id);
+    console.error("Could not queue certificate deployment recovery", error);
+    return reject(503, "Could not queue the redeployment.");
+  }
+  if (result.status !== "queued") discardDeploymentSecret(id);
   if (result.status === "busy") return reject(409, "This host already has an active deployment.");
   if (result.status !== "queued") return reject(409, "The host or deployment is no longer available for recovery.");
   locals.auditTargetId = result.id;

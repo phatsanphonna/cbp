@@ -57,7 +57,7 @@
 
 <Badge
   role="status"
-  variant={status === "offline"
+  variant={status === "offline" || status === "unavailable"
     ? "destructive"
     : status === "online"
       ? "secondary"

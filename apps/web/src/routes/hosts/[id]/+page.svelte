@@ -156,7 +156,8 @@
               <span>Not reported</span>
             {:else}
               {#each host.allowedDeploymentServices as service (service)}
-                <Badge variant="secondary">{service}</Badge>
+                {@const version = host.deploymentServiceVersions?.[service]}
+                <Badge variant="secondary">{service}{#if version}<span class="font-mono">({version})</span>{/if}</Badge>
               {:else}
                 <span>None enabled</span>
               {/each}

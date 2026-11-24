@@ -26,6 +26,7 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Owner = { hostId: string } | { certificateId: string };
 type Job = typeof deploymentJobs.$inferSelect;
 type Worker = { method: 'Agent'; hash: string } | { method: 'Ansible'; endpoint: string };
+const inventoryId = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 type DeploymentPayload = Pick<
   Job,
   | "id"
@@ -34,7 +35,6 @@ type DeploymentPayload = Pick<
   | "engine"
   | "endpoint"
   | "fullchain"
-  | "sealedKey"
 >;
 const active = inArray(deploymentJobs.status, ["Queued", "Running"]);
 const unexpired = gt(deploymentJobs.expiresAt, sql`now()`);
@@ -130,7 +130,7 @@ function deploymentSlug() {
 export async function expireDeploymentJobs(db: Database) {
   await db
     .update(deploymentJobs)
-    .set({ status: "Expired", detail: expiryDetail, sealedKey: null, finishedAt: sql`now()` })
+    .set({ status: "Expired", detail: expiryDetail, finishedAt: sql`now()` })
     .where(and(active, expired));
 }
 
@@ -140,6 +140,8 @@ export function deploymentJobStatuses(db: Database, ids: string[]) {
     .selectDistinctOn([deploymentJobs.deploymentId], {
       jobId: deploymentJobs.id,
       deploymentId: deploymentJobs.deploymentId,
+      startedAt: deploymentJobs.startedAt,
+      finishedAt: deploymentJobs.finishedAt,
       ...jobStatus,
     })
     .from(deploymentJobs)
@@ -221,9 +223,10 @@ export function listDeploymentTargets(
       certificateId: deployments.certificateId,
       domain: deploymentRuns.certificateName,
       sans: deploymentRuns.certificateSans,
+      startedAt: deploymentJobs.startedAt,
       finishedAt: deploymentJobs.finishedAt,
       log: deploymentJobs.log,
-      recoverable: sql<boolean>`${deploymentJobs.status} = 'Deployed' and ${deploymentJobs.sealedKey} is not null and ${deploymentJobs.hostId} is not null and ${deploymentJobs.deploymentId} is not null`,
+      recoverable: sql<boolean>`${deploymentJobs.status} in ('Deployed', 'Failed') and ${deploymentJobs.hostId} is not null and ${deploymentJobs.deploymentId} is not null`,
       ...jobStatus,
     })
     .from(deploymentJobs)
@@ -377,7 +380,7 @@ export async function queueDeployments(
     }
     await tx
       .update(deploymentJobs)
-      .set({ status: "Expired", detail: expiryDetail, sealedKey: null, finishedAt: sql`now()` })
+      .set({ status: "Expired", detail: expiryDetail, finishedAt: sql`now()` })
       .where(and(inArray(deploymentJobs.hostId, hostIds), active, expired));
     const firstSource = current.get(payloads[0].deploymentId)!;
     const run = await createDeploymentRun(tx, owner.certificateId, {
@@ -403,13 +406,11 @@ export async function findRecoverableDeployment(db: Database, jobId: string) {
       endpoint: deploymentJobs.endpoint,
       engine: deploymentJobs.engine,
       fullchain: deploymentJobs.fullchain,
-      sealedKey: deploymentJobs.sealedKey,
     })
     .from(deploymentJobs)
     .where(and(
       eq(deploymentJobs.id, jobId),
-      eq(deploymentJobs.status, "Deployed"),
-      isNotNull(deploymentJobs.sealedKey),
+      inArray(deploymentJobs.status, ["Deployed", "Failed"]),
       isNotNull(deploymentJobs.deploymentId),
       isNotNull(deploymentJobs.hostId),
     ));
@@ -420,7 +421,6 @@ export async function queueDeploymentRecovery(
   db: Database,
   sourceId: string,
   id: string,
-  sealedKey: string,
 ) {
   const source = await findRecoverableDeployment(db, sourceId);
   if (!source?.hostId || !source.deploymentId) return { status: "missing" } as const;
@@ -488,7 +488,6 @@ export async function queueDeploymentRecovery(
       endpoint: source.endpoint,
       engine: source.engine,
       fullchain: source.fullchain,
-      sealedKey,
       status: "Queued",
       recovery: true,
       expiresAt: sql`now() + interval '10 minutes'`,
@@ -560,7 +559,6 @@ export function claimDeployment<T>(
           workerJobs(hostId, worker),
           eq(deploymentJobs.status, "Queued"),
           unexpired,
-          isNotNull(deploymentJobs.sealedKey),
         ),
       )
       .limit(1)
@@ -583,7 +581,6 @@ export function claimDeployment<T>(
           status: "Failed",
           detail:
             "The linked deployment or certificate changed before the job was claimed.",
-          sealedKey: null,
           finishedAt: sql`now()`,
         })
         .where(eq(deploymentJobs.id, job.id));
@@ -622,7 +619,6 @@ export function finishDeployment(
         status,
         detail,
         finishedAt: sql`now()`,
-        ...(status === "Deployed" ? {} : { sealedKey: null }),
       })
       .where(and(owned, eq(deploymentJobs.status, "Running"), unexpired))
       .returning({

@@ -139,6 +139,7 @@ type AgentReport = Pick<
 export const listenerBatchSize = 12;
 export type AgentReadiness = {
   allowedServices: string[];
+  serviceVersions: Record<string, string>;
   cursor?: string;
   results: {
     id: string;
@@ -172,7 +173,11 @@ export function saveAgentCheckIn(
       .where(eq(hosts.id, hostId));
     await tx
       .update(hosts)
-      .set({ ...report, allowedDeploymentServices: readiness?.allowedServices })
+      .set({
+        ...report,
+        allowedDeploymentServices: readiness?.allowedServices,
+        deploymentServiceVersions: readiness?.serviceVersions,
+      })
       .where(
         and(
           eq(hosts.id, hostId),
@@ -270,7 +275,6 @@ export function revokeHostAgent(
           status: sql`case when ${deploymentJobs.expiresAt} <= now() then 'Expired' else 'Failed' end`,
           detail:
             "Agent enrollment was revoked before the deployment could be confirmed.",
-          sealedKey: null,
           finishedAt: sql`now()`,
         })
         .where(
@@ -282,7 +286,7 @@ export function revokeHostAgent(
         );
       await tx
         .update(hosts)
-        .set({ allowedDeploymentServices: null })
+        .set({ allowedDeploymentServices: null, deploymentServiceVersions: null })
         .where(eq(hosts.id, hostId));
       await tx
         .update(deployments)

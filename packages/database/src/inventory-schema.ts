@@ -2,6 +2,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -47,6 +48,7 @@ export const hosts = pgTable("cbp_hosts", {
   }),
   lastPingAddress: text("last_ping_address"),
   allowedDeploymentServices: text("allowed_deployment_services").array(),
+  deploymentServiceVersions: jsonb("deployment_service_versions").$type<Record<string, string>>(),
   agentManaged: boolean("agent_managed").notNull().default(false),
   ansibleManaged: boolean("ansible_managed").notNull().default(false),
   agentSeenAt: instant("agent_seen_at"),
@@ -151,7 +153,6 @@ export const deploymentJobs = pgTable(
     endpoint: text().notNull(),
     engine: text().notNull(),
     fullchain: text().notNull(),
-    sealedKey: text("sealed_key"),
     status: text({
       enum: ["Queued", "Running", "Deployed", "Failed", "Expired"],
     }).notNull(),

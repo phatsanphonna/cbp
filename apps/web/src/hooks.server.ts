@@ -10,6 +10,7 @@ import { isDirectHttps } from "#lib/server/trusted-transport.js";
 const controllerRoutes = [
   "/api/internal/controller/check-in",
   "/api/internal/controller/deployment-claim",
+  "/api/internal/controller/deployment-log",
   "/api/internal/controller/deployment-result",
   "/api/internal/controller/enroll",
   "/api/internal/controller/heartbeat",

@@ -11,7 +11,7 @@ const fingerprintPattern = /^[\da-f]{64}$/i;
 export function parseAgentReadiness(
   report: Record<string, unknown>,
 ): AgentReadiness | null | undefined {
-  const { allowedServices, listenerResults, listenerCursor } = report;
+  const { allowedServices, serviceVersions, listenerResults, listenerCursor } = report;
   if (
     allowedServices === undefined &&
     listenerResults === undefined &&
@@ -30,6 +30,18 @@ export function parseAgentReadiness(
       (typeof listenerCursor !== "string" || !idPattern.test(listenerCursor)))
   )
     return null;
+
+  const versions: Record<string, string> = {};
+  if (serviceVersions !== undefined) {
+    if (!serviceVersions || typeof serviceVersions !== "object" || Array.isArray(serviceVersions))
+      return null;
+    for (const [service, version] of Object.entries(serviceVersions)) {
+      if (!allowedServices.includes(service) || typeof version !== "string" ||
+          !version.trim() || version.length > 128 || /[\x00-\x1f\x7f]/.test(version))
+        return null;
+      versions[service] = version;
+    }
+  }
 
   const results: AgentReadiness["results"] = [];
   const seen = new Set<string>();
@@ -72,6 +84,7 @@ export function parseAgentReadiness(
   }
   return {
     allowedServices: [...new Set<string>(allowedServices)],
+    serviceVersions: versions,
     results,
     cursor: listenerCursor as string | undefined,
   };

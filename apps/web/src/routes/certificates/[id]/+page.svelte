@@ -319,7 +319,7 @@
     {/if}
     {#if data.user?.isAdmin && ansibleTargets.length && !data.agentDeployments.ansibleEnabled}
       <p class="mb-3 text-xs text-muted-foreground">
-        Configure the Ansible runner token and deployment encryption key to enable Ansible deployments.
+        Configure the Ansible runner token to enable Ansible deployments.
       </p>
     {/if}
     <div class="border">

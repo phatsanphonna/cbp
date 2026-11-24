@@ -32,6 +32,7 @@ try {
     await tx.execute(
       sql`alter table cbp_hosts
         add column if not exists allowed_deployment_services text[],
+        add column if not exists deployment_service_versions jsonb,
         add column if not exists appliance_type text`,
     );
     await tx.execute(sql`alter table cbp_deployments
@@ -78,7 +79,6 @@ try {
       endpoint text not null,
       engine text not null,
       fullchain text not null,
-      sealed_key text,
       status text not null,
       detail text,
       started_at timestamp with time zone,
@@ -121,6 +121,7 @@ try {
       add column if not exists started_at timestamp with time zone,
       add column if not exists finished_at timestamp with time zone,
       add column if not exists log text not null default ''`);
+    await tx.execute(sql`alter table cbp_deployment_jobs drop column if exists sealed_key`);
     await tx.execute(sql`update cbp_deployment_jobs job set host_name = host.name
       from cbp_hosts host where job.host_id = host.id and job.host_name = 'Unknown host'`);
     await tx.execute(sql`insert into cbp_deployment_runs (id, certificate_id, submitted_at)

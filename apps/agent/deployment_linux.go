@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -12,8 +13,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/sirupsen/logrus"
 )
 
 type deploymentFile struct {
@@ -78,10 +77,12 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	logStep("Validating certificate and private key")
 	cert, err := tls.X509KeyPair([]byte(chain), []byte(key))
 	if err != nil {
+		logStep("Certificate and private key validation failed: " + err.Error())
 		return "certificate", nil
 	}
 	if err := verifyDeploymentChain(cert.Certificate, target); err != nil {
-		logrus.WithError(err).Warn("deployment certificate verification failed")
+		slog.Warn("deployment certificate verification failed", "error", err)
+		logStep("Certificate chain verification failed: " + err.Error())
 		return "certificate", err
 	}
 	if ctx.Err() != nil {
@@ -90,31 +91,37 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	if target.managedDir != "" {
 		logStep("Checking managed certificate directory")
 		if err := protectedDirectory(target.managedDir, true); err != nil {
-			logrus.WithError(err).Warn("managed TLS directory unavailable")
+			slog.Warn("managed TLS directory unavailable", "error", err)
+			logStep("Managed TLS directory check failed: " + err.Error())
 			return "install", nil
 		}
 	}
 	if err := protectedDirectory(filepath.Dir(target.CertificateFile), false); err != nil {
+		logStep("Certificate destination check failed: " + err.Error())
 		return "configuration", nil
 	}
 	if target.KeyFile != "" {
 		if err := protectedDirectory(filepath.Dir(target.KeyFile), false); err != nil {
+			logStep("Private key destination check failed: " + err.Error())
 			return "configuration", nil
 		}
 	}
 	if target.ConfigFile != "" {
 		if err := validateProtectedFile(target.ConfigFile); err != nil {
+			logStep("Service configuration file check failed: " + err.Error())
 			return "configuration", nil
 		}
 	}
 	certFile, err := readDeploymentFile(target.CertificateFile)
 	if err != nil {
+		logStep("Could not inspect the existing certificate file: " + err.Error())
 		return "install", nil
 	}
 	var keyFile deploymentFile
 	if target.KeyFile != "" {
 		keyFile, err = readDeploymentFile(target.KeyFile)
 		if err != nil {
+			logStep("Could not inspect the existing private key file: " + err.Error())
 			return "install", nil
 		}
 	}
@@ -128,11 +135,14 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	}
 	logStep("Installing certificate files")
 	if err := certFile.write([]byte(chain), certMode); err != nil {
+		logStep("Could not install the certificate file: " + err.Error())
 		return "install", nil
 	}
 	if target.KeyFile != "" {
 		if err := keyFile.write([]byte(key), 0600); err != nil {
+			logStep("Could not install the private key file: " + err.Error())
 			if certFile.restore() != nil {
+				logStep("Could not restore the previous certificate file after the key write failed")
 				return "rollback", nil
 			}
 			return "install", nil
@@ -141,11 +151,16 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 
 	outcome := "reload"
 	logStep("Validating service configuration")
-	if validateService(ctx, target) == nil && reloadService(ctx, target.Engine) == nil {
+	if err := validateService(ctx, target); err != nil {
+		logStep("Service configuration validation failed: " + err.Error())
+	} else if err := reloadService(ctx, target.Engine); err != nil {
+		logStep("Service reload failed: " + err.Error())
+	} else {
 		logStep("Reloaded service; verifying the served certificate")
 		if verifyCertificate(ctx, target, cert.Certificate[0]) {
 			return "ok", nil
 		}
+		logStep("TLS verification failed: the endpoint did not present the deployed certificate before the verification deadline")
 		outcome = "verify"
 	}
 	logStep("Restoring previous certificate files")
@@ -154,11 +169,17 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 		restoreErr = errors.Join(restoreErr, keyFile.restore())
 	}
 	if restoreErr != nil {
+		logStep("Could not restore the previous certificate files: " + restoreErr.Error())
 		return "rollback", nil
 	}
 	rollbackContext, stop := context.WithTimeout(context.WithoutCancel(ctx), 25*time.Second)
 	defer stop()
-	if validateService(rollbackContext, target) != nil || reloadService(rollbackContext, target.Engine) != nil {
+	if err := validateService(rollbackContext, target); err != nil {
+		logStep("Rollback service validation failed: " + err.Error())
+		return "rollback", nil
+	}
+	if err := reloadService(rollbackContext, target.Engine); err != nil {
+		logStep("Could not reload the service after restoring previous files: " + err.Error())
 		return "rollback", nil
 	}
 	return outcome, nil
@@ -167,14 +188,29 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 func validateService(ctx context.Context, target deploymentTarget) error {
 	switch target.Engine {
 	case "Apache2":
-		return exec.CommandContext(ctx, "apache2ctl", "configtest").Run()
+		return runDeploymentCommand(ctx, "apache2ctl", "configtest")
 	case "Nginx":
-		return exec.CommandContext(ctx, "nginx", "-t").Run()
+		return runDeploymentCommand(ctx, "nginx", "-t")
 	case "HAProxy":
-		return exec.CommandContext(ctx, "haproxy", "-c", "-f", target.ConfigFile).Run()
+		return runDeploymentCommand(ctx, "haproxy", "-c", "-f", target.ConfigFile)
 	default:
 		return errors.New("unknown service")
 	}
+}
+
+func runDeploymentCommand(ctx context.Context, name string, args ...string) error {
+	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	detail := strings.TrimSpace(string(output))
+	if len(detail) > 700 {
+		detail = detail[:700] + "…"
+	}
+	if detail == "" {
+		return err
+	}
+	return errors.Join(err, errors.New(detail))
 }
 
 func reloadService(ctx context.Context, engine string) error {

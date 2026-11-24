@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"github.com/sirupsen/logrus"
 )
 
 const systemAgentLogDirectory = "/var/log/cbp"
@@ -37,7 +36,7 @@ func configureAgentLogging(path, credentialPath string) error {
 		return fmt.Errorf("open agent log: %w", err)
 	}
 	// Keep the log open for the process lifetime so the final error reaches both outputs.
-	logrus.SetOutput(io.MultiWriter(file, os.Stderr))
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.MultiWriter(file, os.Stderr), nil)))
 	return nil
 }
 

@@ -1,8 +1,8 @@
 import { appendDeploymentLog, claimDeployment, finishDeployment } from '@cbp/database/deployment-jobs';
 import { json } from '@sveltejs/kit';
 import { unpackAnsibleDeployment } from '#lib/server/ansible-deployment-payload.js';
-import { deploymentEncryptionKey, getAnsibleToken } from '#lib/server/controller-config.js';
-import { openDeploymentKey } from '#lib/server/deployment-key.js';
+import { getAnsibleToken } from '#lib/server/controller-config.js';
+import { takeDeploymentSecret } from '#lib/server/deployment-secrets.js';
 import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
 import { controllerPost, validHostId } from '../controller/request.js';
 import type { RequestHandler } from './$types';
@@ -11,15 +11,19 @@ const run = controllerPost(async (db, { operation, hostId, endpoint, jobId, succ
   if (!validHostId(hostId) || typeof endpoint !== 'string' || !endpoint || endpoint.length > 300) return 400;
   const worker = { method: 'Ansible', endpoint } as const;
   if (operation === 'claim') {
-    const key = deploymentEncryptionKey();
-    if (!key) return 503;
     const job = await claimDeployment(db, hostId, worker, (row) => ({
       id: row.id,
       fullchain: row.fullchain,
-      ...unpackAnsibleDeployment(openDeploymentKey(key, row.id, row.sealedKey ?? ''))
     }));
     if (job === 'missing' || job === 'denied') return 404;
-    return job ? json(job, { headers: { 'cache-control': 'no-store' } }) : 204;
+    if (!job) return 204;
+    const payload = takeDeploymentSecret(job.id);
+    if (!payload) {
+      await finishDeployment(db, hostId, worker, job.id,
+        'The deployment key is no longer available in memory. Upload the private key and queue the deployment again.');
+      return 204;
+    }
+    return json({ ...job, ...unpackAnsibleDeployment(payload) }, { headers: { 'cache-control': 'no-store' } });
   }
   if (operation === 'log') {
     if (!validHostId(jobId) || typeof message !== 'string' || !message.trim() || Buffer.byteLength(message) > 1024 || /\p{Cc}/u.test(message)) return 400;

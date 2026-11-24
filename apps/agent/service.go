@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
 
@@ -56,7 +56,7 @@ func installAgentService(ctx context.Context, flags *pflag.FlagSet) error {
 			return err
 		}
 	}
-	logrus.WithField("service", agentServiceName).Info("systemd service enabled and started")
+	slog.Info("systemd service enabled and started", "service", agentServiceName)
 	return nil
 }
 
@@ -71,7 +71,7 @@ func uninstallAgentService(ctx context.Context) error {
 	path := agentServicePath()
 	if err := validatePrivilegedInput(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			logrus.Info("managed agent service is already absent")
+			slog.Info("managed agent service is already absent")
 			return nil
 		}
 		return err
@@ -94,7 +94,7 @@ func uninstallAgentService(ctx context.Context) error {
 	if err := runSystemctl(ctx, "daemon-reload"); err != nil {
 		return err
 	}
-	logrus.WithField("service", agentServiceName).Info("systemd service removed")
+	slog.Info("systemd service removed", "service", agentServiceName)
 	return nil
 }
 

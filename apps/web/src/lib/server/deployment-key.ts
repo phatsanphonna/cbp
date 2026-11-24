@@ -1,8 +1,5 @@
 import {
-  createCipheriv,
-  createDecipheriv,
   createPrivateKey,
-  randomBytes,
   X509Certificate,
 } from "node:crypto";
 
@@ -51,23 +48,3 @@ export async function readDeploymentKey(
   }
 }
 
-export function sealDeploymentKey(key: Buffer, id: string, pem: string) {
-  const nonce = randomBytes(12);
-  const cipher = createCipheriv("aes-256-gcm", key, nonce);
-  cipher.setAAD(Buffer.from(id));
-  const encrypted = Buffer.concat([cipher.update(pem, "utf8"), cipher.final()]);
-  return Buffer.concat([nonce, cipher.getAuthTag(), encrypted]).toString(
-    "base64url",
-  );
-}
-
-export function openDeploymentKey(key: Buffer, id: string, sealed: string) {
-  const bytes = Buffer.from(sealed, "base64url");
-  const cipher = createDecipheriv("aes-256-gcm", key, bytes.subarray(0, 12));
-  cipher.setAAD(Buffer.from(id));
-  cipher.setAuthTag(bytes.subarray(12, 28));
-  return Buffer.concat([
-    cipher.update(bytes.subarray(28)),
-    cipher.final(),
-  ]).toString("utf8");
-}

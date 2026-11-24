@@ -234,14 +234,11 @@ export async function removeDeployment(
       await tx.update(deploymentJobs).set({
         status: "Failed",
         detail: "The linked deployment was removed.",
-        sealedKey: null,
         finishedAt: sql`now()`,
       }).where(and(
         eq(deploymentJobs.deploymentId, id),
         inArray(deploymentJobs.status, ["Queued", "Running"]),
       ));
-      await tx.update(deploymentJobs).set({ sealedKey: null })
-        .where(eq(deploymentJobs.deploymentId, id));
     }
     await tx.delete(deployments).where(scope);
     return "removed";
@@ -540,13 +537,9 @@ export async function removeCertificate(db: Database, id: string) {
     const linked = await tx.select({ id: deployments.id }).from(deployments)
       .where(eq(deployments.certificateId, id));
     if (linked.length) {
-      await tx.update(deploymentJobs).set({ sealedKey: null }).where(
-        inArray(deploymentJobs.deploymentId, linked.map(({ id: deploymentId }) => deploymentId)),
-      );
       await tx.update(deploymentJobs).set({
         status: "Failed",
         detail: "The certificate was removed.",
-        sealedKey: null,
         finishedAt: sql`now()`,
       }).where(and(
         inArray(deploymentJobs.deploymentId, linked.map(({ id: deploymentId }) => deploymentId)),

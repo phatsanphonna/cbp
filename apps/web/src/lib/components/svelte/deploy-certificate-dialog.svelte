@@ -38,6 +38,8 @@
   let pending = $state(false);
   let selected = $state<string[]>([]);
   let preferredMethod = $state('');
+  let becomeMethod = $state<'sudo' | 'su'>('sudo');
+  let suPassword = $state('');
   const methods = $derived([
     { value: 'Agent', targets: agentTargets, enabled: canDeployAgent },
     { value: 'Ansible', targets: ansibleTargets, enabled: canDeployAnsible }
@@ -197,16 +199,35 @@
         </FieldSet>
         {#if method?.value === 'Ansible'}
           <FieldSet>
-            <FieldLegend variant="label">SSH and su credentials</FieldLegend>
-            <FieldDescription>Leave both blank to use the runner’s SSH key and sudo settings.</FieldDescription>
-            <FieldGroup>
+            <FieldLegend variant="label" required>Ansible credentials</FieldLegend>
+            <FieldDescription>These credentials are used for this deployment only.</FieldDescription>
+            <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel for="{id}-ssh-password">SSH password</FieldLabel>
-                <Input id="{id}-ssh-password" name="sshPassword" type="password" autocomplete="new-password" maxlength={1024} />
+                <FieldLabel for="{id}-ssh-username">SSH username</FieldLabel>
+                <Input id="{id}-ssh-username" name="sshUsername" autocomplete="username" maxlength={256} required />
               </Field>
               <Field>
+                <FieldLabel for="{id}-ssh-password">SSH password</FieldLabel>
+                <Input id="{id}-ssh-password" name="sshPassword" type="password" autocomplete="new-password" maxlength={1024} required />
+              </Field>
+            </FieldGroup>
+            <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Field>
+                <FieldLabel for="{id}-become-method">Become method</FieldLabel>
+                <Select.Root type="single" value={becomeMethod} onValueChange={(value) => { if (value === 'sudo' || value === 'su') { becomeMethod = value; if (value === 'sudo') suPassword = ''; } }}>
+                  <Select.Trigger id="{id}-become-method">{becomeMethod}</Select.Trigger>
+                  <Select.Content>
+                    <Select.Group>
+                      <Select.Item value="sudo" label="sudo" />
+                      <Select.Item value="su" label="su" />
+                    </Select.Group>
+                  </Select.Content>
+                </Select.Root>
+                <input type="hidden" name="becomeMethod" value={becomeMethod} />
+              </Field>
+              <Field class="sm:col-span-2">
                 <FieldLabel for="{id}-su-password">Root su password</FieldLabel>
-                <Input id="{id}-su-password" name="suPassword" type="password" autocomplete="new-password" maxlength={1024} />
+                <Input id="{id}-su-password" name="suPassword" type="password" autocomplete="new-password" maxlength={1024} bind:value={suPassword} disabled={becomeMethod !== 'su'} required={becomeMethod === 'su'} class="disabled:pointer-events-auto disabled:cursor-not-allowed" />
               </Field>
             </FieldGroup>
           </FieldSet>

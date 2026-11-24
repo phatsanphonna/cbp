@@ -1,7 +1,6 @@
-import { claimDeployment } from "@cbp/database/deployment-jobs";
+import { claimDeployment, finishDeployment } from "@cbp/database/deployment-jobs";
 import { json } from "@sveltejs/kit";
-import { deploymentEncryptionKey } from "#lib/server/controller-config.js";
-import { openDeploymentKey } from "#lib/server/deployment-key.js";
+import { takeDeploymentSecret } from "#lib/server/deployment-secrets.js";
 import {
   controllerPost,
   digest,
@@ -11,8 +10,6 @@ import {
 
 export const POST = controllerPost(async (db, { hostId, token }) => {
   if (!validHostId(hostId) || !validAgentToken(token)) return 400;
-  const key = deploymentEncryptionKey();
-  if (!key) return 204;
   const job = await claimDeployment(
     db,
     hostId,
@@ -22,9 +19,15 @@ export const POST = controllerPost(async (db, { hostId, token }) => {
       engine: row.engine,
       endpoint: row.endpoint,
       fullchain: row.fullchain,
-      privateKey: openDeploymentKey(key, row.id, row.sealedKey ?? ""),
     }),
   );
   if (job === "missing" || job === "denied") return 403;
-  return job ? json(job, { headers: { "cache-control": "no-store" } }) : 204;
+  if (!job) return 204;
+  const privateKey = takeDeploymentSecret(job.id);
+  if (!privateKey) {
+    await finishDeployment(db, hostId, digest(token).toString("hex"), job.id,
+      "The deployment key is no longer available in memory. Upload the private key and queue the deployment again.");
+    return 204;
+  }
+  return json({ ...job, privateKey }, { headers: { "cache-control": "no-store" } });
 });

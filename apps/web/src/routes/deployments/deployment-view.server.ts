@@ -9,12 +9,13 @@ export function formatDeploymentTargets(
   timeZone: string | undefined,
 ) {
   const format = dateFormatter(timeZone);
-  return rows.map(({ domain, sans, agentSeenAt, finishedAt, ...job }) => ({
+  return rows.map(({ domain, sans, agentSeenAt, startedAt, finishedAt, ...job }) => ({
     ...job,
     certificateName: displayCertificateDomain(domain, sans),
     agentSeenAt: agentSeenAt?.toISOString(),
     agentSeenLabel: agentSeenAt ? format.format(agentSeenAt) : undefined,
+    startedAt: startedAt?.toISOString(),
     finishedAt: finishedAt?.toISOString(),
-    finishedLabel: finishedAt ? format.format(finishedAt) : undefined,
+    finishedAtLabel: finishedAt ? format.format(finishedAt) : undefined,
   }));
 }

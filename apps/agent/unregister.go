@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
 	rpc "cbp/agent-rpc"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -60,6 +60,6 @@ func unregisterAgent(ctx context.Context, options agentOptions) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("enrollment was revoked, but the local credential could not be removed: %w", err)
 	}
-	logrus.WithField("host", options.host).Info("agent unregistered")
+	slog.Info("agent unregistered", "host", options.host)
 	return nil
 }

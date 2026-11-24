@@ -36,14 +36,13 @@ BETTER_AUTH_URL=https://cbp.example.com
 CBP_ADMIN_EMAILS=<email of the first administrator>
 CBP_TRUSTED_PROXY_TOKEN=<43 to 128 character URL-safe token>
 CBP_CONTROLLER_TOKEN=<43 to 128 character URL-safe token>
-CBP_DEPLOYMENT_ENCRYPTION_KEY=<32 random bytes encoded as base64url>
 CBP_AGENT_CONTROLLER_ADDRESS=cbp-controller.internal:50051
 # CBP_CONTROLLER_BIND=192.0.2.10
 # CBP_AGENT_CA_FILE=/etc/cbp/controller-ca.pem
 # CBP_AGENT_CA_DOWNLOAD_FILE=./controller-ca.pem
 ```
 
-Generate independent random secrets with `openssl rand -hex 32`. For the deployment encryption key, use `openssl rand -base64 32 | tr -- '+/' '-_' | tr -d '=\n'`. Protect the file with `chmod 600 .env`.
+Generate independent random secrets with `openssl rand -hex 32`. Protect the file with `chmod 600 .env`.
 
 Put the controller certificate and key in `controller-fullchain.pem` and `controller.key` at the repository root, or set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` to their host paths. If the agent-facing port differs from 50051, set `CBP_CONTROLLER_PORT` to the port in `CBP_AGENT_CONTROLLER_ADDRESS`. For a private CA, set `CBP_AGENT_CA_FILE` to the CA path on the agent hosts. Set `CBP_AGENT_CA_DOWNLOAD_FILE` to the public CA PEM on the Docker host and make it readable by the web container user to enable the download.
 
@@ -157,7 +156,7 @@ Keep your existing `.env`, controller TLS files, and Compose project name. Back 
 (umask 077; docker compose exec -T db pg_dump -U cbp -d cbp > "cbp-$(date +%F-%H%M%S).sql")
 ```
 
-Keep a protected copy of `.env` with your backups. Its deployment encryption key is required to decrypt stored private keys. PostgreSQL 19 uses `/var/lib/postgresql/19/docker` inside the named volume mounted at `/var/lib/postgresql`. If the old container stored data in an anonymous volume or used a different PostgreSQL major version, restore the backup into the corrected volume or migrate the cluster with `pg_upgrade` before switching over. Keep the original volume until the restored data is verified.
+Keep a protected copy of `.env` with your backups. PostgreSQL 19 uses `/var/lib/postgresql/19/docker` inside the named volume mounted at `/var/lib/postgresql`. If the old container stored data in an anonymous volume or used a different PostgreSQL major version, restore the backup into the corrected volume or migrate the cluster with `pg_upgrade` before switching over. Keep the original volume until the restored data is verified.
 
 After the backup, update the checkout to the version you intend to deploy. If `.env` has no `CBP_DATABASE_WEB_PASSWORD`, generate a new value with `openssl rand -hex 32` and add it while keeping the existing `POSTGRES_PASSWORD`. For remote agents, set `CBP_CONTROLLER_BIND` to the host's agent-facing IP before restarting. Repeat the build and startup commands and run the verification checks again.
 

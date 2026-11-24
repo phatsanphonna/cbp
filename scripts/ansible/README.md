@@ -1,9 +1,11 @@
 # Deploy Nginx certificates via Ansible
 
-CBP queues the uploaded certificate and encrypted key. Run the worker on a Linux machine or in WSL for development. The runner needs Python 3, `ansible-playbook`, and a verified SSH host key. For unattended use, configure SSH key authentication and a user that can run the playbook with sudo without a prompt.
+CBP queues the uploaded certificate and holds the private key in web process memory until the runner claims it. Run the worker on a Linux machine or in WSL for development. The runner needs Python 3, `ansible-playbook`, and a verified SSH host key. For unattended use, configure SSH key authentication and a user that can run the playbook with sudo without a prompt. Keep all deployment requests on a single web instance.
+
+For each deployment, CBP asks for the SSH username and password, then the become method (`sudo` or `su`). It asks for the root `su` password only when `su` is selected. These job credentials override `ansible_user` and related connection settings from the inventory for that run.
 
 1. Apply the database changes. For local development, use the database owner connection and run `bun --filter @cbp/database db:push` followed by `bun --filter @cbp/database db:setup-controller`. The Compose setup job applies these changes on upgrade.
-2. Set `CBP_DEPLOYMENT_ENCRYPTION_KEY` and a separate `CBP_ANSIBLE_TOKEN` in the web environment, then restart the web app. Generate a fresh Ansible token with `openssl rand -hex 32`. If there is no deployment key yet, generate one with `openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'`.
+2. Set a separate `CBP_ANSIBLE_TOKEN` in the web environment, then restart the web app. Generate a fresh Ansible token with `openssl rand -hex 32`.
 3. In CBP, register the target as an Ansible-managed host. Link the certificate to that host with method **Ansible**, service **Nginx**, and the TLS hostname and port served by Nginx. Use the host UUID in the host details page URL in the runner's target file.
 
 Create `inventory.yml` in the runner's Linux home directory. Use the existing regular files that Nginx references for this endpoint. The playbook installs the chain as root mode 0644 and the key as root mode 0600.
@@ -33,7 +35,9 @@ Create `targets.json` beside it. Use the endpoint exactly as shown in CBP and th
 ]
 ```
 
-Start the runner in a Linux shell. Use your HTTPS CBP origin for a remote web app. The example uses loopback for local development.
+On Windows, `bun dev` starts the runner in the `Ubuntu` WSL distro when these defaults exist: `~/.config/cbp/ansible-runner.env`, `~/ansible-lab/inventory.yml`, and `~/ansible-lab/targets.json`. Set `CBP_ANSIBLE_WSL_DISTRO` to use another distro. You can set `CBP_ANSIBLE_INVENTORY` and `CBP_ANSIBLE_TARGETS` in the runner environment file to use different paths. The runner launched by `bun dev` stops with it. It skips cleanly when the WSL distro or runner files are missing, and it will not start a duplicate runner.
+
+To start the runner manually in a Linux shell, use your HTTPS CBP origin for a remote web app. The example uses loopback for local development.
 
 ```bash
 export CBP_ANSIBLE_WEB_URL=http://127.0.0.1:5173

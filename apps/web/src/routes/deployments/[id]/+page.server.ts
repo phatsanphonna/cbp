@@ -3,11 +3,7 @@ import {
   listDeploymentTargets,
 } from "@cbp/database/deployment-jobs";
 import { recoverDeploymentAction } from "#lib/server/agent-deployment.js";
-import {
-  deploymentEncryptionKey,
-  getAnsibleToken,
-  getControllerToken,
-} from "#lib/server/controller-config.js";
+import { getAnsibleToken, getControllerToken } from "#lib/server/controller-config.js";
 import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
 import { resolve } from "$app/paths";
 import { error, redirect } from "@sveltejs/kit";
@@ -48,8 +44,8 @@ export const load: PageServerLoad = async (event) => {
       : undefined,
     jobs: formatDeploymentTargets(targets, timeZone),
     canRecover: {
-      Agent: Boolean(deploymentEncryptionKey() && getControllerToken() && hasTrustedTransport(event)),
-      Ansible: Boolean(deploymentEncryptionKey() && getAnsibleToken() && hasTrustedTransport(event)),
+      Agent: Boolean(getControllerToken() && hasTrustedTransport(event)),
+      Ansible: Boolean(getAnsibleToken() && hasTrustedTransport(event)),
     },
   };
 };

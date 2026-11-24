@@ -52,13 +52,16 @@ def deploy(inventory, alias, endpoint, job, report_log):
         environment.pop("CBP_ANSIBLE_TOKEN", None)
         if credentials := job.get("credentials"):
             environment["CBP_JOB_SSH_PASSWORD"] = credentials["sshPassword"]
-            environment["CBP_JOB_SU_PASSWORD"] = credentials["suPassword"]
             values.update({
+                "ansible_user": credentials["sshUsername"],
                 "ansible_password": "{{ lookup('ansible.builtin.env', 'CBP_JOB_SSH_PASSWORD') }}",
-                "ansible_become_password": "{{ lookup('ansible.builtin.env', 'CBP_JOB_SU_PASSWORD') }}",
-                "ansible_become_method": "su",
+                "ansible_become": True,
+                "ansible_become_method": credentials["becomeMethod"],
                 "ansible_become_user": "root",
             })
+            if credentials["becomeMethod"] == "su":
+                environment["CBP_JOB_SU_PASSWORD"] = credentials["suPassword"]
+                values["ansible_become_password"] = "{{ lookup('ansible.builtin.env', 'CBP_JOB_SU_PASSWORD') }}"
         variables.write_text(json.dumps(values), encoding="utf-8")
         variables.chmod(0o600)
         playbook = Path(__file__).resolve().with_name("deploy-nginx.yml")

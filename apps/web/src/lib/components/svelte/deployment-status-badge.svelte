@@ -7,10 +7,13 @@
   let {
     status,
     detail,
+    showTooltip = true,
   }: {
     status: "Queued" | "Running" | "Expired" | "Failed" | "Deployed";
     detail: string | null;
+    showTooltip?: boolean;
   } = $props();
+
   const explanation = $derived.by(() => {
     switch (status) {
       case "Queued":
@@ -20,9 +23,9 @@
       case "Expired":
         return detail ?? "The deployment job expired.";
       case "Failed":
-        return detail;
+        return detail || null;
       case "Deployed":
-        return "The agent confirmed deployment.";
+        return "The deployment completed successfully.";
     }
   });
 </script>
@@ -39,13 +42,13 @@
       <Spinner data-icon="inline-start" aria-hidden="true" />
     {/if}
     {status}
-    {#if explanation}
+    {#if explanation && showTooltip}
       <Info data-icon="inline-end" aria-hidden="true" />
     {/if}
   </Badge>
 {/snippet}
 
-{#if explanation}
+{#if explanation && showTooltip}
   <Tooltip.Root>
     <Tooltip.Trigger
       class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"

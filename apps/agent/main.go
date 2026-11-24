@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	rpc "cbp/agent-rpc"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,11 +38,10 @@ func (c agentCredential) GetRequestMetadata(context.Context, ...string) (map[str
 func (agentCredential) RequireTransportSecurity() bool { return true }
 
 func main() {
-	logrus.SetFormatter(&logrus.TextFormatter{FullTimestamp: true, DisableColors: true})
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:]); err != nil {
-		logrus.WithError(err).Error("agent stopped")
+		slog.Error("agent stopped", "error", err)
 		os.Exit(1)
 	}
 }
@@ -110,10 +109,10 @@ func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) 
 		if err == nil {
 			listenerTargets = reply
 			code = ""
-			logrus.Info("check-in accepted")
+			slog.Info("check-in accepted")
 			if !once && config.deploymentEnabled() {
 				if err := deployPending(ctx, conn, config); err != nil && ctx.Err() == nil {
-					logrus.WithField("code", status.Code(err)).Warn("deployment RPC failed")
+					slog.Warn("deployment RPC failed", "code", status.Code(err))
 				}
 			}
 		}
@@ -131,7 +130,7 @@ func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) 
 			return err
 		}
 		if err != nil {
-			logrus.WithError(err).Warn("check-in failed")
+			slog.Warn("check-in failed", "error", err)
 		}
 		timer := time.NewTimer(options.interval)
 		select {
@@ -177,6 +176,7 @@ func checkIn(ctx context.Context, conn *grpc.ClientConn, hostname string, config
 		"architecture":    runtime.GOARCH,
 		"collectedAt":     time.Now().UTC().Format(time.RFC3339Nano),
 		"allowedServices": config.allowedDeploymentServices(),
+		"serviceVersions": config.deploymentServiceVersions(ctx),
 		"listenerResults": listeners,
 		"listenerCursor":  targets.GetFields()["nextListenerCursor"].GetStringValue(),
 	})

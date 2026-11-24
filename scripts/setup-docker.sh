@@ -93,7 +93,6 @@ postgres_password=$(openssl rand -hex 32)
 database_web_password=$(openssl rand -hex 32)
 auth_secret=$(openssl rand -hex 32)
 controller_token=$(openssl rand -hex 32)
-encryption_key=$(openssl rand -base64 32 | tr -- '+/' '-_' | tr -d '=\n')
 proxy_token=
 if [[ $web_origin == https://* ]]; then
   proxy_token=$(openssl rand -hex 32)
@@ -105,7 +104,6 @@ BETTER_AUTH_SECRET=$auth_secret
 BETTER_AUTH_URL=$web_origin
 CBP_TRUSTED_PROXY_TOKEN=$proxy_token
 CBP_CONTROLLER_TOKEN=$controller_token
-CBP_DEPLOYMENT_ENCRYPTION_KEY=$encryption_key
 CBP_AGENT_CONTROLLER_ADDRESS=$address
 CBP_CONTROLLER_BIND=127.0.0.1
 CBP_CONTROLLER_PORT=$port

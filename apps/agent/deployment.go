@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"os"
@@ -15,9 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
-
-	"github.com/sirupsen/logrus"
 
 	rpc "cbp/agent-rpc"
 	"google.golang.org/grpc"
@@ -241,11 +241,24 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 		return nil
 	}
 	appendLog := func(message string) {
+		message = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return ' '
+			}
+			return r
+		}, message)
+		if len(message) > 900 {
+			message = message[:900]
+			for !utf8.ValidString(message) {
+				message = message[:len(message)-1]
+			}
+			message += "…"
+		}
 		logContext, stop := context.WithTimeout(ctx, 5*time.Second)
 		defer stop()
 		entry, _ := structpb.NewStruct(map[string]any{"jobId": id, "message": message})
 		if err := conn.Invoke(logContext, rpc.AppendDeploymentLogMethod, entry, &emptypb.Empty{}); err != nil {
-			logrus.WithError(err).Warn("could not append deployment log")
+			slog.Warn("could not append deployment log", "error", err)
 		}
 	}
 	appendLog("Agent claimed deployment")
@@ -254,11 +267,13 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 	outcome := "configuration"
 	var verificationErr error
 	if targetErr == nil {
+		appendLog("Deployment target and service configuration accepted")
 		installContext, stop := context.WithTimeout(ctx, 90*time.Second)
 		outcome, verificationErr = installDeployment(installContext, target, fields["fullchain"].GetStringValue(), fields["privateKey"].GetStringValue(), appendLog)
 		stop()
 	} else {
-		logrus.WithError(targetErr).Warn("deployment target rejected")
+		slog.Warn("deployment target rejected", "error", targetErr)
+		appendLog("Deployment target rejected: " + targetErr.Error())
 	}
 	result := map[string]any{"jobId": id, "outcome": outcome}
 	if verificationErr != nil {

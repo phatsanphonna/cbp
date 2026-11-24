@@ -174,11 +174,10 @@ deploymentServices: [Nginx]`;
           3. Deploy certificates
         </h2>
         <p class="max-w-prose">
-          Set up the deployment table and generate a 32-byte encryption key.
-          Save the generated value as
-          <code>CBP_DEPLOYMENT_ENCRYPTION_KEY</code> in the web app environment and
-          restart the app. Use the same value on all web instances. Serve CBP over
-          HTTPS.
+          Set up the deployment table and configure the controller token in the
+          web app environment. Serve CBP over HTTPS. Private keys are kept in
+          web process memory only until an agent claims the job, so all requests
+          for a deployment must reach the same web instance.
         </p>
         <SetupCommands
           label="Web deployment setup"
