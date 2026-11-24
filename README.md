@@ -2,7 +2,9 @@
 
 CBP is a web application for managing TLS certificates and deploying them to Linux hosts. It tracks certificates, expiration dates, host check-ins, deployment results, and audit events. Administrators can enroll hosts and deploy certificates from the web interface.
 
-## Deploy with Docker Compose
+## Deploy with Docker Compose and direct HTTPS
+
+The Compose stack runs the Bun web app, Go controller, and PostgreSQL. This setup serves browser traffic over HTTPS directly from the web container. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL.
 
 The Compose stack runs the Bun web app, Go controller, and PostgreSQL. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL. For a fresh deployment, run the setup script from the repository root with the controller address your agents will use and the HTTPS URL your users will open.
 
