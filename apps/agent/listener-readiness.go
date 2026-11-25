@@ -47,10 +47,11 @@ func (config agentConfig) checkListeners(ctx context.Context, targets []*structp
 			result := map[string]any{"id": id, "endpoint": endpoint, "engine": engine, "status": "not-allowed"}
 			if target, err := config.deploymentTarget(endpoint, engine); err == nil {
 				result["address"] = target.VerifyAddress
-				status, fingerprint := checkTLSListener(ctx, target)
+				status, fingerprint, expiresAt := checkTLSListener(ctx, target)
 				result["status"] = status
 				if fingerprint != "" {
 					result["fingerprint"] = fingerprint
+					result["expiresAt"] = expiresAt.UTC().Format(time.RFC3339)
 				}
 			}
 			results[index] = result
@@ -60,12 +61,12 @@ func (config agentConfig) checkListeners(ctx context.Context, targets []*structp
 	return results
 }
 
-func checkTLSListener(ctx context.Context, target deploymentTarget) (string, string) {
+func checkTLSListener(ctx context.Context, target deploymentTarget) (string, string, time.Time) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	connection, err := (&net.Dialer{}).DialContext(ctx, "tcp", target.VerifyAddress)
 	if err != nil {
-		return "unreachable", ""
+		return "unreachable", "", time.Time{}
 	}
 	defer connection.Close()
 	client := tls.Client(connection, &tls.Config{
@@ -75,12 +76,13 @@ func checkTLSListener(ctx context.Context, target deploymentTarget) (string, str
 		InsecureSkipVerify: true,
 	})
 	if err := client.HandshakeContext(ctx); err != nil {
-		return "tls-error", ""
+		return "tls-error", "", time.Time{}
 	}
 	state := client.ConnectionState()
 	if len(state.PeerCertificates) == 0 {
-		return "tls-error", ""
+		return "tls-error", "", time.Time{}
 	}
-	fingerprint := sha256.Sum256(state.PeerCertificates[0].Raw)
-	return "ready", hex.EncodeToString(fingerprint[:])
+	leaf := state.PeerCertificates[0]
+	fingerprint := sha256.Sum256(leaf.Raw)
+	return "ready", hex.EncodeToString(fingerprint[:]), leaf.NotAfter
 }

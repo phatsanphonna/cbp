@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/types/known/structpb"
 )
@@ -46,5 +47,11 @@ func TestListenerReadinessUsesLocalVerificationAddress(t *testing.T) {
 	}
 	if got := results[0].(map[string]any)["address"]; got != tlsServer.Listener.Addr().String() {
 		t.Errorf("probe used %v instead of the configured verification address", got)
+	}
+	if got, want := results[0].(map[string]any)["expiresAt"], tlsServer.Certificate().NotAfter.UTC().Format(time.RFC3339); got != want {
+		t.Errorf("served expiry = %v, want %s", got, want)
+	}
+	if _, ok := results[1].(map[string]any)["expiresAt"]; ok {
+		t.Error("a failed handshake must not report an expiry")
 	}
 }

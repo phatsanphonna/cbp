@@ -19,6 +19,7 @@ Use Bun 1.4.5 and Go 1.27.4. Run these commands from the repository root.
 
 Run `gofmt` on changed Go files. Use two-space indentation and single quotes in TypeScript and Svelte. Follow SvelteKit route names such as `+page.server.ts` and `+server.ts`, and use kebab-case for shared component and helper filenames.
 
+- Use the existing shadcn-svelte Select for new dropdowns. In forms, use `form-select.svelte` to keep the trigger associated with its label and submit the field under its existing name. Use a native select only when the feature explicitly requires native behavior.
 - Run `go test ./apps/agent/... ./apps/controller/... ./packages/agent-rpc/...`. Keep Go tests next to their code in `*_test.go` files with `TestXxx` functions.
 - Run `bun test apps/web/src/lib/server` for web unit tests. Co-locate `*.test.ts` files with their helpers and use `bun:test`.
 - Add regression coverage for behavior changes and verify systemd changes on Linux.

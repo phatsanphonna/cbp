@@ -2,6 +2,7 @@
   import { enhance } from "$app/forms";
   import { toast } from 'svelte-sonner';
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
   import RemoveDeploymentDialog from "#lib/components/svelte/remove-deployment-dialog.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
@@ -35,6 +36,12 @@
   const legacyService = $derived(
     engine && !deploymentServices.some((service) => service === engine),
   );
+  const serviceOptions = $derived([
+    ...(legacyService && engine ? [{ value: 'keep', label: engine }] : []),
+    { value: '', label: 'Not specified' },
+    ...deploymentServices.map((value) => ({ value, label: value })),
+  ]);
+  const methodOptions = deploymentMethods.map((value) => ({ value, label: value }));
   const parts = $derived(/^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(endpoint));
   const host = $derived(parts?.[1] ?? parts?.[2] ?? endpoint);
   const port = $derived(parts ? Number(parts[3]) : 443);
@@ -87,32 +94,23 @@
         <DeploymentEndpointFields {host} {port} />
         <Field>
           <FieldLabel for={id}>Web service</FieldLabel>
-          <select
+          <FormSelect
             {id}
             name="engine"
-            class="h-8 w-full border border-input bg-background px-2 text-xs"
-            value={legacyService ? "keep" : (engine ?? "")}
-          >
-            {#if legacyService}<option value="keep">{engine}</option>{/if}
-            <option value="">Not specified</option>
-            {#each deploymentServices as service (service)}
-              <option value={service}>{service}</option>
-            {/each}
-          </select>
+            items={serviceOptions}
+            value={legacyService ? 'keep' : (engine ?? '')}
+            placeholder="Not specified"
+          />
         </Field>
         <Field>
           <FieldLabel for="{id}-method" required>Deployment method</FieldLabel>
-          <select
+          <FormSelect
             id="{id}-method"
             name="method"
-            class="h-8 w-full border border-input bg-background px-2 text-xs"
+            items={methodOptions}
             value={method}
             required
-          >
-            {#each deploymentMethods as option (option)}
-              <option value={option}>{option}</option>
-            {/each}
-          </select>
+          />
         </Field>
         {#if message}
           <p class="text-xs text-destructive" role="alert">{message}</p>

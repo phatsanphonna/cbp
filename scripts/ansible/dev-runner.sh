@@ -4,6 +4,12 @@ set -euo pipefail
 repo=${1:?repository path required}
 runner="$repo/scripts/ansible/runner.py"
 environment=${CBP_ANSIBLE_RUNNER_ENV:-"$HOME/.config/cbp/ansible-runner.env"}
+pid_file=${CBP_ANSIBLE_DEV_PID_FILE:-}
+
+if [[ -n "$pid_file" ]]; then
+  trap 'rm -f "$pid_file"' EXIT
+  printf '%s\n' "$$" > "$pid_file"
+fi
 
 if [[ ! -f "$environment" ]]; then
   echo "Ansible runner skipped: configure $environment."
@@ -27,11 +33,16 @@ if [[ -n "$existing" ]]; then
   exit 0
 fi
 
-python3 "$runner" "$inventory" &
-runner_pid=$!
+runner_pid=
 stop_runner() {
-  kill -TERM "$runner_pid" 2>/dev/null || true
-  wait "$runner_pid" || true
+  trap '' INT TERM HUP
+  if [[ -n "$runner_pid" ]]; then
+    kill -TERM "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" || true
+  fi
+  exit 0
 }
 trap stop_runner INT TERM HUP
+python3 "$runner" "$inventory" &
+runner_pid=$!
 wait "$runner_pid"

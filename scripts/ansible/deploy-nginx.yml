@@ -90,12 +90,15 @@
                   - -c
                   - |
                     import hashlib, socket, ssl, sys
+                    from datetime import datetime, timezone
                     address, port, name, expected, ca_file = sys.argv[1:]
                     context = ssl.create_default_context(cafile=ca_file or None)
                     with socket.create_connection((address, int(port)), timeout=3) as connection:
                         with context.wrap_socket(connection, server_hostname=name) as tls:
                             if hashlib.sha256(tls.getpeercert(binary_form=True)).hexdigest() != expected:
                                 raise SystemExit("Nginx did not serve the uploaded certificate.")
+                            expiry = ssl.cert_time_to_seconds(tls.getpeercert()["notAfter"])
+                            print(datetime.fromtimestamp(expiry, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
                   - "{{ cbp_tls_address | default('127.0.0.1') }}"
                   - "{{ cbp_tls_port }}"
                   - "{{ cbp_server_name }}"
@@ -106,6 +109,10 @@
               until: cbp_tls_check.rc == 0
               retries: 5
               delay: 2
+
+            - name: Report the verified certificate expiry
+              ansible.builtin.debug:
+                msg: "Served certificate expires at {{ cbp_tls_check.stdout | trim }}"
           rescue:
             - name: Retain the backup if rollback cannot complete
               ansible.builtin.set_fact:

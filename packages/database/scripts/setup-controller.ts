@@ -33,6 +33,7 @@ try {
       sql`alter table cbp_hosts
         add column if not exists allowed_deployment_services text[],
         add column if not exists deployment_service_versions jsonb,
+        add column if not exists consecutive_ping_failures integer not null default 0,
         add column if not exists appliance_type text`,
     );
     await tx.execute(sql`alter table cbp_deployments
@@ -40,6 +41,8 @@ try {
       add column if not exists listener_address text,
       add column if not exists listener_checked_at timestamp with time zone,
       add column if not exists listener_fingerprint text,
+      add column if not exists served_certificate_expires_at timestamp with time zone,
+      add column if not exists served_certificate_observed_at timestamp with time zone,
       add column if not exists expected_fingerprint text`);
     await tx.execute(sql`update cbp_deployments deployment
       set expected_fingerprint = certificate.fingerprint
@@ -66,6 +69,34 @@ try {
     create table if not exists cbp_controller_status (
       id integer primary key,
       last_seen_at timestamp with time zone not null
+    )
+  `;
+  await db.$client`
+    alter table cbp_alerts
+      add column if not exists rule_key text,
+      add column if not exists target_id text,
+      add column if not exists cleared_at timestamp with time zone
+  `;
+  await db.$client`
+    create unique index if not exists cbp_alerts_open_rule_idx
+      on cbp_alerts (rule_key) where resolved_at is null
+  `;
+  await db.$client`
+    alter table cbp_notification_channels
+      add column if not exists encrypted_settings text,
+      add column if not exists certificate_ids uuid[]
+  `;
+  await db.$client`
+    create table if not exists cbp_alert_deliveries (
+      alert_id uuid not null constraint cbp_alert_deliveries_alert_id_cbp_alerts_id_fk
+        references cbp_alerts(id) on delete cascade,
+      channel_id integer not null constraint cbp_alert_deliveries_channel_id_cbp_notification_channels_id_fk
+        references cbp_notification_channels(id) on delete cascade,
+      severity text not null,
+      attempts integer not null,
+      next_attempt_at timestamp with time zone not null,
+      delivered_at timestamp with time zone,
+      primary key (alert_id, channel_id, severity)
     )
   `;
   await db.$client`
@@ -215,7 +246,9 @@ try {
       await tx.execute(
         sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`,
       );
-      await tx.execute(sql`grant select on public.cbp_alerts to cbp_web`);
+      await tx.execute(sql`grant select, insert, update on public.cbp_alerts to cbp_web`);
+      await tx.execute(sql`grant select, insert, update on public.cbp_alert_deliveries to cbp_web`);
+      await tx.execute(sql`grant delete on public.cbp_notification_channels to cbp_web`);
     });
   }
 } finally {

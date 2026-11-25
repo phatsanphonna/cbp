@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { dev } from "$app/environment";
+import { dev } from '$app/env';
 import { resolve } from "$app/paths";
 import {
   deploymentJobStatuses,

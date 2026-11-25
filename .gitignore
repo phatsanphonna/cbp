@@ -13,4 +13,5 @@ controller-state/
 /cbp-agent-linux
 .cbp-dev
 agent
+!/apps/agent/
 agent.exe

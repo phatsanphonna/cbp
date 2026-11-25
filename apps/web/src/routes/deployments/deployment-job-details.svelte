@@ -6,6 +6,7 @@
   import { toast } from "svelte-sonner";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
+  import { CopyButton } from '#lib/components/ui/code-block/index.ts';
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
   import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "#lib/components/ui/field/index.ts";
@@ -418,11 +419,19 @@
             {selectedLogJob.endpoint} · {selectedLogJob.hostName} · {selectedLogJob.method}{#if logTimeText}{" · "}<span aria-live="off">{logTimeText}</span>{/if}
           </Dialog.Description>
         </Dialog.Header>
-        <div class="relative">
+        <div class="relative rounded-md bg-muted">
+          <div class="flex justify-end border-b border-border px-2 py-1">
+            <CopyButton
+              value={selectedLogJob.log ?? ''}
+              title="Copy log"
+              aria-label="Copy deployment log"
+              disabled={!selectedLogJob.log}
+            />
+          </div>
           {#if !logPinned}
             <Button type="button" variant="secondary" size="sm" class="absolute bottom-3 right-3 z-10 shadow-md" onclick={stickLogToBottom}><ArrowDown data-icon="inline-start" aria-hidden="true" />Stick to bottom</Button>
           {/if}
-          <pre bind:this={logElement} onscroll={handleLogScroll} class="min-h-72 max-h-[calc(100dvh-12rem)] overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted p-4 font-mono text-xs text-muted-foreground">{selectedLogJob.log || "Waiting for deployment output…"}</pre>
+          <pre bind:this={logElement} onscroll={handleLogScroll} class="min-h-72 max-h-[calc(100dvh-14rem)] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs text-muted-foreground">{selectedLogJob.log || "Waiting for deployment output…"}</pre>
         </div>
         <Dialog.Footer>
           <Dialog.Close>

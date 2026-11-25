@@ -1,4 +1,5 @@
 import {
+  and,
   asc,
   count,
   desc,
@@ -122,7 +123,7 @@ export async function loadOverview(
           detectedAt: alerts.detectedAt,
         })
         .from(alerts)
-        .where(isNull(alerts.resolvedAt))
+        .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)))
         .orderBy(
           sql`case ${alerts.severity} when 'Critical' then 0 when 'High' then 1 when 'Warning' then 2 else 3 end`,
           desc(alerts.detectedAt),

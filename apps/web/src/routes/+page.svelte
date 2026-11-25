@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AlertSeverityBadge from '#lib/components/svelte/alert-severity-badge.svelte';
   import { resolve } from "$app/paths";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -212,12 +213,7 @@
           {#each data.openAlerts as alert (alert.id)}
             <li class="grid gap-2 px-4 py-3 text-xs">
               <div class="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant={alert.severity === "Critical" ||
-                  alert.severity === "High"
-                    ? "destructive"
-                    : "outline"}>{alert.severity}</Badge
-                >
+                <AlertSeverityBadge severity={alert.severity} />
                 <span class="font-medium wrap-anywhere">{alert.message}</span>
               </div>
               <div

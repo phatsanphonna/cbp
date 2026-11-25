@@ -35,6 +35,16 @@ Create the first administrator, then open `BETTER_AUTH_URL` and verify enrollmen
 
 If you already run CBP, back up the database before recreating containers. For deployments that terminate TLS at a reverse proxy, use the proxy setup in the guide. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment) · [HTTPS reverse proxy](apps/controller/README.md#https-reverse-proxy)
 
+## Alert notifications
+
+As an administrator, open **Alerts → Notification channels** to add, edit, pause, or remove destinations for Slack, LINE, Telegram, Resend email, HTTPS webhooks, Microsoft Teams, or Discord. Enter the provider credentials or webhook URL in the form. For Teams, use an incoming webhook URL from a Teams Workflows workflow configured to post to the destination channel. **Docs → Alert** has provider instructions.
+
+CBP encrypts saved credentials using a key derived from the existing `BETTER_AUTH_SECRET`. If that secret changes, remove and recreate affected channels with their credentials.
+
+For an existing local database, run `bun --filter @cbp/database db:setup-controller` with the database owner connection before restarting the web app. Compose applies the schema through its database setup service.
+
+An enabled channel receives matching open alerts, including ones already open when the channel is enabled. CBP records one successful delivery per alert, severity, and channel, and retries failed deliveries up to five attempts in total, five minutes apart. Webhook receivers get a JSON payload with `event`, `alertId`, `severity`, `message`, and `target` and can use the `Idempotency-Key` header to deduplicate retries.
+
 ## Develop locally
 
 Use Bun 1.4.5 and Docker Compose. The development Compose project runs PostgreSQL on `127.0.0.1:5433` with its own named volume. Run Vite on the host for hot reload.

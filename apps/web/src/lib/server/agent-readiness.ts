@@ -3,6 +3,7 @@ import {
   type AgentReadiness,
 } from "@cbp/database/host-agents";
 import { deploymentServices } from "#lib/deployment-services.js";
+import { parseServedCertificateExpiry } from './served-certificate.js';
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const states = ["ready", "unreachable", "tls-error", "not-allowed"] as const;
@@ -47,12 +48,13 @@ export function parseAgentReadiness(
   const seen = new Set<string>();
   for (const result of listenerResults) {
     if (!result || typeof result !== "object") return null;
-    const { id, endpoint, engine, status, address, fingerprint } = result as Record<
+    const { id, endpoint, engine, status, address, fingerprint, expiresAt } = result as Record<
       string,
       unknown
     >;
     const state = states.find((value) => value === status);
     const service = deploymentServices.find((value) => value === engine);
+    const servedExpiry = parseServedCertificateExpiry(expiresAt);
     if (
       typeof id !== "string" ||
       !idPattern.test(id) ||
@@ -62,6 +64,7 @@ export function parseAgentReadiness(
       endpoint.length > 261 ||
       !service ||
       !state ||
+      (expiresAt !== undefined && (!servedExpiry || state !== 'ready' || typeof fingerprint !== 'string')) ||
       (fingerprint !== undefined && fingerprint !== null &&
         (typeof fingerprint !== "string" || !fingerprintPattern.test(fingerprint))) ||
       (state === "not-allowed"
@@ -80,6 +83,7 @@ export function parseAgentReadiness(
       status: state,
       address: typeof address === "string" ? address : null,
       fingerprint: typeof fingerprint === "string" ? fingerprint.toLowerCase() : null,
+      expiresAt: servedExpiry ?? undefined,
     });
   }
   return {

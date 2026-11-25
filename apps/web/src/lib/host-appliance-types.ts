@@ -1,1 +1,1 @@
-export const hostApplianceTypes = ['Linux', 'F5 BIG-IP', 'Other'] as const;
+export const hostApplianceTypes = ['Linux', 'Other'] as const;

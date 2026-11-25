@@ -1,7 +1,9 @@
 import { listAlerts } from "@cbp/database/inventory";
+import { clearAlert } from '@cbp/database/alerts';
+import { fail } from '@sveltejs/kit';
 import { getDatabase } from "#lib/server/database.js";
 import { dateFormatter } from "#lib/server/date-formatter.js";
-import type { PageServerLoad } from "./$types";
+import type { Actions, PageServerLoad } from './$types';
 
 const format = dateFormatter("UTC");
 
@@ -10,14 +12,26 @@ export const load: PageServerLoad = async ({ url }) => {
   return {
     openOnly,
     alerts: (await listAlerts(getDatabase(), openOnly)).map(
-      ({ id, severity, message, target, detectedAt, resolvedAt }) => ({
+      ({ id, severity, message, target, detectedAt, resolvedAt, clearedAt }) => ({
         id,
         severity,
         message,
         target,
         detected: format.format(detectedAt),
-        status: resolvedAt ? "Resolved" : "Open",
+        status: resolvedAt ? 'Resolved' : clearedAt ? 'Cleared' : 'Open',
       }),
     ),
   };
+};
+
+export const actions: Actions = {
+  clear: async ({ request, locals }) => {
+    const id = (await request.formData()).get('id');
+    if (typeof id !== 'string' || !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id)) {
+      return fail(400, { message: 'Choose an alert to clear.' });
+    }
+    locals.auditTargetId = id;
+    if (!await clearAlert(getDatabase(), id)) return fail(409, { message: 'This alert is no longer open.' });
+    return { success: 'Alert cleared.' };
+  },
 };

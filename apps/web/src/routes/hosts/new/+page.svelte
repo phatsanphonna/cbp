@@ -1,5 +1,6 @@
 <script lang="ts">
   import { resolve } from "$app/paths";
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
   import { Button } from "#lib/components/ui/button/index.ts";
   import {
     Field,
@@ -11,6 +12,7 @@
   import type { PageProps } from "./$types";
 
   let { form }: PageProps = $props();
+  const applianceOptions = hostApplianceTypes.map((type) => ({ value: type, label: type }));
 </script>
 
 <svelte:head>
@@ -50,18 +52,13 @@
       </Field>
       <Field>
         <FieldLabel for="appliance-type" required>Appliance type</FieldLabel>
-        <select
+        <FormSelect
           id="appliance-type"
           name="applianceType"
-          class="h-8 w-full border border-input bg-background px-2 text-xs"
+          items={applianceOptions}
+          value={form?.values?.applianceType ?? 'Linux'}
           required
-        >
-          {#each hostApplianceTypes as type (type)}
-            <option value={type} selected={type === (form?.values?.applianceType ?? 'Linux')}>
-              {type}
-            </option>
-          {/each}
-        </select>
+        />
       </Field>
       {#if form?.message}
         <p role="alert" class="text-xs text-destructive">{form.message}</p>

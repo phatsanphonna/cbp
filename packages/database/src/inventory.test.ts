@@ -15,13 +15,13 @@ test.skipIf(!databaseURL)('host inventory stores appliance types and supports un
   try {
     const [appliance] = await registerHost(db, {
       name: applianceName,
-      applianceType: 'F5 BIG-IP',
+      applianceType: 'Other',
       ansibleManaged: true
     });
     const [legacy] = await registerHost(db, { name: legacyName });
-    expect((await findHost(db, appliance.id))?.applianceType).toBe('F5 BIG-IP');
+    expect((await findHost(db, appliance.id))?.applianceType).toBe('Other');
     expect((await findHost(db, legacy.id))?.applianceType).toBeNull();
-    expect((await listHosts(db)).find(({ id }) => id === appliance.id)?.applianceType).toBe('F5 BIG-IP');
+    expect((await listHosts(db)).find(({ id }) => id === appliance.id)?.applianceType).toBe('Other');
   } finally {
     try {
       await db.delete(hosts).where(inArray(hosts.name, [applianceName, legacyName]));
@@ -79,13 +79,13 @@ test.skipIf(!databaseURL)('only Linux hosts can start or complete agent enrollme
   try {
     await db.insert(hosts).values([
       { id: linuxId, name: `${linuxId}.example.test`, applianceType: 'Linux' },
-      { id: applianceId, name: `${applianceId}.example.test`, applianceType: 'F5 BIG-IP' },
+      { id: applianceId, name: `${applianceId}.example.test`, applianceType: 'Other' },
       { id: legacyId, name: `${legacyId}.example.test` }
     ]);
     expect(await inviteHostAgent(db, applianceId, 'invite', { enableAgent: true })).toBe('unsupported');
     expect(await inviteHostAgent(db, legacyId, 'invite', { enableAgent: true })).toBe('unsupported');
     expect(await inviteHostAgent(db, linuxId, 'invite', { enableAgent: true })).toBe('ok');
-    await db.update(hosts).set({ applianceType: 'F5 BIG-IP' }).where(eq(hosts.id, linuxId));
+    await db.update(hosts).set({ applianceType: 'Other' }).where(eq(hosts.id, linuxId));
     expect(await enrollHostAgent(db, linuxId, 'invite', 'token')).toBe('unsupported');
   } finally {
     try {

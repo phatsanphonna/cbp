@@ -148,6 +148,7 @@ export type AgentReadiness = {
     status: 'ready' | 'unreachable' | 'tls-error' | 'not-allowed';
     address: string | null;
     fingerprint: string | null;
+    expiresAt?: Date;
   }[];
 };
 
@@ -201,6 +202,9 @@ export function saveAgentCheckIn(
         result.fingerprint.toLowerCase() !== expectedFingerprint
         ? 'drifted'
         : result.status;
+      const observedAt = sql`${report.lastProbedAt.toISOString()}::timestamptz`;
+      const latestObservation = sql`${deployments.servedCertificateObservedAt} is null or
+        ${deployments.servedCertificateObservedAt} <= ${observedAt}`;
       await tx
         .update(deployments)
         .set({
@@ -208,6 +212,14 @@ export function saveAgentCheckIn(
           listenerAddress: result.address,
           listenerCheckedAt: report.lastProbedAt,
           listenerFingerprint: result.fingerprint,
+          servedCertificateExpiresAt: result.expiresAt
+            ? sql`case when ${latestObservation} then ${result.expiresAt.toISOString()}::timestamptz
+                else ${deployments.servedCertificateExpiresAt} end`
+            : undefined,
+          servedCertificateObservedAt: result.expiresAt
+            ? sql`case when ${latestObservation} then ${observedAt}
+                else ${deployments.servedCertificateObservedAt} end`
+            : undefined,
         })
         .where(
           and(

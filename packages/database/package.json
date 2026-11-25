@@ -4,6 +4,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./alerts": "./src/alerts.ts",
     "./audit": "./src/audit.ts",
     "./auth-schema": "./src/auth-schema.ts",
     "./controller-status": "./src/controller-status.ts",

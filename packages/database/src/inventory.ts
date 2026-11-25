@@ -1,15 +1,18 @@
 import {
   and,
   asc,
+  count,
   countDistinct,
   desc,
   eq,
+  exists,
   getTableColumns,
   gt,
   inArray,
   isNull,
-  notExists,
+  lt,
   lte,
+  notExists,
   or,
   sql,
 } from "drizzle-orm";
@@ -66,7 +69,7 @@ export function listProbeHosts(db: Database, after: string | null) {
     .limit(200);
 }
 
-export function listCertificateOptions(db: Database) {
+export function listCertificateOptions(db: Database, ids?: string[]) {
   return db
     .select({
       id: certificates.id,
@@ -75,6 +78,7 @@ export function listCertificateOptions(db: Database) {
       serial: certificates.serial,
     })
     .from(certificates)
+    .where(ids ? inArray(certificates.id, ids) : undefined)
     .orderBy(
       asc(certificates.domain),
       asc(certificates.validUntil),
@@ -122,6 +126,8 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
           listenerAddress: null,
           listenerCheckedAt: null,
           listenerFingerprint: null,
+          servedCertificateExpiresAt: null,
+          servedCertificateObservedAt: null,
           expectedFingerprint: certificate.fingerprint,
         },
         setWhere: isNull(deployments.hostId),
@@ -165,6 +171,8 @@ export async function updateDeploymentEndpoint(
         listenerAddress: sql`case when ${targetChanged} then null else ${deployments.listenerAddress} end`,
         listenerCheckedAt: sql`case when ${targetChanged} then null else ${deployments.listenerCheckedAt} end`,
         listenerFingerprint: sql`case when ${targetChanged} then null else ${deployments.listenerFingerprint} end`,
+        servedCertificateExpiresAt: sql`case when ${targetChanged} then null else ${deployments.servedCertificateExpiresAt} end`,
+        servedCertificateObservedAt: sql`case when ${targetChanged} then null else ${deployments.servedCertificateObservedAt} end`,
       })
       .where(and(eq(deployments.id, id), eq(ownerColumn, ownerId)))
       .returning({ id: deployments.id });
@@ -259,13 +267,13 @@ export function registerHost(
     .returning({ id: hosts.id });
 }
 
-type HostReport = Pick<
+export type HostReport = Pick<
   typeof hosts.$inferSelect,
-  "hostname" | "fqdn" | "operatingSystem" | "architecture" | "httpsListeners"
-> & { lastProbedAt: Date };
+  "hostname" | "fqdn" | "operatingSystem" | "architecture"
+> & { lastProbedAt: Date; httpsListeners?: string | null };
 
 export async function saveHostReport(
-  db: Database,
+  db: Pick<Database, 'update'>,
   id: string,
   report: HostReport,
 ) {
@@ -294,11 +302,17 @@ type HostPing = Pick<typeof hosts.$inferSelect, "lastPingAddress"> & {
 export function saveHostPing(db: Database, id: string, ping: HostPing) {
   return db
     .update(hosts)
-    .set(ping)
+    .set({
+      ...ping,
+      consecutivePingFailures:
+        ping.lastPingStatus === 'no-reply'
+          ? sql`${hosts.consecutivePingFailures} + 1`
+          : 0,
+    })
     .where(
       and(
         eq(hosts.id, id),
-        or(isNull(hosts.lastPingAt), lte(hosts.lastPingAt, ping.lastPingAt)),
+        or(isNull(hosts.lastPingAt), lt(hosts.lastPingAt, ping.lastPingAt)),
       ),
     );
 }
@@ -349,6 +363,8 @@ export async function findHost(db: Database, id: string) {
       listenerAddress: deployments.listenerAddress,
       listenerCheckedAt: deployments.listenerCheckedAt,
       listenerFingerprint: deployments.listenerFingerprint,
+      servedCertificateExpiresAt: deployments.servedCertificateExpiresAt,
+      servedCertificateObservedAt: deployments.servedCertificateObservedAt,
       certificateFingerprint: certificates.fingerprint,
       expectedFingerprint: deployments.expectedFingerprint,
       certificateId: certificates.id,
@@ -552,11 +568,19 @@ export async function removeCertificate(db: Database, id: string) {
   });
 }
 
+export async function countOpenAlerts(db: Database) {
+  const [row] = await db
+    .select({ total: count() })
+    .from(alerts)
+    .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)));
+  return row?.total ?? 0;
+}
+
 export function listAlerts(db: Database, openOnly = false) {
   return db
     .select()
     .from(alerts)
-    .where(openOnly ? isNull(alerts.resolvedAt) : undefined)
+    .where(openOnly ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)) : undefined)
     .orderBy(desc(alerts.detectedAt));
 }
 
@@ -564,11 +588,16 @@ export function listChannels(db: Database) {
   return db.select().from(channels).orderBy(asc(channels.id));
 }
 
+export async function findChannel(db: Database, id: number) {
+  const [channel] = await db.select().from(channels).where(eq(channels.id, id));
+  return channel;
+}
+
 export function addChannel(
   db: Database,
   values: Pick<
     typeof channels.$inferInsert,
-    "provider" | "destination" | "severity"
+    'provider' | 'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'
   >,
 ) {
   return db
@@ -582,6 +611,38 @@ export function setChannelEnabled(db: Database, id: number, enabled: boolean) {
   return db
     .update(channels)
     .set({ enabled })
+    .where(eq(channels.id, id))
+    .returning({ id: channels.id });
+}
+
+export function updateChannel(
+  db: Database,
+  id: number,
+  values: Pick<typeof channels.$inferInsert, 'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'>,
+) {
+  return db.update(channels)
+    .set(values)
+    .where(eq(channels.id, id))
+    .returning({ id: channels.id });
+}
+
+export async function bindChannelToCertificate(db: Database, id: number, certificateId: string) {
+  if (!inventoryId.test(certificateId)) return false;
+  const selected = sql`${certificateId}::uuid`;
+  const [updated] = await db.update(channels).set({
+    certificateIds: sql`case when ${selected} = any(${channels.certificateIds})
+      then ${channels.certificateIds}
+      else array_append(coalesce(${channels.certificateIds}, '{}'::uuid[]), ${selected})
+      end`,
+  }).where(and(
+    eq(channels.id, id),
+    exists(db.select({ id: certificates.id }).from(certificates).where(eq(certificates.id, certificateId))),
+  )).returning({ id: channels.id });
+  return Boolean(updated);
+}
+
+export function removeChannel(db: Database, id: number) {
+  return db.delete(channels)
     .where(eq(channels.id, id))
     .returning({ id: channels.id });
 }

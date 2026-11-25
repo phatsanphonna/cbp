@@ -18,7 +18,7 @@
   type Target = {
     id: string;
     hostId: string;
-    hostName: string;
+    hostLabel: string;
     endpoint: string;
     engine: string;
   };
@@ -36,6 +36,7 @@
   } = $props();
   const id = $props.id();
   let pending = $state(false);
+  let hostSearch = $state('');
   let selected = $state<string[]>([]);
   let becomeMethod = $state<'sudo' | 'su'>('sudo');
   let suPassword = $state('');
@@ -54,15 +55,25 @@
       ]),
     })),
   );
-  const selectedChoices = $derived(
-    choices.filter(({ value }) => selected.includes(value)),
-  );
+  const searchTerms = $derived(hostSearch.trim().toLowerCase().split(/\s+/).filter(Boolean));
+  const visibleChoices = $derived(searchTerms.length
+    ? choices.filter(({ hostLabel, endpoint, engine, method }) => {
+        const label = `${hostLabel} ${endpoint} ${engine} ${method}`.toLowerCase();
+        return searchTerms.every((term) => label.includes(term));
+      })
+    : choices);
+  const selectedValues = $derived(new Set(selected));
+  const selectedChoices = $derived(choices.filter(({ value }) => selectedValues.has(value)));
   const selectedHosts = $derived(
     new Set(selectedChoices.map(({ hostId }) => hostId)),
   );
   const hasAnsibleSelected = $derived(
     selectedChoices.some(({ method }) => method === 'Ansible'),
   );
+
+  function selectTarget(value: string, checked: boolean) {
+    selected = checked ? [...selected, value] : selected.filter((item) => item !== value);
+  }
 </script>
 
 <Dialog.Root>
@@ -109,20 +120,37 @@
       <FieldGroup>
         <FieldSet>
           <FieldLegend variant="label" required>Hosts</FieldLegend>
-          <FieldGroup class="gap-2">
-            {#each choices as choice (choice.id)}
+          <Field>
+            <FieldLabel for="{id}-host-search" class="sr-only">Search deployment hosts</FieldLabel>
+            <Input
+              id="{id}-host-search"
+              type="search"
+              placeholder="Search host, endpoint, service, or method"
+              bind:value={hostSearch}
+              onkeydown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+            />
+          </Field>
+          <p class="text-xs text-muted-foreground" aria-live="polite">
+            {selectedChoices.length} selected · {visibleChoices.length} of {choices.length} endpoints shown
+          </p>
+          {#each selectedChoices as choice (choice.id)}
+            <input type="hidden" name="deploymentTarget" value={choice.value} />
+          {/each}
+          <FieldGroup class="max-h-64 gap-2 overflow-y-auto overscroll-contain border p-2">
+            {#each visibleChoices as choice (choice.id)}
               <Field orientation="horizontal">
                 <span class="grid size-4 shrink-0 place-items-center">
                   <input
                     type="checkbox"
                     id="{id}-{choice.id}"
-                    name="deploymentTarget"
-                    value={choice.value}
-                    bind:group={selected}
+                    checked={selectedValues.has(choice.value)}
+                    onchange={(event) => selectTarget(choice.value, event.currentTarget.checked)}
                     class="peer col-start-1 row-start-1 size-4 appearance-none border border-input bg-background checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 forced-colors:appearance-auto"
                     disabled={pending ||
                       (selectedHosts.has(choice.hostId) &&
-                        !selected.includes(choice.value))}
+                        !selectedValues.has(choice.value))}
                   />
                   <Check
                     aria-hidden="true"
@@ -133,12 +161,16 @@
                   for="{id}-{choice.id}"
                   class="flex min-w-0 flex-col items-start gap-1"
                 >
-                  <span class="wrap-anywhere">{choice.hostName}</span>
+                  <span class="wrap-anywhere">{choice.hostLabel}</span>
                   <span class="wrap-anywhere font-normal text-muted-foreground"
                     >{choice.endpoint} · {choice.engine} · {choice.method}</span
                   >
                 </FieldLabel>
               </Field>
+            {:else}
+              <p class="px-2 py-3 text-xs text-muted-foreground">
+                {choices.length ? 'No endpoints match your search.' : 'No eligible endpoints are available.'}
+              </p>
             {/each}
           </FieldGroup>
         </FieldSet>

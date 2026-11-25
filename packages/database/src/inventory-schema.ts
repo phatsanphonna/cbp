@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -8,8 +9,9 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
-} from "drizzle-orm/pg-core";
+} from 'drizzle-orm/pg-core';
 import { user } from "./auth-schema.js";
 
 const instant = (name: string) => timestamp(name, { withTimezone: true });
@@ -43,6 +45,9 @@ export const hosts = pgTable("cbp_hosts", {
   httpsListeners: text("https_listeners"),
   lastProbedAt: instant("last_probed_at"),
   lastPingAt: instant("last_ping_at"),
+  consecutivePingFailures: integer("consecutive_ping_failures")
+    .notNull()
+    .default(0),
   lastPingStatus: text("last_ping_status", {
     enum: ["reachable", "no-reply", "unavailable"],
   }),
@@ -109,6 +114,8 @@ export const deployments = pgTable(
     listenerAddress: text("listener_address"),
     listenerCheckedAt: instant("listener_checked_at"),
     listenerFingerprint: text("listener_fingerprint"),
+    servedCertificateExpiresAt: instant('served_certificate_expires_at'),
+    servedCertificateObservedAt: instant('served_certificate_observed_at'),
     expectedFingerprint: text("expected_fingerprint"),
   },
   (table) => [unique().on(table.certificateId, table.endpoint)],
@@ -186,25 +193,53 @@ export const auditEvents = pgTable(
   ],
 );
 
-export const alerts = pgTable("cbp_alerts", {
-  id: uuid().defaultRandom().primaryKey(),
-  severity: text({ enum: ["Info", "Warning", "High", "Critical"] }).notNull(),
-  message: text().notNull(),
-  target: text().notNull(),
-  detectedAt: instant("detected_at").notNull().defaultNow(),
-  resolvedAt: instant("resolved_at"),
-});
+export const alerts = pgTable(
+  "cbp_alerts",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    ruleKey: text("rule_key"),
+    targetId: text("target_id"),
+    severity: text({ enum: ["Info", "Warning", "High", "Critical"] }).notNull(),
+    message: text().notNull(),
+    target: text().notNull(),
+    detectedAt: instant("detected_at").notNull().defaultNow(),
+    resolvedAt: instant("resolved_at"),
+    clearedAt: instant('cleared_at'),
+  },
+  (table) => [
+    uniqueIndex("cbp_alerts_open_rule_idx")
+      .on(table.ruleKey)
+      .where(sql`${table.resolvedAt} is null`),
+  ],
+);
 
 export const channels = pgTable(
   "cbp_notification_channels",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     provider: text({
-      enum: ["Slack", "LINE", "Telegram", "Email", "Webhook"],
+      enum: ['Slack', 'LINE', 'Telegram', 'Email', 'Webhook', 'Microsoft Teams', 'Discord'],
     }).notNull(),
     destination: text().notNull(),
+    encryptedSettings: text('encrypted_settings'),
+    certificateIds: uuid('certificate_ids').array(),
     severity: text({ enum: ["Info", "Warning", "High", "Critical"] }).notNull(),
     enabled: boolean().notNull().default(true),
   },
   (table) => [unique().on(table.provider, table.destination)],
+);
+
+export const alertDeliveries = pgTable(
+  'cbp_alert_deliveries',
+  {
+    alertId: uuid('alert_id').notNull().references(() => alerts.id, { onDelete: 'cascade' }),
+    channelId: integer('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+    severity: text().notNull(),
+    attempts: integer().notNull(),
+    nextAttemptAt: instant('next_attempt_at').notNull(),
+    deliveredAt: instant('delivered_at'),
+  },
+  (table) => [
+    primaryKey({ name: 'cbp_alert_deliveries_pkey', columns: [table.alertId, table.channelId, table.severity] }),
+  ],
 );

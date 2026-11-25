@@ -8,10 +8,12 @@
     LayoutDashboard,
     LogIn,
     LogOut,
+    Network,
     RefreshCw,
     Send,
     Server,
     ShieldCheck,
+    Terminal,
     Users,
   } from "@lucide/svelte";
   import { resolve } from "$app/paths";
@@ -32,79 +34,120 @@
   );
   const overview = resolve("/");
   const navigation = [
-    { label: "Overview", route: "/", icon: LayoutDashboard },
-    { label: "Hosts", route: "/hosts", icon: Server },
-    { label: "Certificates", route: "/certificates", icon: FileBadge },
-    { label: "Deployments", route: "/deployments", icon: Send },
-    { label: "Alerts", route: "/alerts", icon: Bell },
-    { label: "Audit log", route: "/audit", icon: History },
-    { label: "Users", route: "/users", icon: Users, adminOnly: true },
-    { label: "Controller setup", route: "/docs/controller", icon: BookOpen },
-    { label: "Agent setup", route: "/docs/agent", icon: BookOpen },
+    {
+      id: 'workspace',
+      label: 'Workspace',
+      items: [
+        { label: 'Overview', route: '/', icon: LayoutDashboard },
+        { label: 'Certificates', route: '/certificates', icon: FileBadge },
+        { label: 'Hosts', route: '/hosts', icon: Server },
+        { label: 'Deployments', route: '/deployments', icon: Send },
+        { label: 'Renewals', icon: RefreshCw },
+      ],
+    },
+    {
+      id: 'monitoring',
+      label: 'Monitoring',
+      items: [
+        { label: 'Alerts', route: '/alerts', icon: Bell },
+        { label: 'Audit log', route: '/audit', icon: History },
+      ],
+    },
+    {
+      id: 'administration',
+      label: 'Administration',
+      adminOnly: true,
+      items: [{ label: 'Users', route: '/users', icon: Users }],
+    },
+    {
+      id: 'docs',
+      label: 'Docs',
+      items: [
+        { label: 'Alert', route: '/docs/alert', icon: BookOpen },
+        { label: 'Controller', route: '/docs/controller', icon: Network },
+        { label: 'Agent', route: '/docs/agent', icon: Terminal },
+      ],
+    },
   ] as const;
-  const planned = [{ label: "Renewals", icon: RefreshCw }];
+  type NavigationLink = Extract<(typeof navigation)[number]['items'][number], { route: string }>;
 </script>
 
-<Sidebar.Root>
+{#snippet navigationLink(item: NavigationLink)}
+  {@const current = page.route.id === item.route}
+  {@const active = current || page.route.id?.startsWith(`${item.route}/`) === true}
+  <Sidebar.MenuItem>
+    <Sidebar.MenuButton isActive={active} tooltipContent={item.label}>
+      {#snippet child({ props })}
+        <a
+          {...props}
+          href={resolve(item.route)}
+          aria-current={current ? 'page' : undefined}
+          onclick={() => sidebar.setOpenMobile(false)}
+        >
+          <item.icon aria-hidden="true" />
+          <span class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0">
+            {item.label}
+          </span>
+        </a>
+      {/snippet}
+    </Sidebar.MenuButton>
+  </Sidebar.MenuItem>
+{/snippet}
+
+<Sidebar.Root collapsible="icon">
   <Sidebar.Header
-    class="h-14 justify-center border-b border-sidebar-border px-4"
+    class="h-14 justify-center border-b border-sidebar-border px-4 group-data-[collapsible=icon]:px-0"
   >
     <a
       href={overview}
-      class="inline-flex items-center gap-2.5 text-sm font-semibold"
+      class="inline-flex items-center gap-2.5 text-sm font-semibold transition-[gap] duration-300 ease-in-out group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
       onclick={() => sidebar.setOpenMobile(false)}
     >
       <ShieldCheck size={18} class="text-sidebar-primary" aria-hidden="true" />
-      Certified by Pat
+      <span
+        class="max-w-40 overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity] duration-300 ease-in-out group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0"
+        >Certified by Pat</span
+      >
     </a>
   </Sidebar.Header>
 
   <Sidebar.Content>
     <nav aria-label="Main navigation">
-      <Sidebar.Group>
-        <Sidebar.GroupContent>
-          <Sidebar.Menu>
-            {#each navigation.filter((item) => !("adminOnly" in item) || user?.isAdmin) as item (item.route)}
-              {@const current = page.route.id === item.route}
-              {@const active =
-                current || page.route.id?.startsWith(`${item.route}/`) === true}
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton isActive={active}>
-                  {#snippet child({ props })}
-                    <a
-                      {...props}
-                      href={resolve(item.route)}
-                      aria-current={current ? "page" : undefined}
-                      onclick={() => sidebar.setOpenMobile(false)}
-                    >
-                      <item.icon aria-hidden="true" />
-                      <span>{item.label}</span>
-                    </a>
-                  {/snippet}
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-            {/each}
-            {#each planned as item (item.label)}
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton aria-disabled="true" tabindex={-1}>
-                  <item.icon aria-hidden="true" />
-                  <span>{item.label}</span>
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-            {/each}
-          </Sidebar.Menu>
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
+      {#each navigation as group (group.id)}
+        {#if !('adminOnly' in group) || user?.isAdmin}
+          <Sidebar.Group role="group" aria-labelledby={`sidebar-${group.id}-label`}>
+            <Sidebar.GroupLabel id={`sidebar-${group.id}-label`}>{group.label}</Sidebar.GroupLabel>
+            <Sidebar.GroupContent>
+              <Sidebar.Menu>
+                {#each group.items as item (item.label)}
+                  {#if 'route' in item}
+                    {@render navigationLink(item)}
+                  {:else}
+                    <Sidebar.MenuItem>
+                      <Sidebar.MenuButton aria-disabled="true" tabindex={-1} tooltipContent={item.label}>
+                        <item.icon aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </Sidebar.MenuButton>
+                    </Sidebar.MenuItem>
+                  {/if}
+                {/each}
+              </Sidebar.Menu>
+            </Sidebar.GroupContent>
+          </Sidebar.Group>
+        {/if}
+      {/each}
     </nav>
   </Sidebar.Content>
   <Sidebar.Footer class="border-t border-sidebar-border">
     {#if user}
-      <div class="flex min-w-0 items-center gap-2.5 px-2 py-1.5">
+      <div
+        class="flex min-w-0 items-center gap-2.5 px-2 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
+      >
         <Avatar.Root aria-hidden="true">
           {#if user.image}<Avatar.Image src={user.image} alt="" />{/if}
           <Avatar.Fallback>{initials}</Avatar.Fallback>
         </Avatar.Root>
-        <div class="min-w-0">
+        <div class="min-w-0 group-data-[collapsible=icon]:hidden">
           <p class="truncate text-xs font-medium">{user.name}</p>
           <p class="truncate text-xs text-muted-foreground">
             {user.username ? `@${user.username}` : user.email}
@@ -115,14 +158,21 @@
     <Sidebar.Menu>
       {#if user}
         <Sidebar.MenuItem>
-          <Sidebar.MenuButton isActive={page.route.id === "/account/password"}>
+          <Sidebar.MenuButton
+            isActive={page.route.id === "/account/password"}
+            tooltipContent="Change password"
+          >
             {#snippet child({ props })}
               <a
                 {...props}
                 href={resolve("/account/password")}
                 onclick={() => sidebar.setOpenMobile(false)}
               >
-                <KeyRound aria-hidden="true" /><span>Change password</span>
+                <KeyRound aria-hidden="true" />
+                <span
+                  class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0"
+                  >Change password</span
+                >
               </a>
             {/snippet}
           </Sidebar.MenuButton>
@@ -131,20 +181,28 @@
       <Sidebar.MenuItem>
         {#if user}
           <form method="POST" action={resolve("/signout")}>
-            <Sidebar.MenuButton>
+            <Sidebar.MenuButton tooltipContent="Sign out">
               {#snippet child({ props })}
-                <button {...props} type="submit"
-                  ><LogOut aria-hidden="true" /><span>Sign out</span></button
-                >
+                <button {...props} type="submit">
+                  <LogOut aria-hidden="true" />
+                  <span
+                    class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0"
+                    >Sign out</span
+                  >
+                </button>
               {/snippet}
             </Sidebar.MenuButton>
           </form>
         {:else}
-          <Sidebar.MenuButton>
+          <Sidebar.MenuButton tooltipContent="Sign in">
             {#snippet child({ props })}
-              <a {...props} href={resolve("/signin")}
-                ><LogIn aria-hidden="true" /><span>Sign in</span></a
-              >
+              <a {...props} href={resolve("/signin")}>
+                <LogIn aria-hidden="true" />
+                <span
+                  class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0"
+                  >Sign in</span
+                >
+              </a>
             {/snippet}
           </Sidebar.MenuButton>
         {/if}

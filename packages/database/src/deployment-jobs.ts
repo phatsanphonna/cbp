@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 import { withAgentHost } from "./host-agents.js";
 import type { openDatabase } from "./index.js";
+import { saveHostReport, type HostReport } from './inventory.js';
 import {
   certificates,
   deploymentJobs,
@@ -615,7 +616,7 @@ export function claimDeployment<T>(
   db: Database,
   hostId: string,
   identity: string | Worker,
-  materialize: (job: Job) => T,
+  materialize: (job: Job, collectHostFacts: boolean) => T,
 ) {
   const worker = typeof identity === 'string' ? { method: 'Agent', hash: identity } as const : identity;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
@@ -654,7 +655,8 @@ export function claimDeployment<T>(
         .where(eq(deploymentJobs.id, job.id));
       return null;
     }
-    const payload = materialize(job);
+    const collectHostFacts = worker.method === 'Ansible' && !(await agentHash(tx, hostId));
+    const payload = materialize(job, collectHostFacts);
     await tx
       .update(deploymentJobs)
       .set({
@@ -667,12 +669,37 @@ export function claimDeployment<T>(
   });
 }
 
+export function saveAnsibleHostReport(
+  db: Database,
+  hostId: string,
+  endpoint: string,
+  jobId: string,
+  report: Omit<HostReport, 'httpsListeners'>,
+) {
+  const worker = { method: 'Ansible', endpoint } as const;
+  return withDeploymentHost(db, hostId, worker, async (tx) => {
+    const [job] = await tx
+      .select({ id: deploymentJobs.id })
+      .from(deploymentJobs)
+      .where(and(
+        workerJobs(hostId, worker),
+        eq(deploymentJobs.id, jobId),
+        eq(deploymentJobs.status, 'Running'),
+        unexpired,
+      ));
+    if (!job) return 'missing';
+    if (!(await agentHash(tx, hostId))) await saveHostReport(tx, hostId, report);
+    return 'ok';
+  });
+}
+
 export function finishDeployment(
   db: Database,
   hostId: string,
   identity: string | Worker,
   id: string,
   detail: string | null,
+  servedExpiry?: Date,
 ) {
   const worker = typeof identity === 'string' ? { method: 'Agent', hash: identity } as const : identity;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
@@ -721,6 +748,8 @@ export function finishDeployment(
           listenerAddress: null,
           listenerCheckedAt: null,
           listenerFingerprint: null,
+          servedCertificateExpiresAt: worker.method === 'Ansible' ? servedExpiry : undefined,
+          servedCertificateObservedAt: worker.method === 'Ansible' && servedExpiry ? sql`now()` : undefined,
         })
         .where(
           and(

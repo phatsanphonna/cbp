@@ -1,28 +1,22 @@
 <script lang="ts">
-  import { setMode, userPrefersMode } from "mode-watcher";
-  import * as Select from "#lib/components/ui/select/index.ts";
+  import { setMode, userPrefersMode } from 'mode-watcher';
+  import { Monitor, Moon, Sun } from '@lucide/svelte';
+  import { Button } from '#lib/components/ui/button/index.ts';
 
-  const labels = { system: "System", light: "Light", dark: "Dark" };
-
-  function selectTheme(value: string) {
-    if (value !== "system" && value !== "light" && value !== "dark") return;
-    setMode(value);
-  }
+  const labels = { system: 'System', light: 'Light', dark: 'Dark' };
+  const icons = { system: Monitor, light: Sun, dark: Moon };
+  const nextModes = { system: 'light', light: 'dark', dark: 'system' } as const;
+  const current = $derived(userPrefersMode.current);
+  const next = $derived(nextModes[current]);
+  const Icon = $derived(icons[current]);
 </script>
 
-<Select.Root
-  type="single"
-  value={userPrefersMode.current}
-  onValueChange={selectTheme}
+<Button
+  variant="outline"
+  size="icon-sm"
+  onclick={() => setMode(next)}
+  aria-label={`Color theme: ${labels[current]}. Switch to ${labels[next]}.`}
+  title={`${labels[current]} theme. Switch to ${labels[next]}.`}
 >
-  <Select.Trigger size="sm" aria-label="Color theme">
-    {labels[userPrefersMode.current]}
-  </Select.Trigger>
-  <Select.Content align="end">
-    <Select.Group>
-      {#each Object.entries(labels) as [value, label] (value)}
-        <Select.Item {value} {label} />
-      {/each}
-    </Select.Group>
-  </Select.Content>
-</Select.Root>
+  <Icon aria-hidden="true" />
+</Button>

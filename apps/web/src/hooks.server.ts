@@ -1,8 +1,10 @@
 import { building, dev } from "$app/env";
 import { resolve as resolvePath } from "$app/paths";
+import { reconcileAlerts } from '@cbp/database/alerts';
 import { expireDeploymentJobs } from "@cbp/database/deployment-jobs";
 import { error, redirect, type Handle, type HandleServerError } from "@sveltejs/kit";
 import { auditUserAction } from "#lib/server/audit-action.js";
+import { deliverAlertNotifications } from '#lib/server/alert-notifications.js';
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
 import { isDirectHttps } from "#lib/server/trusted-transport.js";
@@ -22,9 +24,15 @@ const controllerRoutes = [
 ];
 
 type ExpiryTimer = ReturnType<typeof setInterval>;
-const cleanup = globalThis as typeof globalThis & { cbpDeploymentExpiryTimer?: ExpiryTimer };
+type AlertTimer = ReturnType<typeof setInterval>;
+const cleanup = globalThis as typeof globalThis & {
+  cbpDeploymentExpiryTimer?: ExpiryTimer;
+  cbpAlertReconcileTimer?: AlertTimer;
+};
 let expiryTimer: ExpiryTimer | undefined;
+let alertTimer: AlertTimer | undefined;
 let expiringJobs = false;
+let reconcilingAlerts = false;
 
 export function init() {
   if (building || expiryTimer) return;
@@ -46,14 +54,42 @@ export function init() {
   expiryTimer = setInterval(expire, 10_000);
   cleanup.cbpDeploymentExpiryTimer = expiryTimer;
   expiryTimer.unref();
+
+  clearInterval(cleanup.cbpAlertReconcileTimer);
+  const reconcile = async () => {
+    if (reconcilingAlerts) return;
+    reconcilingAlerts = true;
+    try {
+      await reconcileAlerts(getDatabase());
+    } catch (failure) {
+      const cause = failure instanceof Error ? failure.cause ?? failure : failure;
+      console.error('Could not reconcile alerts', cause);
+    }
+    try {
+      await deliverAlertNotifications(getDatabase());
+    } catch {
+      console.error('Could not process alert notifications');
+    } finally {
+      reconcilingAlerts = false;
+    }
+  };
+  void reconcile();
+  alertTimer = setInterval(reconcile, 60_000);
+  cleanup.cbpAlertReconcileTimer = alertTimer;
+  alertTimer.unref();
 }
 
 import.meta.hot?.dispose(() => {
   clearInterval(expiryTimer);
+  clearInterval(alertTimer);
   if (cleanup.cbpDeploymentExpiryTimer === expiryTimer) {
     delete cleanup.cbpDeploymentExpiryTimer;
   }
+  if (cleanup.cbpAlertReconcileTimer === alertTimer) {
+    delete cleanup.cbpAlertReconcileTimer;
+  }
   expiryTimer = undefined;
+  alertTimer = undefined;
 });
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -106,14 +142,12 @@ export const handle: Handle = async ({ event, resolve }) => {
   });
 };
 
-export const handleError: HandleServerError = ({ error: cause, event, status, message }) => {
-  if (event.route.id?.startsWith("/deployments")) {
-    console.error(`Deployment page failed with HTTP ${status}`, cause);
+export const handleError: HandleServerError = ({ error: cause, event, kind }) => {
+  if (!event.route.id?.startsWith('/deployments')) return;
+
+  const status = kind === 'unknown' ? 500 : cause.status;
+  console.error(`Deployment page failed with HTTP ${status}`, cause);
+  if (dev && kind === 'unknown' && cause instanceof Error) {
+    return { message: cause.message };
   }
-  return {
-    message:
-      dev && event.route.id?.startsWith("/deployments") && cause instanceof Error
-        ? cause.message
-        : message,
-  };
 };

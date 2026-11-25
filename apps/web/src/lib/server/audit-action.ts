@@ -33,9 +33,14 @@ const actionLabels: Record<string, Record<string, string>> = {
     remove: "Remove certificate",
   },
   "/deployments/[id]": { cancel: "Cancel queued deployment" },
+  '/alerts': { clear: 'Clear alert' },
   "/alerts/channels": {
     add: "Add notification channel",
+    edit: 'Edit notification channel',
+    bindCertificate: 'Bind notification channel to certificate',
     setEnabled: "Change notification channel status",
+    remove: 'Remove notification channel',
+    test: 'Send test notification',
   },
 };
 

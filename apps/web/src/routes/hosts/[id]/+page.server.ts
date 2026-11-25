@@ -84,6 +84,8 @@ export const load: PageServerLoad = async (event) => {
       deployments: host.deployments.map((deployment) => ({
         ...deployment,
         listenerCheckedAt: timestamp(deployment.listenerCheckedAt),
+        servedCertificateExpiresAt: timestamp(deployment.servedCertificateExpiresAt),
+        servedCertificateObservedAt: timestamp(deployment.servedCertificateObservedAt),
       })),
       lastPingAt: timestamp(host.lastPingAt),
       lastPingLabel: host.lastPingStatus

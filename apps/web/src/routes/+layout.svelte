@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { invalidate } from '$app/navigation';
+  import { resolve } from '$app/paths';
+  import { Bell } from '@lucide/svelte';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
   import { page } from "$app/state";
   import AppSidebar from "#lib/components/svelte/app-sidebar.svelte";
   import ControllerStatus from "#lib/components/svelte/controller-status.svelte";
@@ -24,6 +29,7 @@
     "/audit": "Audit log",
     "/users": "Users",
     "/users/new": "Create user",
+    '/docs/alert': 'Alert guide',
     "/docs/controller": "Controller setup",
     "/docs/agent": "Agent setup",
   };
@@ -31,7 +37,19 @@
     page.route.id ? pageTitles[page.route.id] : undefined,
   );
 
-  let { children } = $props();
+  let { children, data } = $props();
+
+  const alertLabel = $derived(
+    data.openAlertCount === null
+      ? 'View open alerts'
+      : `${data.openAlertCount} open ${data.openAlertCount === 1 ? 'alert' : 'alerts'}`,
+  );
+
+  $effect(() => {
+    if (!data.user) return;
+    const timer = setInterval(() => void invalidate('cbp:open-alert-count'), 60_000);
+    return () => clearInterval(timer);
+  });
 </script>
 
 <svelte:head>
@@ -39,7 +57,7 @@
 </svelte:head>
 
 <ModeWatcher />
-<Toaster position="top-center" closeButton />
+<Toaster position="top-center" closeButton richColors />
 
 {#if page.route.id === "/signin"}
   <div class="absolute end-4 top-4 z-10">
@@ -59,6 +77,25 @@
         {/if}
         <div class="ms-auto flex shrink-0 items-center gap-2">
           <ControllerStatus />
+          <Button
+            variant="outline"
+            size="icon-sm"
+            class="relative"
+            href={resolve('/alerts') + '?status=open'}
+            aria-label={alertLabel}
+            title={alertLabel}
+          >
+            <Bell aria-hidden="true" />
+            {#if data.openAlertCount !== null}
+              <Badge
+                variant={data.openAlertCount > 0 ? 'warning' : 'secondary'}
+                class="pointer-events-none absolute -end-1 -top-2 h-4 min-w-4 px-1"
+                aria-hidden="true"
+              >
+                {data.openAlertCount > 99 ? '99+' : data.openAlertCount}
+              </Badge>
+            {/if}
+          </Button>
           <ThemeToggle />
         </div>
       </header>

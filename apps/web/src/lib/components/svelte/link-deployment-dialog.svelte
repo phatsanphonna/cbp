@@ -2,6 +2,7 @@
   import { enhance } from "$app/forms";
   import { toast } from 'svelte-sonner';
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import {
@@ -26,6 +27,12 @@
 
   const id = $props.id();
   const label = $derived(target === "host" ? "Host" : "Certificate");
+  const targetOptions = $derived(options.map(({ id, label }) => ({ value: id, label })));
+  const serviceOptions = [
+    { value: '', label: 'Not specified' },
+    ...deploymentServices.map((value) => ({ value, label: value })),
+  ];
+  const methodOptions = deploymentMethods.map((value) => ({ value, label: value }));
   let open = $state(false);
   let pending = $state(false);
 </script>
@@ -67,44 +74,33 @@
       <FieldGroup>
         <Field>
           <FieldLabel for="{id}-target" required>{label}</FieldLabel>
-          <select
+          <FormSelect
             id="{id}-target"
-            name={target === "host" ? "hostId" : "certificateId"}
-            class="h-8 w-full border border-input bg-background px-2 text-xs"
+            name={target === 'host' ? 'hostId' : 'certificateId'}
+            items={targetOptions}
+            placeholder={`Choose a ${target}`}
             required
-          >
-            <option value="">Choose a {target}</option>
-            {#each options as option (option.id)}
-              <option value={option.id}>{option.label}</option>
-            {/each}
-          </select>
+          />
         </Field>
         <DeploymentEndpointFields useHostAddress />
         <Field>
           <FieldLabel for="{id}-engine">Web service</FieldLabel>
-          <select
+          <FormSelect
             id="{id}-engine"
             name="engine"
-            class="h-8 w-full border border-input bg-background px-2 text-xs"
-          >
-            <option value="">Not specified</option>
-            {#each deploymentServices as service (service)}
-              <option value={service}>{service}</option>
-            {/each}
-          </select>
+            items={serviceOptions}
+            placeholder="Not specified"
+          />
         </Field>
         <Field>
           <FieldLabel for="{id}-method" required>Deployment method</FieldLabel>
-          <select
+          <FormSelect
             id="{id}-method"
             name="method"
-            class="h-8 w-full border border-input bg-background px-2 text-xs"
+            items={methodOptions}
+            value={deploymentMethods[0]}
             required
-          >
-            {#each deploymentMethods as method (method)}
-              <option value={method}>{method}</option>
-            {/each}
-          </select>
+          />
         </Field>
         {#if message}
           <p class="text-xs text-destructive" role="alert">{message}</p>

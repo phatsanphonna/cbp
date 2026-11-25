@@ -1,15 +1,18 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import { resolve } from "$app/paths";
+  import { ChevronDown } from '@lucide/svelte';
   import CertificateChainFields from "#lib/components/svelte/certificate-chain-fields.svelte";
   import DeployCertificateDialog from "#lib/components/svelte/deploy-certificate-dialog.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
+  import ServedCertificateExpiry from '#lib/components/svelte/served-certificate-expiry.svelte';
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.ts';
   import { FieldGroup } from "#lib/components/ui/field/index.ts";
   import * as Table from "#lib/components/ui/table/index.ts";
   import { deploymentServices } from "#lib/deployment-services.js";
@@ -22,8 +25,10 @@
   let { data, form }: PageProps = $props();
   let updateOpen = $state(false);
   let restoreOpen = $state(false);
+  let removeOpen = $state(false);
   let restorePending = $state(false);
   const certificate = $derived(data.certificate);
+  const hostLabels = $derived(new Map(data.hostOptions.map(({ id, label }) => [id, label])));
   const verified = $derived(
     certificate.deployments.filter(({ status }) => status === "Verified")
       .length,
@@ -42,7 +47,7 @@
     certificate.deployments.flatMap(({ id, hostId, hostName, endpoint, engine, method, ansibleManaged }) =>
       method === 'Ansible' && ansibleManaged && hostId && hostName &&
       engine === 'Nginx' && !busyHosts.has(hostId)
-        ? [{ id, hostId, hostName, endpoint, engine }]
+        ? [{ id, hostId, hostLabel: hostLabels.get(hostId) ?? hostName, endpoint, engine }]
         : []
     )
   );
@@ -56,11 +61,18 @@
         !busyHosts.has(hostId) &&
         engine &&
         deploymentServices.some((service) => service === engine)
-          ? [{ id, hostId, hostName, endpoint, engine }]
+          ? [{ id, hostId, hostLabel: hostLabels.get(hostId) ?? hostName, endpoint, engine }]
           : [],
     ),
   );
   const canDeployAnsible = $derived(data.agentDeployments.ansibleEnabled && !data.agentDeployments.httpsRequired);
+
+  function focusCertificateActions(event: Event) {
+    const trigger = document.getElementById('certificate-actions');
+    if (!trigger) return;
+    event.preventDefault();
+    trigger.focus();
+  }
 
   watchDeploymentUpdates(() =>
     nextDeploymentExpiry(Object.values(data.agentDeployments.statuses)),
@@ -89,17 +101,45 @@
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
-      <Button href={resolve("/certificates")} variant="outline"
-        >Back to certificates</Button
-      >
-      <Dialog.Root bind:open={updateOpen}>
-        <Dialog.Trigger>
+      <Button href={resolve('/certificates')} variant="outline">Back to certificates</Button>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
           {#snippet child({ props })}
-            <Button {...props} variant="outline">Update fullchain</Button>
+            <Button {...props} id="certificate-actions" variant="outline">
+              Actions <ChevronDown data-icon="inline-end" aria-hidden="true" />
+            </Button>
           {/snippet}
-        </Dialog.Trigger>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content
+          align="end"
+          class="min-w-48"
+          onCloseAutoFocus={(event) => {
+            if (updateOpen || restoreOpen || removeOpen) event.preventDefault();
+          }}
+        >
+          <DropdownMenu.Group>
+            <DropdownMenu.Item>
+              {#snippet child({ props })}
+                <a {...props} href={resolve('/alerts/channels') + `?certificate=${encodeURIComponent(certificate.id)}`}>
+                  Notification channels
+                </a>
+              {/snippet}
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item onSelect={() => (updateOpen = true)}>Update fullchain</DropdownMenu.Item>
+            {#if certificate.previousChainRevision}
+              <DropdownMenu.Item onSelect={() => (restoreOpen = true)}>Restore previous fullchain</DropdownMenu.Item>
+            {/if}
+            <DropdownMenu.Item variant="destructive" onSelect={() => (removeOpen = true)}>
+              Remove certificate
+            </DropdownMenu.Item>
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      <Dialog.Root bind:open={updateOpen}>
         <Dialog.Content
           class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+          onCloseAutoFocus={focusCertificateActions}
         >
           <Dialog.Header>
             <Dialog.Title>Update fullchain</Dialog.Title>
@@ -141,14 +181,7 @@
       </Dialog.Root>
       {#if certificate.previousChainRevision}
         <AlertDialog.Root bind:open={restoreOpen}>
-          <AlertDialog.Trigger>
-            {#snippet child({ props })}
-              <Button {...props} variant="outline"
-                >Restore previous fullchain</Button
-              >
-            {/snippet}
-          </AlertDialog.Trigger>
-          <AlertDialog.Content>
+          <AlertDialog.Content onCloseAutoFocus={focusCertificateActions}>
             <AlertDialog.Header>
               <AlertDialog.Title>Restore previous fullchain?</AlertDialog.Title>
               <AlertDialog.Description>
@@ -193,13 +226,8 @@
           </AlertDialog.Content>
         </AlertDialog.Root>
       {/if}
-      <AlertDialog.Root>
-        <AlertDialog.Trigger>
-          {#snippet child({ props })}
-            <Button {...props} variant="destructive">Remove certificate</Button>
-          {/snippet}
-        </AlertDialog.Trigger>
-        <AlertDialog.Content>
+      <AlertDialog.Root bind:open={removeOpen}>
+        <AlertDialog.Content onCloseAutoFocus={focusCertificateActions}>
           <AlertDialog.Header>
             <AlertDialog.Title>Remove certificate?</AlertDialog.Title>
             <AlertDialog.Description class="wrap-anywhere">
@@ -335,6 +363,7 @@
             <Table.Head scope="col">Web service</Table.Head>
             <Table.Head scope="col">Method</Table.Head>
             <Table.Head scope="col">Verification</Table.Head>
+            <Table.Head scope="col">Served certificate expiry</Table.Head>
             <Table.Head scope="col" class="text-right">Actions</Table.Head>
           </Table.Row>
         </Table.Header>
@@ -360,7 +389,7 @@
                   <a
                     href={resolve("/hosts/[id]", { id: deployment.hostId })}
                     class="text-primary underline underline-offset-4"
-                    >{deployment.hostName}</a
+                    >{hostLabels.get(deployment.hostId) ?? deployment.hostName}</a
                   >
                 {:else}
                   <span class="text-muted-foreground">Unlinked</span>
@@ -373,6 +402,12 @@
                   >{deployment.status}</span
                 ></Table.Cell
               >
+              <Table.Cell>
+                <ServedCertificateExpiry
+                  expiry={deployment.servedCertificateExpiresAt}
+                  observedAt={deployment.servedCertificateObservedAt}
+                />
+              </Table.Cell>
               <Table.Cell class="text-right">
                 <EditDeploymentEndpointDialog
                   deploymentId={deployment.id}
@@ -391,7 +426,7 @@
           {:else}
             <Table.Row
               ><Table.Cell
-                colspan={7}
+                colspan={8}
                 class="py-8 text-center text-muted-foreground"
                 >No deployments recorded for this certificate.</Table.Cell
               ></Table.Row

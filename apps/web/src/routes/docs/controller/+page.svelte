@@ -49,11 +49,11 @@ printf '\n'`;
   </header>
 
   <div
-    class="grid max-w-6xl items-start gap-6 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-10"
+    class="grid max-w-6xl items-start gap-6 lg:grid-cols-[minmax(0,1fr)_11rem] lg:gap-10"
   >
     <nav
       aria-label="On this page"
-      class="border-y py-3 text-xs lg:sticky lg:top-4 lg:border-y-0 lg:border-e lg:pe-4"
+      class="border-y py-3 text-xs lg:sticky lg:top-4 lg:col-start-2 lg:row-start-1 lg:border-y-0 lg:border-s lg:ps-4"
     >
       <p class="mb-2 font-medium">On this page</p>
       <ol class="grid list-decimal gap-2 ps-5">
@@ -69,7 +69,7 @@ printf '\n'`;
       </ol>
     </nav>
 
-    <article class="grid min-w-0 gap-7 text-sm leading-relaxed">
+    <article class="grid min-w-0 gap-7 text-sm leading-relaxed lg:col-start-1 lg:row-start-1">
       <p class="max-w-prose">
         Agents connect to the controller over gRPC with TLS. The controller
         calls the web app over HTTPS, and the web app stores enrollment and

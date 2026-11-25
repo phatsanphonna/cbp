@@ -4,6 +4,10 @@ CBP queues the uploaded certificate and holds the private key in web process mem
 
 For each deployment, CBP asks for the SSH username and password, then the become method (`sudo` or `su`). It asks for the root `su` password only when `su` is selected. These job credentials override `ansible_user` and related connection settings from the inventory for that run.
 
+For a host without an enrolled CBP agent, the runner collects its hostname, fully qualified hostname, operating system, and architecture over SSH before changing any certificate files. It sends the report to CBP first. If inventory collection fails, the runner logs the failure and still attempts the deployment.
+
+After successful TLS verification, the runner reports the expiry of the certificate Nginx served. CBP shows that expiry and the time it was observed on the host and certificate pages.
+
 1. Apply the database changes. For local development, use the database owner connection and run `bun --filter @cbp/database db:push` followed by `bun --filter @cbp/database db:setup-controller`. The Compose setup job applies these changes on upgrade.
 2. Set a separate `CBP_ANSIBLE_TOKEN` in the web environment, then restart the web app. Generate a fresh Ansible token with `openssl rand -hex 32`.
 3. In CBP, register the target as an Ansible-managed host. Link the certificate to that host with method **Ansible**, service **Nginx**, and the TLS hostname and port served by Nginx.

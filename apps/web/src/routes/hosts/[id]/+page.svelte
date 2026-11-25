@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { Info } from "@lucide/svelte";
+  import AlpineIcon from '@icons-pack/svelte-simple-icons/icons/SiAlpinelinux';
+  import ArchIcon from '@icons-pack/svelte-simple-icons/icons/SiArchlinux';
+  import DebianIcon from '@icons-pack/svelte-simple-icons/icons/SiDebian';
+  import FedoraIcon from '@icons-pack/svelte-simple-icons/icons/SiFedora';
+  import LinuxIcon from '@icons-pack/svelte-simple-icons/icons/SiLinux';
+  import RedHatIcon from '@icons-pack/svelte-simple-icons/icons/SiRedhat';
+  import UbuntuIcon from '@icons-pack/svelte-simple-icons/icons/SiUbuntu';
+  import { Info, Monitor } from '@lucide/svelte';
   import { resolve } from "$app/paths";
   import AgentEnrollment from "#lib/components/svelte/agent-enrollment.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
+  import ServedCertificateExpiry from '#lib/components/svelte/served-certificate-expiry.svelte';
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -20,6 +28,25 @@
   let { data, form }: PageProps = $props();
   refreshHostPing();
   const host = $derived(data.host);
+  const architectureAliases = new Map([['x86_64', 'amd64'], ['aarch64', 'arm64']]);
+  const architecture = $derived(
+    host.architecture ? (architectureAliases.get(host.architecture) ?? host.architecture) : null,
+  );
+  const platform = $derived([host.operatingSystem, architecture].filter(Boolean).join(' · '));
+  const distroIcons = [
+    [/^ubuntu\b/i, UbuntuIcon],
+    [/^debian\b/i, DebianIcon],
+    [/^fedora\b/i, FedoraIcon],
+    [/^red hat\b/i, RedHatIcon],
+    [/^alpine\b/i, AlpineIcon],
+    [/^arch\b/i, ArchIcon],
+    [/\blinux\b/i, LinuxIcon],
+  ] as const;
+  const OSIcon = $derived(
+    host.operatingSystem
+      ? (distroIcons.find(([pattern]) => pattern.test(host.operatingSystem ?? ''))?.[1] ?? Monitor)
+      : null,
+  );
   const hostname = $derived(host.hostname || host.name);
   const hostTitle = $derived(
     host.ipAddress && host.ipAddress !== hostname
@@ -30,10 +57,6 @@
     { label: "Discovered hostname", value: host.hostname },
     { label: "IP address", value: host.ipAddress },
     { label: 'Appliance type', value: host.applianceType ?? 'Not specified' },
-    {
-      label: 'Platform',
-      value: [host.operatingSystem, host.architecture].filter(Boolean).join(' · ') || null
-    },
   ]);
   const listenerLabels = {
     ready: "TLS healthy",
@@ -42,6 +65,12 @@
     "tls-error": "TLS handshake failed",
     "not-allowed": "Target not enabled",
   } as const;
+  function formatFingerprint(fingerprint: string) {
+    const hex = fingerprint.replace(/^sha256:/i, "").replaceAll(":", "");
+    return /^[\da-f]{64}$/i.test(hex)
+      ? hex.replace(/(..)(?=.)/g, "$1:").toUpperCase()
+      : fingerprint;
+  }
 
   watchDeploymentUpdates(() =>
     nextDeploymentExpiry(Object.values(data.agentDeployments.statuses)),
@@ -116,6 +145,13 @@
           <dd class="mt-1 wrap-anywhere">{fact.value ?? "Not collected"}</dd>
         </div>
       {/each}
+      <div class="min-w-0">
+        <dt class="text-muted-foreground">Platform</dt>
+        <dd class="mt-1 flex items-center gap-1.5 wrap-anywhere">
+          {#if OSIcon}<OSIcon size={14} class="shrink-0" aria-hidden="true" />{/if}
+          <span>{platform || 'Not collected'}</span>
+        </dd>
+      </div>
       <div>
         <dt class="text-muted-foreground">Network reachability</dt>
         <dd class="mt-1" aria-live="polite">
@@ -225,6 +261,7 @@
             <Table.Head scope="col">Method</Table.Head>
             <Table.Head scope="col">Listener readiness</Table.Head>
             <Table.Head scope="col">Verification</Table.Head>
+            <Table.Head scope="col">Served certificate expiry</Table.Head>
             <Table.Head scope="col" class="text-right">Actions</Table.Head>
           </Table.Row>
         </Table.Header>
@@ -269,22 +306,39 @@
                           <Info data-icon="inline-end" aria-hidden="true" />
                         </Badge>
                       </Tooltip.Trigger>
-                      <Tooltip.Content sideOffset={4} class="max-w-xs">
-                        {#if deployment.listenerCheckedAt}
-                          <time
-                            class="block"
-                            datetime={deployment.listenerCheckedAt.iso}
-                            >{deployment.listenerCheckedAt.label}</time
-                          >
-                        {:else}
-                          Check time unavailable.
-                        {/if}
-                        {#if deployment.listenerFingerprint}
-                          <p class="break-all">Served: <code>{deployment.listenerFingerprint}</code></p>
-                        {/if}
-                        {#if deployment.expectedFingerprint}
-                          <p class="break-all">Expected: <code>{deployment.expectedFingerprint}</code></p>
-                        {/if}
+                      <Tooltip.Content
+                        sideOffset={4}
+                        class="max-w-sm flex-col items-start gap-2 whitespace-normal text-left"
+                      >
+                        <div class="grid min-w-0 gap-2">
+                          {#if deployment.listenerCheckedAt}
+                            <time
+                              class="block text-background/80"
+                              datetime={deployment.listenerCheckedAt.iso}
+                              >Checked {deployment.listenerCheckedAt.label}</time
+                            >
+                          {:else}
+                            <p>Check time unavailable.</p>
+                          {/if}
+                          {#if deployment.listenerFingerprint}
+                            <div class="grid min-w-0 gap-0.5">
+                              <span class="text-background/70">Served certificate</span>
+                              <code
+                                class="block break-all font-mono text-[0.65rem] leading-relaxed"
+                                >{formatFingerprint(deployment.listenerFingerprint)}</code
+                              >
+                            </div>
+                          {/if}
+                          {#if deployment.expectedFingerprint}
+                            <div class="grid min-w-0 gap-0.5">
+                              <span class="text-background/70">Expected certificate</span>
+                              <code
+                                class="block break-all font-mono text-[0.65rem] leading-relaxed"
+                                >{formatFingerprint(deployment.expectedFingerprint)}</code
+                              >
+                            </div>
+                          {/if}
+                        </div>
                       </Tooltip.Content>
                     </Tooltip.Root>
                   {:else}
@@ -306,12 +360,12 @@
                     {#if deployment.listenerStatus === 'drifted'}
                       {#if deployment.listenerFingerprint}
                         <p class="mt-1 max-w-64 break-all text-muted-foreground">
-                          Served: <code>{deployment.listenerFingerprint}</code>
+                          Served: <code>{formatFingerprint(deployment.listenerFingerprint)}</code>
                         </p>
                       {/if}
                       {#if deployment.expectedFingerprint}
                         <p class="max-w-64 break-all text-muted-foreground">
-                          Expected: <code>{deployment.expectedFingerprint}</code>
+                          Expected: <code>{formatFingerprint(deployment.expectedFingerprint)}</code>
                         </p>
                       {/if}
                     {/if}
@@ -329,6 +383,12 @@
                   >{deployment.status}</span
                 ></Table.Cell
               >
+              <Table.Cell>
+                <ServedCertificateExpiry
+                  expiry={deployment.servedCertificateExpiresAt}
+                  observedAt={deployment.servedCertificateObservedAt}
+                />
+              </Table.Cell>
               <Table.Cell class="text-right">
                 <EditDeploymentEndpointDialog
                   deploymentId={deployment.id}
@@ -347,7 +407,7 @@
           {:else}
             <Table.Row
               ><Table.Cell
-                colspan={8}
+                colspan={9}
                 class="py-8 text-center text-muted-foreground"
                 >No certificate deployments recorded for this host.</Table.Cell
               ></Table.Row

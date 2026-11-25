@@ -197,7 +197,7 @@ func checkIn(ctx context.Context, conn *grpc.ClientConn, hostname string, config
 	listeners := config.checkListeners(ctx, targets.GetFields()["listenerTargets"].GetListValue().GetValues())
 	report, err := structpb.NewStruct(map[string]any{
 		"hostname":        hostname,
-		"operatingSystem": runtime.GOOS,
+		"operatingSystem": operatingSystemName(),
 		"architecture":    runtime.GOARCH,
 		"collectedAt":     time.Now().UTC().Format(time.RFC3339Nano),
 		"allowedServices": config.allowedDeploymentServices(),

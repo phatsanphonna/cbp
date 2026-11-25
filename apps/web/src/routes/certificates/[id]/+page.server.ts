@@ -34,6 +34,8 @@ export const load: PageServerLoad = async (event) => {
   const certificate = await findCertificate(database, params.id);
   if (!certificate) error(404, "Certificate not found");
   const format = dateFormatter(cookies.get("cbp-time-zone"));
+  const timestamp = (date: Date | null) =>
+    date ? { iso: date.toISOString(), label: format.format(date) } : null;
   const [hosts, agentDeployments] = await Promise.all([
     listHostOptions(database),
     loadAgentDeployments(
@@ -58,6 +60,11 @@ export const load: PageServerLoad = async (event) => {
       validFromLabel: format.format(certificate.validFrom),
       validUntil: certificate.validUntil.toISOString(),
       validUntilLabel: format.format(certificate.validUntil),
+      deployments: certificate.deployments.map((deployment) => ({
+        ...deployment,
+        servedCertificateExpiresAt: timestamp(deployment.hostId ? deployment.servedCertificateExpiresAt : null),
+        servedCertificateObservedAt: timestamp(deployment.hostId ? deployment.servedCertificateObservedAt : null),
+      })),
     },
   };
 };

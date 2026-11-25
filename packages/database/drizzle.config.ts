@@ -18,6 +18,7 @@ export default defineConfig({
     "cbp_deployment_jobs",
     "cbp_audit_events",
     "cbp_alerts",
+    "cbp_alert_deliveries",
     "cbp_notification_channels",
     "cbp_user_groups",
     "cbp_user_group_members",

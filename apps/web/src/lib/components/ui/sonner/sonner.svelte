@@ -46,16 +46,22 @@
     --normal-bg: var(--popover);
     --normal-text: var(--popover-foreground);
     --normal-border: var(--border);
+    --toast-close-button-start: unset;
+    --toast-close-button-end: 0;
+    --toast-close-button-transform: translate(35%, -35%);
     font-family: inherit;
   }
 
   :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]) {
-    border-color: var(--border);
     border-radius: var(--radius);
+  }
+
+  :global(.toaster [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type]) [data-close-button]) {
+    border-color: var(--border);
     color: var(--popover-foreground);
   }
 
-  :global(.toaster [data-sonner-toast][data-styled='true']:hover [data-close-button]:hover) {
+  :global(.toaster [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type]):hover [data-close-button]:hover) {
     background: var(--accent);
     border-color: var(--border);
     color: var(--accent-foreground);
