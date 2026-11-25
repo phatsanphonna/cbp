@@ -12,6 +12,7 @@ controller-state/
 /controller-ca.pem
 /cbp-agent-linux
 .cbp-dev
+/ansible-config/
 agent
 !/apps/agent/
 agent.exe

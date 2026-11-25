@@ -41,15 +41,16 @@ if (certPath && keyPath) {
 await import("../dist/index.js");
 
 if (certPath && keyPath) {
-  const controllerApi = Bun.serve({
+  const workerApi = Bun.serve({
     hostname: "127.0.0.1",
     port: 3001,
     idleTimeout: 10,
     maxRequestBodySize: 512 * 1024,
     fetch(request, listener) {
+      const path = new URL(request.url).pathname;
       if (
         request.method !== "POST" ||
-        !new URL(request.url).pathname.startsWith("/api/internal/controller/")
+        !(path.startsWith("/api/internal/controller/") || path === "/api/internal/ansible")
       ) {
         return new Response(null, { status: 404 });
       }
@@ -60,6 +61,6 @@ if (certPath && keyPath) {
     },
   });
   process.on("sveltekit:shutdown", () => {
-    void controllerApi.stop(true);
+    void workerApi.stop(true);
   });
 }

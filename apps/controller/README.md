@@ -15,7 +15,7 @@ Choose the HTTPS URL browsers will use and the controller DNS name or IP address
 For a fresh install, replace both example addresses and run:
 
 ```sh
-bash scripts/setup-docker.sh cbp-controller.internal:50051 https://cbp.example.com
+bash setup-docker.sh cbp-controller.internal:50051 https://cbp.example.com
 ```
 
 The script creates `.env` with deployment secrets and a proxy token. It reuses the default controller TLS files if they exist and generates a self-signed controller certificate if both are absent. To use existing files at other paths, set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` before running the script. The controller certificate must cover the exact DNS name or IP address in the agent connection address. For direct browser HTTPS, follow [Direct HTTPS with Compose](#direct-https-with-compose).
@@ -162,7 +162,7 @@ After the backup, update the checkout to the version you intend to deploy. If `.
 
 ### Run the web app outside Compose
 
-For production outside Compose, run `bun --filter @cbp/database db:push` and `bun --filter @cbp/database db:setup-controller` with a `DATABASE_URL` that can manage the schema and create roles. Set an independent `CBP_DATABASE_WEB_PASSWORD` for setup to provision `cbp_web`. Start the web app with a `DATABASE_URL` that uses `cbp_web` and its password. Build with `bun run --filter web build` and start with `bun run --filter web start`. The Bun adapter writes its server to `apps/web/dist`.
+For production outside Compose, run `bun --filter @cbp/database db:setup-controller` with a `DATABASE_URL` that can manage the schema and create roles. The setup initializes an empty database and applies upgrades to an existing CBP schema. Set an independent `CBP_DATABASE_WEB_PASSWORD` for setup to provision `cbp_web`. Start the web app with a `DATABASE_URL` that uses `cbp_web` and its password. Build with `bun run --filter web build` and start with `bun run --filter web start`. The Bun adapter writes its server to `apps/web/dist`.
 
 ## Connect to the web app
 

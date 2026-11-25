@@ -20,3 +20,7 @@ services:
   controller:
     environment:
       CBP_WEB_URL: http://127.0.0.1:3001
+
+  ansible:
+    environment:
+      CBP_ANSIBLE_WEB_URL: http://127.0.0.1:3001

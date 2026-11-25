@@ -14,6 +14,19 @@ EXPOSE 50051
 ENTRYPOINT ["cbp-controller"]
 CMD ["serve", "-listen", "0.0.0.0:50051", "-tls-cert", "/run/cbp/controller-fullchain.pem", "-tls-key", "/run/cbp/controller.key"]
 
+FROM python:3.13-slim-bookworm AS ansible
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssh-client sshpass \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir 'ansible-core~=2.20.0' \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin cbp-runner \
+    && install -d -m 0700 -o cbp-runner -g cbp-runner /home/cbp-runner/.ssh \
+    && install -m 0600 -o cbp-runner -g cbp-runner /dev/null /home/cbp-runner/.ssh/known_hosts
+COPY scripts/ansible/runner.py scripts/ansible/collect-host.yml scripts/ansible/deploy-nginx.yml /opt/cbp/ansible/
+ENV HOME=/home/cbp-runner
+USER cbp-runner
+ENTRYPOINT ["python", "-u", "/opt/cbp/ansible/runner.py"]
+CMD ["/run/cbp/ansible/inventory.yml"]
+
 FROM golang:1.27.4-bookworm AS agent-build
 WORKDIR /src
 COPY go.work go.work.sum ./

@@ -5,6 +5,7 @@
 .turbo
 .vscode
 controller-state
+ansible-config
 cbp-agent-linux
 **/node_modules
 **/.svelte-kit

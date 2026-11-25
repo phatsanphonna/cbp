@@ -8,7 +8,7 @@ For a host without an enrolled CBP agent, the runner collects its hostname, full
 
 After successful TLS verification, the runner reports the expiry of the certificate Nginx served. CBP shows that expiry and the time it was observed on the host and certificate pages.
 
-1. Apply the database changes. For local development, use the database owner connection and run `bun --filter @cbp/database db:push` followed by `bun --filter @cbp/database db:setup-controller`. The Compose setup job applies these changes on upgrade.
+1. Apply the database changes. For local development, use the database owner connection and run `bun --filter @cbp/database db:setup-controller`. The Compose setup job applies these changes on upgrade.
 2. Set a separate `CBP_ANSIBLE_TOKEN` in the web environment, then restart the web app. Generate a fresh Ansible token with `openssl rand -hex 32`.
 3. In CBP, register the target as an Ansible-managed host. Link the certificate to that host with method **Ansible**, service **Nginx**, and the TLS hostname and port served by Nginx.
 
@@ -28,6 +28,26 @@ all:
 ```
 
 If an inventory alias matches more than one registered CBP host, set `cbp_endpoint` on that alias to the exact endpoint to disambiguate it. This is only needed for ambiguous inventories.
+
+## Run the Ansible worker in Docker
+
+1. The root `setup-docker.sh` generates `CBP_ANSIBLE_TOKEN` in `.env`. For an existing `.env` without that entry, generate a token with `openssl rand -hex 32` and add it. The web and Ansible services use this same value.
+2. Put your `inventory.yml` in `./ansible-config/`, or set `CBP_ANSIBLE_CONFIG_DIR` to an existing directory on the Docker host. The service mounts it read-only at `/run/cbp/ansible`. Ensure inventory files are readable by the worker, which runs as UID 10001. For SSH key authentication, point `ansible_ssh_private_key_file` at a readable key in the mounted directory and keep the key private.
+3. Start the stack with the Ansible profile. For a deployment that terminates HTTPS in the web container, include the HTTPS override.
+
+```sh
+docker compose --profile ansible up -d --build
+docker compose --profile ansible logs --tail=50 ansible
+```
+
+```sh
+docker compose -f compose.yaml -f compose.https.yaml --profile ansible up -d --build
+docker compose -f compose.yaml -f compose.https.yaml --profile ansible logs --tail=50 ansible
+```
+
+The Ansible service uses the web container’s private loopback endpoint. Its SSH connections go to the hosts in your inventory, and its named volume keeps SSH host keys across container rebuilds. The local WSL runner and the Compose service each claim jobs independently. Stop the local runner when switching it to the Compose service for the same web app.
+
+## Run the worker directly
 
 On Windows, `bun dev` starts the runner in the `Ubuntu` WSL distro when these defaults exist: `~/.config/cbp/ansible-runner.env` and `~/ansible-lab/inventory.yml`. Set `CBP_ANSIBLE_WSL_DISTRO` to use another distro. You can set `CBP_ANSIBLE_INVENTORY` in the runner environment file to use a different path. The runner launched by `bun dev` stops with it. It skips cleanly when the WSL distro or runner files are missing, and it will not start a duplicate runner.
 

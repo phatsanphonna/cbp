@@ -1,5 +1,6 @@
 import { openDatabase } from "../src/index.js";
 import { sql } from "drizzle-orm";
+import { fileURLToPath } from 'node:url';
 
 const webPassword = Bun.env.CBP_DATABASE_WEB_PASSWORD;
 if (webPassword !== undefined && !/^[A-Za-z0-9_-]{32,128}$/.test(webPassword)) {
@@ -10,6 +11,26 @@ if (webPassword !== undefined && !/^[A-Za-z0-9_-]{32,128}$/.test(webPassword)) {
 
 const db = openDatabase();
 try {
+  const [schema] = await db.$client`
+    select count(*)::int as present
+    from unnest(array[
+      'cbp_auth_user', 'cbp_auth_session', 'cbp_auth_account', 'cbp_auth_verification',
+      'cbp_hosts', 'cbp_certificates', 'cbp_deployments'
+    ]) as core(name)
+    where to_regclass('public.' || name) is not null
+  `;
+  if (schema.present === 0) {
+    const bootstrap = Bun.spawn([process.execPath, 'run', 'db:push'], {
+      cwd: fileURLToPath(new URL('../', import.meta.url)),
+      stdin: 'ignore',
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
+    if (await bootstrap.exited !== 0) throw new Error('Could not initialize the CBP database.');
+  } else if (schema.present !== 7) {
+    throw new Error('The CBP database has an incomplete base schema. Restore a complete database before upgrading.');
+  }
+
   await db.$client`
     create table if not exists cbp_audit_events (
       id uuid primary key default gen_random_uuid(),
@@ -44,6 +65,8 @@ try {
       add column if not exists served_certificate_expires_at timestamp with time zone,
       add column if not exists served_certificate_observed_at timestamp with time zone,
       add column if not exists expected_fingerprint text`);
+    await tx.execute(sql`create unique index if not exists cbp_deployments_certificate_id_endpoint_unique
+      on cbp_deployments (certificate_id, endpoint)`);
     await tx.execute(sql`update cbp_deployments deployment
       set expected_fingerprint = certificate.fingerprint
       from cbp_certificates certificate
@@ -72,6 +95,16 @@ try {
     )
   `;
   await db.$client`
+    create table if not exists cbp_alerts (
+      id uuid primary key default gen_random_uuid(),
+      severity text not null,
+      message text not null,
+      target text not null,
+      detected_at timestamp with time zone not null default now(),
+      resolved_at timestamp with time zone
+    )
+  `;
+  await db.$client`
     alter table cbp_alerts
       add column if not exists rule_key text,
       add column if not exists target_id text,
@@ -80,6 +113,16 @@ try {
   await db.$client`
     create unique index if not exists cbp_alerts_open_rule_idx
       on cbp_alerts (rule_key) where resolved_at is null
+  `;
+  await db.$client`
+    create table if not exists cbp_notification_channels (
+      id integer primary key generated always as identity,
+      provider text not null,
+      destination text not null,
+      severity text not null,
+      enabled boolean not null default true,
+      constraint cbp_notification_channels_provider_destination_unique unique (provider, destination)
+    )
   `;
   await db.$client`
     alter table cbp_notification_channels

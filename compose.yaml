@@ -28,12 +28,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command:
-      [
-        "sh",
-        "-ec",
-        "bun --filter @cbp/database db:push && bun --filter @cbp/database db:setup-controller",
-      ]
+    command: ["bun", "--filter", "@cbp/database", "db:setup-controller"]
 
   web:
     image: cbp-web:local
@@ -103,5 +98,30 @@ services:
           create_host_path: false
     restart: unless-stopped
 
+  ansible:
+    profiles: [ansible]
+    build:
+      context: .
+      target: ansible
+    init: true
+    environment:
+      CBP_ANSIBLE_TOKEN: ${CBP_ANSIBLE_TOKEN:-}
+      CBP_ANSIBLE_WEB_URL: http://127.0.0.1:3000
+    network_mode: service:web
+    depends_on:
+      web:
+        condition: service_started
+        restart: true
+    volumes:
+      - type: bind
+        source: ${CBP_ANSIBLE_CONFIG_DIR:-./ansible-config}
+        target: /run/cbp/ansible
+        read_only: true
+        bind:
+          create_host_path: false
+      - cbp-ansible-ssh:/home/cbp-runner/.ssh
+    restart: unless-stopped
+
 volumes:
   cbp-db:
+  cbp-ansible-ssh:
