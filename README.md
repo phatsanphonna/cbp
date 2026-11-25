@@ -2,9 +2,13 @@
 
 CBP is a web application for managing TLS certificates and deploying them to Linux hosts. It tracks certificates, expiration dates, host check-ins, deployment results, and audit events. Administrators can enroll hosts and deploy certificates from the web interface.
 
-## Deploy with Docker Compose and direct HTTPS
+## Deploy with Docker Compose
 
-The Compose stack runs the Bun web app, Go controller, and PostgreSQL. This setup serves browser traffic over HTTPS directly from the web container. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL.
+The Compose stack runs the Bun web app, Go controller, and PostgreSQL. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL. Choose direct HTTPS if the web container will serve TLS, or use a reverse proxy to serve HTTPS in front of the container.
+
+For an existing deployment, keep your `.env` and controller TLS files and back up the database before upgrading. For remote agents, set `CBP_CONTROLLER_BIND` in `.env` to the Docker host's agent-facing IP address in either setup. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment)
+
+### Direct HTTPS
 
 For a fresh deployment, run the setup script from the repository root. Replace the example controller address and browser URL with yours.
 
@@ -23,7 +27,7 @@ CBP_WEB_TLS_KEY=./web.key
 CBP_ADMIN_EMAILS=admin@example.com
 ```
 
-For remote agents, set `CBP_CONTROLLER_BIND` to the Docker host's agent-facing IP address. Use both Compose files to start or upgrade the direct HTTPS deployment.
+Use both Compose files to start or upgrade the deployment.
 
 ```sh
 docker compose -f compose.yaml -f compose.https.yaml config --quiet
@@ -31,9 +35,31 @@ docker compose -f compose.yaml -f compose.https.yaml up -d --build
 docker compose -f compose.yaml -f compose.https.yaml ps --all
 ```
 
-Create the first administrator, then open `BETTER_AUTH_URL` and verify enrollment and certificate delivery. [Docker deployment guide](apps/controller/README.md#4-create-the-first-administrator)
+### HTTPS through a reverse proxy
 
-If you already run CBP, back up the database before recreating containers. For deployments that terminate TLS at a reverse proxy, use the proxy setup in the guide. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment) · [HTTPS reverse proxy](apps/controller/README.md#https-reverse-proxy)
+For a fresh deployment, pass your public HTTPS URL to the setup script. The script generates `CBP_TRUSTED_PROXY_TOKEN` in `.env`.
+
+```sh
+bash setup-docker.sh cbp-controller.internal:50051 https://cbp.example.com
+```
+
+Set `CBP_ADMIN_EMAILS` in `.env` to your first administrator's email. Keep `BETTER_AUTH_URL` set to the public HTTPS URL and leave `CBP_WEB_BIND` at `127.0.0.1` for a reverse proxy running on the Docker host. Start the stack with the base Compose file.
+
+```sh
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps --all
+```
+
+Configure the proxy with a browser-trusted certificate and forward requests to `http://127.0.0.1:3000`. Have the proxy set `X-Forwarded-Proto` to `https`, `X-CBP-Client-IP` to the client IP, and `X-CBP-Proxy-Token` to the value from `.env`. [Nginx configuration example](apps/controller/README.md#https-reverse-proxy)
+
+### Local HTTP testing
+
+For a fresh local test, run `bash setup-docker.sh localhost:50051` to use `http://127.0.0.1:3000`. Set `CBP_ADMIN_EMAILS` in `.env`, use the base Compose commands above, and keep the web port bound to loopback. HTTP requires the app to see a loopback peer. If Docker presents the connection as coming from a bridge address, use either HTTPS setup above. [Compose configuration guide](apps/controller/README.md#1-configure-the-deployment)
+
+### After startup
+
+Create the first administrator, then open `BETTER_AUTH_URL` and verify enrollment and certificate delivery. [Docker deployment guide](apps/controller/README.md#4-create-the-first-administrator)
 
 Enable the optional `ansible` profile to run the Ansible worker alongside the controller in its own container. [Ansible container setup](scripts/ansible/README.md#run-the-ansible-worker-in-docker)
 
