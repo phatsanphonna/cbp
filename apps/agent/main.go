@@ -28,6 +28,8 @@ type agentCredential struct {
 	token string
 }
 
+const deploymentPollInterval = 5 * time.Second
+
 func (c agentCredential) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
 	return map[string]string{
 		rpc.HostHeader:  c.host,
@@ -98,6 +100,7 @@ func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) 
 		return err
 	}
 	var listenerTargets *structpb.Struct
+	deploymentPolling := false
 	for ctx.Err() == nil {
 		reply, err := checkIn(ctx, conn, hostname, config, listenerTargets)
 		if status.Code(err) == codes.Unauthenticated && code != "" {
@@ -110,10 +113,13 @@ func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) 
 			listenerTargets = reply
 			code = ""
 			slog.Info("check-in accepted")
-			if !once && config.deploymentEnabled() {
+			if options.once && config.deploymentEnabled() {
 				if err := deployPending(ctx, conn, config); err != nil && ctx.Err() == nil {
 					slog.Warn("deployment RPC failed", "code", status.Code(err))
 				}
+			} else if !once && !deploymentPolling && config.deploymentEnabled() {
+				deploymentPolling = true
+				go pollDeployments(ctx, conn, config)
 			}
 		}
 		if ctx.Err() != nil {
@@ -141,6 +147,25 @@ func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) 
 		}
 	}
 	return nil
+}
+
+func pollDeployments(ctx context.Context, conn *grpc.ClientConn, config agentConfig) {
+	poll := func() {
+		if err := deployPending(ctx, conn, config); err != nil && ctx.Err() == nil {
+			slog.Warn("deployment RPC failed", "code", status.Code(err))
+		}
+	}
+	poll()
+	ticker := time.NewTicker(deploymentPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			poll()
+		}
+	}
 }
 
 func connectAgent(options agentOptions, token string) (*grpc.ClientConn, error) {

@@ -20,9 +20,10 @@
       loop: ["{{ cbp_nginx_certificate }}", "{{ cbp_nginx_key }}"]
       register: cbp_current
 
-    - name: Require existing regular files
+    - name: Require configured paths to be absent or regular files
       ansible.builtin.assert:
-        that: item.stat.isreg | default(false)
+        that:
+          - not item.stat.exists or (item.stat.isreg | default(false))
       loop: "{{ cbp_current.results }}"
 
     - name: Save the current files and install the new pair
@@ -33,15 +34,22 @@
             prefix: cbp-nginx-
           register: cbp_backup
 
+        - name: Create certificate parent directories when missing
+          ansible.builtin.file:
+            path: "{{ item | dirname }}"
+            state: directory
+          loop: ["{{ cbp_nginx_certificate }}", "{{ cbp_nginx_key }}"]
+
         - name: Back up the current files
           ansible.builtin.copy:
             remote_src: true
-            src: "{{ item.path }}"
+            src: "{{ item.original.stat.path }}"
             dest: "{{ cbp_backup.path }}/{{ item.name }}"
             mode: preserve
           loop:
-            - { path: "{{ cbp_nginx_certificate }}", name: certificate }
-            - { path: "{{ cbp_nginx_key }}", name: key }
+            - { original: "{{ cbp_current.results[0] }}", name: certificate }
+            - { original: "{{ cbp_current.results[1] }}", name: key }
+          when: item.original.stat.exists
 
         - name: Install the certificate and verify Nginx
           block:
@@ -114,8 +122,16 @@
               loop:
                 - { original: "{{ cbp_current.results[0] }}", name: certificate }
                 - { original: "{{ cbp_current.results[1] }}", name: key }
+              when: item.original.stat.exists
               no_log: true
               diff: false
+
+            - name: Remove files that did not exist before deployment
+              ansible.builtin.file:
+                path: "{{ item.item }}"
+                state: absent
+              loop: "{{ cbp_current.results }}"
+              when: not item.stat.exists
 
             - name: Reload Nginx with the previous files
               ansible.builtin.service:

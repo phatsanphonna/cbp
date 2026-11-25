@@ -216,6 +216,10 @@ func verifyDeploymentChain(chain [][]byte, target deploymentTarget) error {
 
 func certificateDiagnostic(err error, at time.Time) string {
 	detail := fmt.Sprintf("%s WARN deployment certificate verification failed error=%q", at.Format("2006/01/02 15:04:05 Z07:00"), err.Error())
+	return limitDeploymentDiagnostic(detail)
+}
+
+func limitDeploymentDiagnostic(detail string) string {
 	if len(detail) > rpc.MaxDeploymentDiagnosticBytes {
 		const ellipsis = "…"
 		end := rpc.MaxDeploymentDiagnosticBytes - len(ellipsis)
@@ -277,7 +281,14 @@ func deployPending(ctx context.Context, conn *grpc.ClientConn, config agentConfi
 	}
 	result := map[string]any{"jobId": id, "outcome": outcome}
 	if verificationErr != nil {
-		result["diagnostic"] = certificateDiagnostic(verificationErr, time.Now())
+		var diagnostic string
+		if outcome == "verify" {
+			diagnostic = limitDeploymentDiagnostic("TLS verification failed: " + verificationErr.Error())
+		} else {
+			diagnostic = certificateDiagnostic(verificationErr, time.Now())
+		}
+		appendLog(diagnostic)
+		result["diagnostic"] = diagnostic
 	}
 	if outcome == "ok" {
 		appendLog("Deployment succeeded")

@@ -1,4 +1,4 @@
-import { appendDeploymentLog, claimDeployment, finishDeployment } from '@cbp/database/deployment-jobs';
+import { appendDeploymentLog, claimDeployment, finishDeployment, listAnsibleDeploymentTargets } from '@cbp/database/deployment-jobs';
 import { json } from '@sveltejs/kit';
 import { unpackAnsibleDeployment } from '#lib/server/ansible-deployment-payload.js';
 import { getAnsibleToken } from '#lib/server/controller-config.js';
@@ -8,6 +8,9 @@ import { controllerPost, validHostId } from '../controller/request.js';
 import type { RequestHandler } from './$types';
 
 const run = controllerPost(async (db, { operation, hostId, endpoint, jobId, succeeded, message }) => {
+  if (operation === 'targets') {
+    return json(await listAnsibleDeploymentTargets(db), { headers: { 'cache-control': 'no-store' } });
+  }
   if (!validHostId(hostId) || typeof endpoint !== 'string' || !endpoint || endpoint.length > 300) return 400;
   const worker = { method: 'Ansible', endpoint } as const;
   if (operation === 'claim') {

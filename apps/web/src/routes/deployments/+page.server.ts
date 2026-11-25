@@ -7,10 +7,7 @@ import { resolve } from "$app/paths";
 import { dateFormatter } from "#lib/server/date-formatter.js";
 import { getDatabase } from "#lib/server/database.js";
 import { displayCertificateDomain } from "../certificates/display-domain.js";
-import {
-  formatDeploymentTargets,
-  jobIdPattern,
-} from "./deployment-view.server.js";
+import { jobIdPattern } from "./deployment-view.server.js";
 import type { PageServerLoad } from "./$types";
 
 const pageSize = 50;
@@ -26,21 +23,10 @@ export const load: PageServerLoad = async ({ url, cookies, depends }) => {
   const timezone = cookies.get("cbp-time-zone");
   if (jobIds.length) {
     const rows = await listDeploymentTargets(database, { jobIds });
-    if (jobIds.length === 1 && rows.length === 1)
+    const runSlugs = new Set(rows.map(({ runSlug }) => runSlug));
+    if (runSlugs.size === 1)
       redirect(307, resolve("/deployments/[id]", { id: rows[0].runSlug }));
-    const first = rows[0];
-    const certificateName =
-      first &&
-      rows.every(({ certificateId }) => certificateId === first.certificateId)
-        ? displayCertificateDomain(first.domain, first.sans)
-        : undefined;
-    return {
-      legacy: {
-        certificateName,
-        jobs: formatDeploymentTargets(rows, timezone),
-        missing: jobIds.length - rows.length,
-      },
-    };
+    redirect(307, resolve("/deployments"));
   }
 
   const requested = Number(url.searchParams.get("page"));
@@ -57,7 +43,6 @@ export const load: PageServerLoad = async ({ url, cookies, depends }) => {
   const format = dateFormatter(timezone);
 
   return {
-    legacy: null,
     page,
     hasNext: rows.length > pageSize,
     runs: rows

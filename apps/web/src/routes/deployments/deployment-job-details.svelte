@@ -1,7 +1,9 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { goto } from "$app/navigation";
+  import { enhance } from "$app/forms";
   import { resolve } from "$app/paths";
+  import { toast } from "svelte-sonner";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
@@ -24,6 +26,7 @@
     jobs,
     submittedAt,
     submittedLabel,
+    canCancel = false,
     canRecover = { Agent: false, Ansible: false },
     recoverError,
     missing = 0,
@@ -34,6 +37,7 @@
     jobs: ReturnType<typeof formatDeploymentTargets>;
     submittedAt?: string;
     submittedLabel?: string;
+    canCancel?: boolean;
     canRecover?: { Agent: boolean; Ansible: boolean };
     recoverError?: string;
     missing?: number;
@@ -53,6 +57,7 @@
   let logPinned = $state(true);
   let logJobId = $state<string | null>(null);
   let recoveryOpen = $state(false);
+  let cancelPendingId = $state<string | null>(null);
   let recoveryJobId = $state<string | null>(null);
   let recoveryBecomeMethod = $state<'sudo' | 'su'>('sudo');
   let recoverySuPassword = $state('');
@@ -175,7 +180,7 @@
 
   {#if queuedAgent}
     <p class="mt-4 text-sm text-muted-foreground">
-      Agents request jobs after check-in. If a job stays queued, check that <code
+      Agents check for jobs every five seconds after check-in. If a job stays queued, check that <code
         >cbp-agent</code
       >
       is running and <code>deploymentServices</code> is configured in its YAML
@@ -265,6 +270,36 @@
                     {/snippet}
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Content align="end" class="min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                    {#if canCancel && job.status === "Queued"}
+                      <form
+                        id="cancel-{job.id}"
+                        method="POST"
+                        action="?/cancel"
+                        class="hidden"
+                        use:enhance={() => {
+                          cancelPendingId = job.id;
+                          return async ({ result, update }) => {
+                            try {
+                              await update();
+                              if (result.type === "success")
+                                toast.success("Queued deployment canceled.");
+                              else
+                                toast.error(result.data?.cancelError ?? "Could not cancel the deployment.");
+                            } finally {
+                              cancelPendingId = null;
+                            }
+                          };
+                        }}
+                      >
+                        <input type="hidden" name="jobId" value={job.id} />
+                      </form>
+                      <DropdownMenu.Item
+                        variant="destructive"
+                        disabled={cancelPendingId === job.id}
+                        onSelect={() =>
+                          (document.getElementById(`cancel-${job.id}`) as HTMLFormElement | null)?.requestSubmit()}
+                      >Cancel deployment</DropdownMenu.Item>
+                    {/if}
                     {#if canRecover[job.method] && job.recoverable}
                       <DropdownMenu.Item
                         class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"

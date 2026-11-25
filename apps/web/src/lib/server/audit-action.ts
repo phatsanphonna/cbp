@@ -27,10 +27,12 @@ const actionLabels: Record<string, Record<string, string>> = {
     ...deploymentActions,
     deploy: "Deploy certificate",
     deployAnsible: 'Deploy certificate via Ansible',
+    deployMixed: "Deploy certificate",
     updateChain: "Update fullchain",
     restoreChain: "Restore fullchain",
     remove: "Remove certificate",
   },
+  "/deployments/[id]": { cancel: "Cancel queued deployment" },
   "/alerts/channels": {
     add: "Add notification channel",
     setEnabled: "Change notification channel status",

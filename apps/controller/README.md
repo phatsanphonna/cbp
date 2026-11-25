@@ -230,7 +230,7 @@ cbp-agent \
 unset CBP_AGENT_ENROLLMENT_CODE
 ```
 
-Replace `cbp-controller.internal` with the controller's DNS name. Omit `--ca` if the controller uses a publicly trusted certificate. The controller should log an enrollment and a check-in. Run the agent without `--once` to send a report every minute. Subsequent runs use the credential file. Keep its directory private to the agent service account. Run `cbp-agent --help` for the available flags.
+Replace `cbp-controller.internal` with the controller's DNS name. Omit `--ca` if the controller uses a publicly trusted certificate. The controller should log an enrollment and a check-in. Run the agent without `--once` to send a report at its configured check-in interval (one minute by default); after its first successful check-in, it checks for deployment jobs every five seconds. Subsequent runs use the credential file. Keep its directory private to the agent service account. Run `cbp-agent --help` for the available flags.
 
 For an existing enrollment on a Linux host running systemd, use `cbp-agent --install-service` as root with the existing settings in the agent YAML or supplied as flags. The service starts after a successful check-in and starts again at boot. Existing systemd units with single-dash flags continue to work.
 

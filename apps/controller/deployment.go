@@ -43,7 +43,7 @@ func (c *controller) FinishDeployment(ctx context.Context, req *structpb.Struct)
 		return nil, status.Error(codes.InvalidArgument, "invalid deployment result")
 	}
 	payload := webRequest{HostID: host, Token: token, JobID: jobID, Outcome: outcome}
-	if diagnostic := fields["diagnostic"].GetStringValue(); outcome == "certificate" && rpc.ValidDeploymentDiagnostic(diagnostic) {
+	if diagnostic := fields["diagnostic"].GetStringValue(); (outcome == "certificate" || outcome == "verify") && rpc.ValidDeploymentDiagnostic(diagnostic) {
 		payload.Diagnostic = diagnostic
 	}
 	if err := c.web.send(ctx, "deployment-result", payload); err != nil {

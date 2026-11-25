@@ -33,7 +33,7 @@ export const POST = controllerPost(
     let detail =
       outcome === "ok" ? null : messages[outcome as keyof typeof messages];
     if (
-      outcome === "certificate" &&
+      (outcome === "certificate" || outcome === "verify") &&
       typeof diagnostic === "string" &&
       diagnostic.trim() &&
       Buffer.byteLength(diagnostic) <= 512 &&

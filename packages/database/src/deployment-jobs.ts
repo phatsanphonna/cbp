@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import { withAgentHost } from "./host-agents.js";
@@ -35,7 +36,7 @@ type DeploymentPayload = Pick<
   | "engine"
   | "endpoint"
   | "fullchain"
->;
+> & { method?: Job["method"] };
 const active = inArray(deploymentJobs.status, ["Queued", "Running"]);
 const unexpired = gt(deploymentJobs.expiresAt, sql`now()`);
 const expired = lte(deploymentJobs.expiresAt, sql`now()`);
@@ -119,12 +120,14 @@ const slugWords = [
 const slugCharacters = "abcdefghjkmnpqrstuvwxyz23456789";
 
 function deploymentSlug() {
-  const words = slugWords.map((choices) => choices[randomInt(choices.length)]);
+  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const adjective = slugWords[0][randomInt(slugWords[0].length)];
+  const animal = slugWords[2][randomInt(slugWords[2].length)];
   const suffix = Array.from(
     { length: 4 },
     () => slugCharacters[randomInt(slugCharacters.length)],
   ).join("");
-  return [...words, suffix].join("-");
+  return ["deploy", date, adjective, animal, suffix].join("-");
 }
 
 export async function expireDeploymentJobs(db: Database) {
@@ -166,7 +169,7 @@ export function listDeploymentRuns(
   limit: number,
 ) {
   return db
-    .select({
+    .selectDistinct({
       ...runFields,
       targets: sql<number>`count(${deploymentJobs.id})`.mapWith(Number),
       deployed:
@@ -241,6 +244,28 @@ export function listDeploymentTargets(
     .orderBy(deploymentJobs.hostName, deploymentJobs.endpoint, deploymentJobs.id);
 }
 
+export function listAnsibleDeploymentTargets(db: Database) {
+  return db
+    .selectDistinct({
+      hostId: hosts.id,
+      hostName: hosts.name,
+      hostname: hosts.hostname,
+      fqdn: hosts.fqdn,
+      lastPingAddress: hosts.lastPingAddress,
+      endpoint: deployments.endpoint,
+    })
+    .from(deployments)
+    .innerJoin(hosts, eq(hosts.id, deployments.hostId))
+    .where(
+      and(
+        eq(deployments.method, "Ansible"),
+        eq(deployments.engine, "Nginx"),
+        eq(hosts.ansibleManaged, true),
+      ),
+    )
+    .orderBy(asc(hosts.name), asc(deployments.endpoint));
+}
+
 export function deploymentSources(
   db: Pick<Database, "select">,
   owner: Owner,
@@ -303,30 +328,37 @@ export async function queueDeployments(
   db: Database,
   owner: { certificateId: string },
   payloads: DeploymentPayload[],
-  method: Job['method'] = 'Agent',
+  defaultMethod: Job["method"] = "Agent",
 ) {
   const hostIds = [...new Set(payloads.map(({ hostId }) => hostId))];
   if (!hostIds.length || hostIds.length !== payloads.length)
     return { status: "invalid" } as const;
+  const methodFor = (payload: DeploymentPayload) => payload.method ?? defaultMethod;
 
   return db.transaction(async (tx) => {
     // Use the same host locks as claim, completion and deletion, in a consistent order for batches.
     const eligible = await tx
       .select({ id: hosts.id, name: hosts.name })
       .from(hosts)
-      .where(and(inArray(hosts.id, hostIds), eq(method === 'Agent' ? hosts.agentManaged : hosts.ansibleManaged, true)))
+      .where(or(...payloads.map((payload) => and(
+        eq(hosts.id, payload.hostId),
+        eq(methodFor(payload) === "Agent" ? hosts.agentManaged : hosts.ansibleManaged, true),
+      ))))
       .orderBy(asc(hosts.id))
       .for("update");
     const eligibleIds = new Set(eligible.map(({ id }) => id));
     const hostNames = new Map(eligible.map(({ id, name }) => [id, name]));
-    const agents = method === 'Agent' ? await tx
+    const agentHostIds = payloads
+      .filter((payload) => methodFor(payload) === "Agent")
+      .map(({ hostId }) => hostId);
+    const agents = agentHostIds.length ? await tx
       .select({ hostId: hostAgents.hostId, hash: hostAgents.tokenHash })
       .from(hostAgents)
       .where(
         and(
           inArray(
             hostAgents.hostId,
-            eligible.map(({ id }) => id),
+            agentHostIds,
           ),
           isNotNull(hostAgents.tokenHash),
         ),
@@ -354,9 +386,10 @@ export async function queueDeployments(
     })[] = [];
     for (const payload of payloads) {
       const { deploymentId, hostId, endpoint, engine, fullchain } = payload;
+      const method = methodFor(payload);
       const hash = hashes.get(hostId) ?? null;
       if (!eligibleIds.has(hostId) || (method === 'Agent' && !hash))
-        return { status: "unenrolled", endpoint } as const;
+        return { status: "unenrolled", endpoint, method } as const;
       if (busyHosts.has(hostId)) return { status: "busy", endpoint } as const;
       const source = current.get(deploymentId);
       if (
@@ -540,6 +573,41 @@ export function appendDeploymentLog(
       unexpired,
     )).returning({ id: deploymentJobs.id });
     return job ? 'ok' : 'missing';
+  });
+}
+
+export function cancelQueuedDeployment(db: Database, id: string, runSlug: string) {
+  return db.transaction(async (tx) => {
+    const [job] = await tx
+      .select({ hostId: deploymentJobs.hostId, runId: deploymentJobs.runId })
+      .from(deploymentJobs)
+      .innerJoin(deploymentRuns, eq(deploymentRuns.id, deploymentJobs.runId))
+      .where(and(eq(deploymentJobs.id, id), eq(deploymentRuns.slug, runSlug)));
+    if (!job) return "missing" as const;
+    if (job.hostId) {
+      await tx
+        .select({ id: hosts.id })
+        .from(hosts)
+        .where(eq(hosts.id, job.hostId))
+        .for("update");
+    }
+    const [cancelled] = await tx
+      .update(deploymentJobs)
+      .set({
+        status: "Failed",
+        detail: "Canceled by an administrator before a worker claimed the deployment.",
+        finishedAt: sql`now()`,
+        log: sql`right(${deploymentJobs.log} || to_char(now(), 'YYYY-MM-DD HH24:MI:SS') || ' Deployment canceled before worker claim.' || E'\\n', 65536)`,
+      })
+      .where(
+        and(
+          eq(deploymentJobs.id, id),
+          eq(deploymentJobs.runId, job.runId),
+          eq(deploymentJobs.status, "Queued"),
+        ),
+      )
+      .returning({ id: deploymentJobs.id });
+    return cancelled ? ("cancelled" as const) : ("not-queued" as const);
   });
 }
 

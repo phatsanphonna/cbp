@@ -37,25 +37,20 @@
   const id = $props.id();
   let pending = $state(false);
   let selected = $state<string[]>([]);
-  let preferredMethod = $state('');
   let becomeMethod = $state<'sudo' | 'su'>('sudo');
   let suPassword = $state('');
-  const methods = $derived([
-    { value: 'Agent', targets: agentTargets, enabled: canDeployAgent },
-    { value: 'Ansible', targets: ansibleTargets, enabled: canDeployAnsible }
-  ].filter(({ targets }) => targets.length));
-  const method = $derived(
-    methods.find(({ value, enabled }) => enabled && value === preferredMethod) ??
-    methods.find(({ enabled }) => enabled)
-  );
   const choices = $derived(
-    (method?.targets ?? []).map((target) => ({
+    [
+      ...(canDeployAgent ? agentTargets.map((target) => ({ ...target, method: 'Agent' as const })) : []),
+      ...(canDeployAnsible ? ansibleTargets.map((target) => ({ ...target, method: 'Ansible' as const })) : []),
+    ].map((target) => ({
       ...target,
       value: JSON.stringify([
         target.id,
         target.endpoint,
         target.hostId,
         target.engine,
+        target.method,
       ]),
     })),
   );
@@ -65,17 +60,20 @@
   const selectedHosts = $derived(
     new Set(selectedChoices.map(({ hostId }) => hostId)),
   );
+  const hasAnsibleSelected = $derived(
+    selectedChoices.some(({ method }) => method === 'Ansible'),
+  );
 </script>
 
 <Dialog.Root>
-  {#if methods.length}
+  {#if agentTargets.length || ansibleTargets.length}
     <Dialog.Trigger>
       {#snippet child({ props })}
         <Button
           {...props}
           variant="outline"
           size="sm"
-          disabled={!method}
+          disabled={!choices.length}
         >Deploy</Button>
       {/snippet}
     </Dialog.Trigger>
@@ -84,13 +82,13 @@
     <Dialog.Header>
       <Dialog.Title>Deploy certificate</Dialog.Title>
       <Dialog.Description
-        >Select one linked endpoint per host and provide the matching private
-        key once.</Dialog.Description
+        >Select one linked endpoint per host. Agent and Ansible targets can be
+        combined in one run.</Dialog.Description
       >
     </Dialog.Header>
     <form
       method="POST"
-      action={method?.value === 'Ansible' ? '?/deployAnsible' : '?/deploy'}
+      action="?/deployMixed"
       enctype="multipart/form-data"
       use:enhance={() => {
         pending = true;
@@ -109,28 +107,8 @@
       }}
     >
       <FieldGroup>
-        {#if methods.length > 1}
-          <Field>
-            <FieldLabel for="{id}-method">Deployment method</FieldLabel>
-            <Select.Root type="single" value={method?.value ?? ''} disabled={pending}
-              onValueChange={(value) => {
-                preferredMethod = value;
-                selected = [];
-              }}
-            >
-              <Select.Trigger id="{id}-method">{method?.value}</Select.Trigger>
-              <Select.Content>
-                <Select.Group>
-                  {#each methods as { value, enabled } (value)}
-                    <Select.Item {value} label={enabled ? value : `${value} (unavailable)`} disabled={!enabled} />
-                  {/each}
-                </Select.Group>
-              </Select.Content>
-            </Select.Root>
-          </Field>
-        {/if}
         <FieldSet>
-          <FieldLegend variant="label" required>{methods.length === 1 && method ? `${method.value} hosts` : 'Hosts'}</FieldLegend>
+          <FieldLegend variant="label" required>Hosts</FieldLegend>
           <FieldGroup class="gap-2">
             {#each choices as choice (choice.id)}
               <Field orientation="horizontal">
@@ -157,7 +135,7 @@
                 >
                   <span class="wrap-anywhere">{choice.hostName}</span>
                   <span class="wrap-anywhere font-normal text-muted-foreground"
-                    >{choice.endpoint} · {choice.engine}</span
+                    >{choice.endpoint} · {choice.engine} · {choice.method}</span
                   >
                 </FieldLabel>
               </Field>
@@ -197,7 +175,7 @@
             </Field>
           </FieldGroup>
         </FieldSet>
-        {#if method?.value === 'Ansible'}
+        {#if hasAnsibleSelected}
           <FieldSet>
             <FieldLegend variant="label" required>Ansible credentials</FieldLegend>
             <FieldDescription>These credentials are used for this deployment only.</FieldDescription>

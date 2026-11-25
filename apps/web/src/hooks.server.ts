@@ -1,7 +1,7 @@
-import { building } from "$app/env";
+import { building, dev } from "$app/env";
 import { resolve as resolvePath } from "$app/paths";
 import { expireDeploymentJobs } from "@cbp/database/deployment-jobs";
-import { error, redirect, type Handle } from "@sveltejs/kit";
+import { error, redirect, type Handle, type HandleServerError } from "@sveltejs/kit";
 import { auditUserAction } from "#lib/server/audit-action.js";
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
@@ -104,4 +104,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     return resolve(event);
   });
+};
+
+export const handleError: HandleServerError = ({ error: cause, event, status, message }) => {
+  if (event.route.id?.startsWith("/deployments")) {
+    console.error(`Deployment page failed with HTTP ${status}`, cause);
+  }
+  return {
+    message:
+      dev && event.route.id?.startsWith("/deployments") && cause instanceof Error
+        ? cause.message
+        : message,
+  };
 };

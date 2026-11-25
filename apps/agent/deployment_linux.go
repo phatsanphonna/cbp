@@ -72,7 +72,7 @@ func (f deploymentFile) restore() error {
 	return os.Remove(f.path)
 }
 
-// Return a diagnostic error only when it comes from verifying the public certificate chain.
+// Return verification errors so the agent can report the exact failure.
 func installDeployment(ctx context.Context, target deploymentTarget, chain, key string, logStep func(string)) (string, error) {
 	logStep("Validating certificate and private key")
 	cert, err := tls.X509KeyPair([]byte(chain), []byte(key))
@@ -150,6 +150,7 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 	}
 
 	outcome := "reload"
+	var verificationErr error
 	logStep("Validating service configuration")
 	if err := validateService(ctx, target); err != nil {
 		logStep("Service configuration validation failed: " + err.Error())
@@ -157,10 +158,12 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 		logStep("Service reload failed: " + err.Error())
 	} else {
 		logStep("Reloaded service; verifying the served certificate")
-		if verifyCertificate(ctx, target, cert.Certificate[0]) {
+		if err := verifyCertificate(ctx, target, cert.Certificate[0]); err == nil {
 			return "ok", nil
+		} else {
+			verificationErr = err
+			logStep("TLS verification failed: " + verificationErr.Error())
 		}
-		logStep("TLS verification failed: the endpoint did not present the deployed certificate before the verification deadline")
 		outcome = "verify"
 	}
 	logStep("Restoring previous certificate files")
@@ -182,7 +185,7 @@ func installDeployment(ctx context.Context, target deploymentTarget, chain, key 
 		logStep("Could not reload the service after restoring previous files: " + err.Error())
 		return "rollback", nil
 	}
-	return outcome, nil
+	return outcome, verificationErr
 }
 
 func validateService(ctx context.Context, target deploymentTarget) error {
@@ -217,7 +220,7 @@ func reloadService(ctx context.Context, engine string) error {
 	return exec.CommandContext(ctx, "systemctl", "reload", strings.ToLower(engine)).Run()
 }
 
-func verifyCertificate(ctx context.Context, target deploymentTarget, leaf []byte) bool {
+func verifyCertificate(ctx context.Context, target deploymentTarget, leaf []byte) error {
 	ctx, stop := context.WithTimeout(ctx, 15*time.Second)
 	defer stop()
 	dialer := tls.Dialer{
@@ -234,16 +237,23 @@ func verifyCertificate(ctx context.Context, target deploymentTarget, leaf []byte
 			},
 		},
 	}
+	var lastErr error
 	for ctx.Err() == nil {
 		conn, err := dialer.DialContext(ctx, "tcp", target.VerifyAddress)
 		if err == nil {
 			conn.Close()
-			return true
+			return nil
+		}
+		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			lastErr = err
 		}
 		select {
 		case <-ctx.Done():
 		case <-time.After(time.Second):
 		}
 	}
-	return false
+	if lastErr == nil {
+		return ctx.Err()
+	}
+	return lastErr
 }

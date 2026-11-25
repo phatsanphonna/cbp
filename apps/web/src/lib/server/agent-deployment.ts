@@ -4,6 +4,7 @@ import { resolve } from "$app/paths";
 import {
   deploymentJobStatuses,
   deploymentSources,
+  cancelQueuedDeployment,
   findRecoverableDeployment,
   queueDeploymentRecovery,
   queueDeployments,
@@ -26,6 +27,7 @@ type DeploymentSelection = {
   endpoint: string;
   hostId: string;
   engine: string;
+  method: "Agent" | "Ansible";
 };
 
 export async function loadAgentDeployments(
@@ -53,7 +55,7 @@ export async function loadAgentDeployments(
 export async function deployCertificateAction(
   event: Pick<RequestEvent, "request" | "setHeaders" | "locals"> & Connection,
   certificateId: string,
-  method: 'Agent' | 'Ansible' = 'Agent',
+  method: "Agent" | "Ansible" | null = "Agent",
 ) {
   const { request, setHeaders, locals } = event;
   setHeaders({ "cache-control": "no-store" });
@@ -65,7 +67,7 @@ export async function deployCertificateAction(
       "A trusted HTTPS connection is required to submit a private key.",
     );
   }
-  if (!(method === 'Agent' ? getControllerToken() : getAnsibleToken()))
+  if (method && !(method === "Agent" ? getControllerToken() : getAnsibleToken()))
     return reject(503, `${method} deployment is unavailable.`);
   const fields = await request.formData().catch(() => null);
   const selected = fields && readDeploymentTargets(fields);
@@ -95,10 +97,10 @@ export async function deployCertificateAction(
     if (!source?.hostId)
       return reject(404, "A selected deployment has no linked host.");
     const { hostId, endpoint, engine, fullchain } = source;
-    if (source.method !== method)
+    if (source.method !== target.method || (method && source.method !== method))
       return reject(
         400,
-        `Set the deployment method to ${method} before deploying from CBP.`,
+        "A selected deployment method changed. Refresh the page before deploying.",
       );
     if (
       endpoint !== target.endpoint ||
@@ -113,7 +115,7 @@ export async function deployCertificateAction(
     if (!engine || !deploymentServices.some((service) => service === engine)) {
       return reject(400, "Choose a supported web service for each deployment.");
     }
-    if (method === 'Ansible' && engine !== 'Nginx')
+    if (source.method === "Ansible" && engine !== "Nginx")
       return reject(400, 'Ansible deployment currently supports Nginx.');
     if (!fullchain)
       return reject(400, "Upload the public certificate chain first.");
@@ -126,28 +128,38 @@ export async function deployCertificateAction(
       endpoint,
       engine,
       fullchain,
+      method: source.method,
     });
   }
+  if (targets.some(({ method }) => method === "Agent") && !getControllerToken())
+    return reject(503, "Agent deployment is unavailable.");
+  if (targets.some(({ method }) => method === "Ansible") && !getAnsibleToken())
+    return reject(503, "Ansible deployment is unavailable.");
   const key = await readDeploymentKey(fields, targets[0].fullchain);
   if ("message" in key) return reject(400, key.message);
-  const ansible = method === 'Ansible' ? readAnsibleCredentials(fields) : undefined;
+  const ansible = targets.some(({ method }) => method === "Ansible")
+    ? readAnsibleCredentials(fields)
+    : undefined;
   if (ansible?.message) return reject(400, ansible.message);
-  const payload = packAnsibleDeployment(key.pem, ansible?.credentials);
-
   let runId: string;
   let runSlug: string;
   let secretIds: string[] = [];
   try {
     const jobs = targets.map((target) => {
       const id = randomUUID();
-      keepDeploymentSecret(id, payload);
+      keepDeploymentSecret(
+        id,
+        target.method === "Ansible"
+          ? packAnsibleDeployment(key.pem, ansible!.credentials)
+          : key.pem,
+      );
       secretIds.push(id);
       return {
         ...target,
         id,
       };
     });
-    const result = await queueDeployments(database, owner, jobs, method);
+    const result = await queueDeployments(database, owner, jobs);
     if (result.status !== "queued") jobs.forEach(({ id }) => discardDeploymentSecret(id));
     if (result.status === "busy")
       return reject(
@@ -157,7 +169,7 @@ export async function deployCertificateAction(
     if (result.status === "unenrolled")
       return reject(
         409,
-        method === 'Agent'
+        result.method === "Agent"
           ? `Enroll an agent for ${result.endpoint} before deploying.`
           : `Register an Ansible-managed host for ${result.endpoint} before deploying.`,
       );
@@ -235,6 +247,27 @@ export async function recoverDeploymentAction(
   redirect(303, resolve("/deployments/[id]", { id: result.slug }));
 }
 
+export async function cancelQueuedDeploymentAction(
+  event: Pick<RequestEvent, "request" | "setHeaders" | "locals" | "params">,
+) {
+  const { request, setHeaders, locals } = event;
+  setHeaders({ "cache-control": "no-store" });
+  if (!locals.user?.isAdmin)
+    return fail(403, { cancelError: "An administrator account is required." });
+  const form = await request.formData().catch(() => null);
+  const id = form?.get("jobId");
+  if (typeof id !== "string" || !idPattern.test(id))
+    return fail(400, { cancelError: "Choose a queued deployment to cancel." });
+  const result = await cancelQueuedDeployment(getDatabase(), id, event.params.id);
+  if (result === "missing")
+    return fail(404, { cancelError: "This deployment could not be found." });
+  if (result === "not-queued")
+    return fail(409, { cancelError: "This deployment is no longer queued and cannot be canceled." });
+  discardDeploymentSecret(id);
+  locals.auditTargetId = id;
+  return { cancelMessage: "Queued deployment canceled." };
+}
+
 function readDeploymentTargets(fields: FormData) {
   const selected: DeploymentSelection[] = [];
   for (const value of fields.getAll("deploymentTarget")) {
@@ -245,17 +278,18 @@ function readDeploymentTargets(fields: FormData) {
     } catch {
       return null;
     }
-    if (!Array.isArray(target) || target.length !== 4) return null;
-    const [id, endpoint, hostId, engine] = target;
+    if (!Array.isArray(target) || target.length !== 5) return null;
+    const [id, endpoint, hostId, engine, method] = target;
     if (
       typeof id !== "string" ||
       typeof endpoint !== "string" ||
       typeof hostId !== "string" ||
       typeof engine !== "string" ||
+      (method !== "Agent" && method !== "Ansible") ||
       !idPattern.test(hostId)
     )
       return null;
-    selected.push({ id, endpoint, hostId, engine });
+    selected.push({ id, endpoint, hostId, engine, method });
   }
   return selected;
 }

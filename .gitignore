@@ -12,3 +12,5 @@ controller-state/
 /controller-ca.pem
 /cbp-agent-linux
 .cbp-dev
+agent
+agent.exe

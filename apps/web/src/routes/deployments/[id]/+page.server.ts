@@ -2,7 +2,10 @@ import {
   findDeploymentRun,
   listDeploymentTargets,
 } from "@cbp/database/deployment-jobs";
-import { recoverDeploymentAction } from "#lib/server/agent-deployment.js";
+import {
+  cancelQueuedDeploymentAction,
+  recoverDeploymentAction,
+} from "#lib/server/agent-deployment.js";
 import { getAnsibleToken, getControllerToken } from "#lib/server/controller-config.js";
 import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
 import { resolve } from "$app/paths";
@@ -43,6 +46,7 @@ export const load: PageServerLoad = async (event) => {
       ? dateFormatter(timeZone).format(run.submittedAt)
       : undefined,
     jobs: formatDeploymentTargets(targets, timeZone),
+    canCancel: Boolean(event.locals.user?.isAdmin),
     canRecover: {
       Agent: Boolean(getControllerToken() && hasTrustedTransport(event)),
       Ansible: Boolean(getAnsibleToken() && hasTrustedTransport(event)),
@@ -52,4 +56,5 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
   recover: (event) => recoverDeploymentAction(event),
+  cancel: (event) => cancelQueuedDeploymentAction(event),
 };

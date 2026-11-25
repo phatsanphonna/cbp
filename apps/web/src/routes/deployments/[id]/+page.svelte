@@ -12,6 +12,7 @@
   jobs={data.jobs}
   submittedAt={data.submittedAt}
   submittedLabel={data.submittedLabel}
+  canCancel={data.canCancel}
   canRecover={data.canRecover}
   recoverError={form?.recoverError}
 />

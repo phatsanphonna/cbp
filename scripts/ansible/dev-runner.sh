@@ -15,10 +15,9 @@ source "$environment"
 set +a
 export CBP_ANSIBLE_WEB_URL=${CBP_ANSIBLE_WEB_URL:-http://127.0.0.1:5173}
 inventory=${CBP_ANSIBLE_INVENTORY:-"$HOME/ansible-lab/inventory.yml"}
-targets=${CBP_ANSIBLE_TARGETS:-"$HOME/ansible-lab/targets.json"}
 
-if [[ ! -f "$inventory" || ! -f "$targets" ]]; then
-  echo "Ansible runner skipped: configure $inventory and $targets."
+if [[ ! -f "$inventory" ]]; then
+  echo "Ansible runner skipped: configure $inventory."
   exit 0
 fi
 
@@ -28,7 +27,7 @@ if [[ -n "$existing" ]]; then
   exit 0
 fi
 
-python3 "$runner" "$inventory" "$targets" &
+python3 "$runner" "$inventory" &
 runner_pid=$!
 stop_runner() {
   kill -TERM "$runner_pid" 2>/dev/null || true
