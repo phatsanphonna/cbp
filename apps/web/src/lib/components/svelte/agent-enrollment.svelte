@@ -146,16 +146,23 @@
       commands.
     </p>
   {/if}
-  {#if canEnroll && status !== 'enrolled' && (canDownloadAgent || caDownloadSource)}
+  {#if canEnroll && status !== "enrolled" && (canDownloadAgent || caDownloadSource)}
     <div class="flex flex-wrap items-center gap-2">
       {#if canDownloadAgent}
-        <Button href={resolve('/agent/download')} variant="outline" size="sm">
-          <Download data-icon="inline-start" aria-hidden="true" /> Download Linux agent
+        <Button href={resolve("/agent/download")} variant="outline" size="sm">
+          <Download data-icon="inline-start" aria-hidden="true" /> Download Linux
+          agent
         </Button>
       {/if}
       {#if caDownloadSource}
-        <Button href={resolve('/api/agent-ca')} download variant="outline" size="sm">
-          <Download data-icon="inline-start" aria-hidden="true" /> Download controller CA
+        <Button
+          href={resolve("/api/agent-ca")}
+          download
+          variant="outline"
+          size="sm"
+        >
+          <Download data-icon="inline-start" aria-hidden="true" /> Download controller
+          CA
         </Button>
         <p class="text-xs text-muted-foreground">
           Copy it to <code>{caDownloadSource}</code> on the Linux host before running
@@ -215,9 +222,9 @@
       </p>
     </div>
   {/if}
-  {#if canEnroll && status !== 'enrolled'}
+  {#if canEnroll && status !== "enrolled"}
     <a
-      href={`${resolve('/docs/agent')}#agent`}
+      href={`${resolve("/docs/agent")}#agent`}
       class="justify-self-start text-xs text-primary underline underline-offset-4"
     >
       Agent setup instructions

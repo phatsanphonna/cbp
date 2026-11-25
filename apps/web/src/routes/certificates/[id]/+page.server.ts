@@ -62,8 +62,12 @@ export const load: PageServerLoad = async (event) => {
       validUntilLabel: format.format(certificate.validUntil),
       deployments: certificate.deployments.map((deployment) => ({
         ...deployment,
-        servedCertificateExpiresAt: timestamp(deployment.hostId ? deployment.servedCertificateExpiresAt : null),
-        servedCertificateObservedAt: timestamp(deployment.hostId ? deployment.servedCertificateObservedAt : null),
+        servedCertificateExpiresAt: timestamp(
+          deployment.hostId ? deployment.servedCertificateExpiresAt : null,
+        ),
+        servedCertificateObservedAt: timestamp(
+          deployment.hostId ? deployment.servedCertificateObservedAt : null,
+        ),
       })),
     },
   };
@@ -71,7 +75,8 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
   deploy: (event) => deployCertificateAction(event, event.params.id),
-  deployAnsible: (event) => deployCertificateAction(event, event.params.id, 'Ansible'),
+  deployAnsible: (event) =>
+    deployCertificateAction(event, event.params.id, "Ansible"),
   deployMixed: (event) => deployCertificateAction(event, event.params.id, null),
   linkDeployment: ({ params, request }) =>
     linkDeploymentAction(request, { certificateId: params.id }),

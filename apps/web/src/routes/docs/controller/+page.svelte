@@ -69,7 +69,9 @@ printf '\n'`;
       </ol>
     </nav>
 
-    <article class="grid min-w-0 gap-7 text-sm leading-relaxed lg:col-start-1 lg:row-start-1">
+    <article
+      class="grid min-w-0 gap-7 text-sm leading-relaxed lg:col-start-1 lg:row-start-1"
+    >
       <p class="max-w-prose">
         Agents connect to the controller over gRPC with TLS. The controller
         calls the web app over HTTPS, and the web app stores enrollment and

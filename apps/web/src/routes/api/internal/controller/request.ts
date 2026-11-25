@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "@sveltejs/kit";
 import { getControllerToken } from "#lib/server/controller-config.js";
 import { getDatabase } from "#lib/server/database.js";
-import type { RequestEvent } from '@sveltejs/kit';
+import type { RequestEvent } from "@sveltejs/kit";
 
 const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/;
 export const digest = (value: string) =>

@@ -239,14 +239,19 @@ export async function removeDeployment(
           ),
         );
       if (running) return "busy";
-      await tx.update(deploymentJobs).set({
-        status: "Failed",
-        detail: "The linked deployment was removed.",
-        finishedAt: sql`now()`,
-      }).where(and(
-        eq(deploymentJobs.deploymentId, id),
-        inArray(deploymentJobs.status, ["Queued", "Running"]),
-      ));
+      await tx
+        .update(deploymentJobs)
+        .set({
+          status: "Failed",
+          detail: "The linked deployment was removed.",
+          finishedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(deploymentJobs.deploymentId, id),
+            inArray(deploymentJobs.status, ["Queued", "Running"]),
+          ),
+        );
     }
     await tx.delete(deployments).where(scope);
     return "removed";
@@ -273,7 +278,7 @@ export type HostReport = Pick<
 > & { lastProbedAt: Date; httpsListeners?: string | null };
 
 export async function saveHostReport(
-  db: Pick<Database, 'update'>,
+  db: Pick<Database, "update">,
   id: string,
   report: HostReport,
 ) {
@@ -305,7 +310,7 @@ export function saveHostPing(db: Database, id: string, ping: HostPing) {
     .set({
       ...ping,
       consecutivePingFailures:
-        ping.lastPingStatus === 'no-reply'
+        ping.lastPingStatus === "no-reply"
           ? sql`${hosts.consecutivePingFailures} + 1`
           : 0,
     })
@@ -320,18 +325,31 @@ export function saveHostPing(db: Database, id: string, ping: HostPing) {
 export async function removeHost(db: Database, id: string) {
   if (!inventoryId.test(id)) return false;
   return db.transaction(async (tx) => {
-    const [host] = await tx.select({ id: hosts.id }).from(hosts)
-      .where(eq(hosts.id, id)).for("update");
+    const [host] = await tx
+      .select({ id: hosts.id })
+      .from(hosts)
+      .where(eq(hosts.id, id))
+      .for("update");
     if (!host) return false;
-    const runIds = await tx.selectDistinct({ runId: deploymentJobs.runId })
-      .from(deploymentJobs).where(eq(deploymentJobs.hostId, id));
+    const runIds = await tx
+      .selectDistinct({ runId: deploymentJobs.runId })
+      .from(deploymentJobs)
+      .where(eq(deploymentJobs.hostId, id));
     await tx.delete(deploymentJobs).where(eq(deploymentJobs.hostId, id));
     for (const { runId } of runIds) {
-      await tx.delete(deploymentRuns).where(and(
-        eq(deploymentRuns.id, runId),
-        notExists(tx.select({ id: deploymentJobs.id }).from(deploymentJobs)
-          .where(eq(deploymentJobs.runId, runId))),
-      ));
+      await tx
+        .delete(deploymentRuns)
+        .where(
+          and(
+            eq(deploymentRuns.id, runId),
+            notExists(
+              tx
+                .select({ id: deploymentJobs.id })
+                .from(deploymentJobs)
+                .where(eq(deploymentJobs.runId, runId)),
+            ),
+          ),
+        );
     }
     await tx.delete(hosts).where(eq(hosts.id, id));
     return true;
@@ -378,11 +396,20 @@ export async function findHost(db: Database, id: string) {
       asc(certificates.domain),
       asc(deployments.id),
     );
-  return { ...host, deployments: endpoints.map((deployment) =>
-    deployment.method === 'Ansible'
-      ? { ...deployment, listenerStatus: null, listenerAddress: null, listenerCheckedAt: null, listenerFingerprint: null }
-      : deployment
-  ) };
+  return {
+    ...host,
+    deployments: endpoints.map((deployment) =>
+      deployment.method === "Ansible"
+        ? {
+            ...deployment,
+            listenerStatus: null,
+            listenerAddress: null,
+            listenerCheckedAt: null,
+            listenerFingerprint: null,
+          }
+        : deployment,
+    ),
+  };
 }
 
 export function listCertificates(
@@ -547,20 +574,33 @@ function violatesConstraint(error: unknown, name: string) {
 export async function removeCertificate(db: Database, id: string) {
   if (!inventoryId.test(id)) return false;
   return db.transaction(async (tx) => {
-    const [certificate] = await tx.select({ id: certificates.id }).from(certificates)
-      .where(eq(certificates.id, id)).for("update");
+    const [certificate] = await tx
+      .select({ id: certificates.id })
+      .from(certificates)
+      .where(eq(certificates.id, id))
+      .for("update");
     if (!certificate) return false;
-    const linked = await tx.select({ id: deployments.id }).from(deployments)
+    const linked = await tx
+      .select({ id: deployments.id })
+      .from(deployments)
       .where(eq(deployments.certificateId, id));
     if (linked.length) {
-      await tx.update(deploymentJobs).set({
-        status: "Failed",
-        detail: "The certificate was removed.",
-        finishedAt: sql`now()`,
-      }).where(and(
-        inArray(deploymentJobs.deploymentId, linked.map(({ id: deploymentId }) => deploymentId)),
-        inArray(deploymentJobs.status, ["Queued", "Running"]),
-      ));
+      await tx
+        .update(deploymentJobs)
+        .set({
+          status: "Failed",
+          detail: "The certificate was removed.",
+          finishedAt: sql`now()`,
+        })
+        .where(
+          and(
+            inArray(
+              deploymentJobs.deploymentId,
+              linked.map(({ id: deploymentId }) => deploymentId),
+            ),
+            inArray(deploymentJobs.status, ["Queued", "Running"]),
+          ),
+        );
     }
     await tx.delete(deploymentRuns).where(eq(deploymentRuns.certificateId, id));
     await tx.delete(certificates).where(eq(certificates.id, id));
@@ -580,7 +620,11 @@ export function listAlerts(db: Database, openOnly = false) {
   return db
     .select()
     .from(alerts)
-    .where(openOnly ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)) : undefined)
+    .where(
+      openOnly
+        ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt))
+        : undefined,
+    )
     .orderBy(desc(alerts.detectedAt));
 }
 
@@ -597,7 +641,11 @@ export function addChannel(
   db: Database,
   values: Pick<
     typeof channels.$inferInsert,
-    'provider' | 'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'
+    | "provider"
+    | "destination"
+    | "severity"
+    | "encryptedSettings"
+    | "certificateIds"
   >,
 ) {
   return db
@@ -618,31 +666,51 @@ export function setChannelEnabled(db: Database, id: number, enabled: boolean) {
 export function updateChannel(
   db: Database,
   id: number,
-  values: Pick<typeof channels.$inferInsert, 'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'>,
+  values: Pick<
+    typeof channels.$inferInsert,
+    "destination" | "severity" | "encryptedSettings" | "certificateIds"
+  >,
 ) {
-  return db.update(channels)
+  return db
+    .update(channels)
     .set(values)
     .where(eq(channels.id, id))
     .returning({ id: channels.id });
 }
 
-export async function bindChannelToCertificate(db: Database, id: number, certificateId: string) {
+export async function bindChannelToCertificate(
+  db: Database,
+  id: number,
+  certificateId: string,
+) {
   if (!inventoryId.test(certificateId)) return false;
   const selected = sql`${certificateId}::uuid`;
-  const [updated] = await db.update(channels).set({
-    certificateIds: sql`case when ${selected} = any(${channels.certificateIds})
+  const [updated] = await db
+    .update(channels)
+    .set({
+      certificateIds: sql`case when ${selected} = any(${channels.certificateIds})
       then ${channels.certificateIds}
       else array_append(coalesce(${channels.certificateIds}, '{}'::uuid[]), ${selected})
       end`,
-  }).where(and(
-    eq(channels.id, id),
-    exists(db.select({ id: certificates.id }).from(certificates).where(eq(certificates.id, certificateId))),
-  )).returning({ id: channels.id });
+    })
+    .where(
+      and(
+        eq(channels.id, id),
+        exists(
+          db
+            .select({ id: certificates.id })
+            .from(certificates)
+            .where(eq(certificates.id, certificateId)),
+        ),
+      ),
+    )
+    .returning({ id: channels.id });
   return Boolean(updated);
 }
 
 export function removeChannel(db: Database, id: number) {
-  return db.delete(channels)
+  return db
+    .delete(channels)
     .where(eq(channels.id, id))
     .returning({ id: channels.id });
 }

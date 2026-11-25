@@ -1,18 +1,18 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
   import { resolve } from "$app/paths";
-  import { ChevronDown } from '@lucide/svelte';
+  import { ChevronDown } from "@lucide/svelte";
   import CertificateChainFields from "#lib/components/svelte/certificate-chain-fields.svelte";
   import DeployCertificateDialog from "#lib/components/svelte/deploy-certificate-dialog.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
-  import ServedCertificateExpiry from '#lib/components/svelte/served-certificate-expiry.svelte';
+  import ServedCertificateExpiry from "#lib/components/svelte/served-certificate-expiry.svelte";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
-  import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.ts';
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
   import { FieldGroup } from "#lib/components/ui/field/index.ts";
   import * as Table from "#lib/components/ui/table/index.ts";
   import { deploymentServices } from "#lib/deployment-services.js";
@@ -28,7 +28,9 @@
   let removeOpen = $state(false);
   let restorePending = $state(false);
   const certificate = $derived(data.certificate);
-  const hostLabels = $derived(new Map(data.hostOptions.map(({ id, label }) => [id, label])));
+  const hostLabels = $derived(
+    new Map(data.hostOptions.map(({ id, label }) => [id, label])),
+  );
   const verified = $derived(
     certificate.deployments.filter(({ status }) => status === "Verified")
       .length,
@@ -44,12 +46,25 @@
     ),
   );
   const ansibleTargets = $derived(
-    certificate.deployments.flatMap(({ id, hostId, hostName, endpoint, engine, method, ansibleManaged }) =>
-      method === 'Ansible' && ansibleManaged && hostId && hostName &&
-      engine === 'Nginx' && !busyHosts.has(hostId)
-        ? [{ id, hostId, hostLabel: hostLabels.get(hostId) ?? hostName, endpoint, engine }]
-        : []
-    )
+    certificate.deployments.flatMap(
+      ({ id, hostId, hostName, endpoint, engine, method, ansibleManaged }) =>
+        method === "Ansible" &&
+        ansibleManaged &&
+        hostId &&
+        hostName &&
+        engine === "Nginx" &&
+        !busyHosts.has(hostId)
+          ? [
+              {
+                id,
+                hostId,
+                hostLabel: hostLabels.get(hostId) ?? hostName,
+                endpoint,
+                engine,
+              },
+            ]
+          : [],
+    ),
   );
   const deploymentTargets = $derived(
     certificate.deployments.flatMap(
@@ -61,14 +76,25 @@
         !busyHosts.has(hostId) &&
         engine &&
         deploymentServices.some((service) => service === engine)
-          ? [{ id, hostId, hostLabel: hostLabels.get(hostId) ?? hostName, endpoint, engine }]
+          ? [
+              {
+                id,
+                hostId,
+                hostLabel: hostLabels.get(hostId) ?? hostName,
+                endpoint,
+                engine,
+              },
+            ]
           : [],
     ),
   );
-  const canDeployAnsible = $derived(data.agentDeployments.ansibleEnabled && !data.agentDeployments.httpsRequired);
+  const canDeployAnsible = $derived(
+    data.agentDeployments.ansibleEnabled &&
+      !data.agentDeployments.httpsRequired,
+  );
 
   function focusCertificateActions(event: Event) {
-    const trigger = document.getElementById('certificate-actions');
+    const trigger = document.getElementById("certificate-actions");
     if (!trigger) return;
     event.preventDefault();
     trigger.focus();
@@ -101,7 +127,9 @@
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
-      <Button href={resolve('/certificates')} variant="outline">Back to certificates</Button>
+      <Button href={resolve("/certificates")} variant="outline"
+        >Back to certificates</Button
+      >
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           {#snippet child({ props })}
@@ -120,17 +148,28 @@
           <DropdownMenu.Group>
             <DropdownMenu.Item>
               {#snippet child({ props })}
-                <a {...props} href={resolve('/alerts/channels') + `?certificate=${encodeURIComponent(certificate.id)}`}>
+                <a
+                  {...props}
+                  href={resolve("/alerts/channels") +
+                    `?certificate=${encodeURIComponent(certificate.id)}`}
+                >
                   Notification channels
                 </a>
               {/snippet}
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
-            <DropdownMenu.Item onSelect={() => (updateOpen = true)}>Update fullchain</DropdownMenu.Item>
+            <DropdownMenu.Item onSelect={() => (updateOpen = true)}
+              >Update fullchain</DropdownMenu.Item
+            >
             {#if certificate.previousChainRevision}
-              <DropdownMenu.Item onSelect={() => (restoreOpen = true)}>Restore previous fullchain</DropdownMenu.Item>
+              <DropdownMenu.Item onSelect={() => (restoreOpen = true)}
+                >Restore previous fullchain</DropdownMenu.Item
+              >
             {/if}
-            <DropdownMenu.Item variant="destructive" onSelect={() => (removeOpen = true)}>
+            <DropdownMenu.Item
+              variant="destructive"
+              onSelect={() => (removeOpen = true)}
+            >
               Remove certificate
             </DropdownMenu.Item>
           </DropdownMenu.Group>
@@ -389,7 +428,8 @@
                   <a
                     href={resolve("/hosts/[id]", { id: deployment.hostId })}
                     class="text-primary underline underline-offset-4"
-                    >{hostLabels.get(deployment.hostId) ?? deployment.hostName}</a
+                    >{hostLabels.get(deployment.hostId) ??
+                      deployment.hostName}</a
                   >
                 {:else}
                   <span class="text-muted-foreground">Unlinked</span>

@@ -50,7 +50,10 @@ if (certPath && keyPath) {
       const path = new URL(request.url).pathname;
       if (
         request.method !== "POST" ||
-        !(path.startsWith("/api/internal/controller/") || path === "/api/internal/ansible")
+        !(
+          path.startsWith("/api/internal/controller/") ||
+          path === "/api/internal/ansible"
+        )
       ) {
         return new Response(null, { status: 404 });
       }

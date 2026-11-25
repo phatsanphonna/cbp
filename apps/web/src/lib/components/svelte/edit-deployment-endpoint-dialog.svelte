@@ -1,8 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import { toast } from 'svelte-sonner';
+  import { toast } from "svelte-sonner";
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
-  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import FormSelect from "#lib/components/svelte/form-select.svelte";
   import RemoveDeploymentDialog from "#lib/components/svelte/remove-deployment-dialog.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
@@ -37,11 +37,14 @@
     engine && !deploymentServices.some((service) => service === engine),
   );
   const serviceOptions = $derived([
-    ...(legacyService && engine ? [{ value: 'keep', label: engine }] : []),
-    { value: '', label: 'Not specified' },
+    ...(legacyService && engine ? [{ value: "keep", label: engine }] : []),
+    { value: "", label: "Not specified" },
     ...deploymentServices.map((value) => ({ value, label: value })),
   ]);
-  const methodOptions = deploymentMethods.map((value) => ({ value, label: value }));
+  const methodOptions = deploymentMethods.map((value) => ({
+    value,
+    label: value,
+  }));
   const parts = $derived(/^(?:\[([^\]]+)\]|([^:]+)):(\d{1,5})$/.exec(endpoint));
   const host = $derived(parts?.[1] ?? parts?.[2] ?? endpoint);
   const port = $derived(parts ? Number(parts[3]) : 443);
@@ -77,9 +80,9 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === 'success') {
+            if (result.type === "success") {
               open = false;
-              if (typeof result.data?.endpointMessage === 'string') {
+              if (typeof result.data?.endpointMessage === "string") {
                 toast.success(result.data.endpointMessage);
               }
             }
@@ -98,7 +101,7 @@
             {id}
             name="engine"
             items={serviceOptions}
-            value={legacyService ? 'keep' : (engine ?? '')}
+            value={legacyService ? "keep" : (engine ?? "")}
             placeholder="Not specified"
           />
         </Field>

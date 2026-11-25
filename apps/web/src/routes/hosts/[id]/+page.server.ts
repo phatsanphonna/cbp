@@ -35,7 +35,7 @@ import {
   updateDeploymentEndpointAction,
 } from "#lib/server/deployment-actions.js";
 import { pingHost, pingLabels } from "#lib/server/ping-host.js";
-import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
+import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
 import { displayCertificateDomain } from "../../certificates/display-domain.js";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -59,7 +59,9 @@ export const load: PageServerLoad = async (event) => {
   return {
     agentDeployments,
     enrollment: {
-      canDownloadAgent: Boolean(event.locals.user?.isAdmin && hasTrustedTransport(event)),
+      canDownloadAgent: Boolean(
+        event.locals.user?.isAdmin && hasTrustedTransport(event),
+      ),
       configured: Boolean(
         normalizeAgentControllerAddress(CBP_AGENT_CONTROLLER_ADDRESS),
       ),
@@ -84,8 +86,12 @@ export const load: PageServerLoad = async (event) => {
       deployments: host.deployments.map((deployment) => ({
         ...deployment,
         listenerCheckedAt: timestamp(deployment.listenerCheckedAt),
-        servedCertificateExpiresAt: timestamp(deployment.servedCertificateExpiresAt),
-        servedCertificateObservedAt: timestamp(deployment.servedCertificateObservedAt),
+        servedCertificateExpiresAt: timestamp(
+          deployment.servedCertificateExpiresAt,
+        ),
+        servedCertificateObservedAt: timestamp(
+          deployment.servedCertificateObservedAt,
+        ),
       })),
       lastPingAt: timestamp(host.lastPingAt),
       lastPingLabel: host.lastPingStatus
@@ -114,8 +120,10 @@ export const actions: Actions = {
       enableAgent: true,
     });
     if (result === "missing") error(404, "Host not found");
-    if (result === 'unsupported')
-      return fail(400, { enrollmentError: 'Agent enrollment is available for Linux hosts only.' });
+    if (result === "unsupported")
+      return fail(400, {
+        enrollmentError: "Agent enrollment is available for Linux hosts only.",
+      });
     if (result === "conflict")
       return fail(409, {
         enrollmentError:

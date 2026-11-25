@@ -13,7 +13,7 @@
     FieldSet,
   } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
-  import * as Select from '#lib/components/ui/select/index.ts';
+  import * as Select from "#lib/components/ui/select/index.ts";
 
   type Target = {
     id: string;
@@ -36,14 +36,24 @@
   } = $props();
   const id = $props.id();
   let pending = $state(false);
-  let hostSearch = $state('');
+  let hostSearch = $state("");
   let selected = $state<string[]>([]);
-  let becomeMethod = $state<'sudo' | 'su'>('sudo');
-  let suPassword = $state('');
+  let becomeMethod = $state<"sudo" | "su">("sudo");
+  let suPassword = $state("");
   const choices = $derived(
     [
-      ...(canDeployAgent ? agentTargets.map((target) => ({ ...target, method: 'Agent' as const })) : []),
-      ...(canDeployAnsible ? ansibleTargets.map((target) => ({ ...target, method: 'Ansible' as const })) : []),
+      ...(canDeployAgent
+        ? agentTargets.map((target) => ({
+            ...target,
+            method: "Agent" as const,
+          }))
+        : []),
+      ...(canDeployAnsible
+        ? ansibleTargets.map((target) => ({
+            ...target,
+            method: "Ansible" as const,
+          }))
+        : []),
     ].map((target) => ({
       ...target,
       value: JSON.stringify([
@@ -55,24 +65,33 @@
       ]),
     })),
   );
-  const searchTerms = $derived(hostSearch.trim().toLowerCase().split(/\s+/).filter(Boolean));
-  const visibleChoices = $derived(searchTerms.length
-    ? choices.filter(({ hostLabel, endpoint, engine, method }) => {
-        const label = `${hostLabel} ${endpoint} ${engine} ${method}`.toLowerCase();
-        return searchTerms.every((term) => label.includes(term));
-      })
-    : choices);
+  const searchTerms = $derived(
+    hostSearch.trim().toLowerCase().split(/\s+/).filter(Boolean),
+  );
+  const visibleChoices = $derived(
+    searchTerms.length
+      ? choices.filter(({ hostLabel, endpoint, engine, method }) => {
+          const label =
+            `${hostLabel} ${endpoint} ${engine} ${method}`.toLowerCase();
+          return searchTerms.every((term) => label.includes(term));
+        })
+      : choices,
+  );
   const selectedValues = $derived(new Set(selected));
-  const selectedChoices = $derived(choices.filter(({ value }) => selectedValues.has(value)));
+  const selectedChoices = $derived(
+    choices.filter(({ value }) => selectedValues.has(value)),
+  );
   const selectedHosts = $derived(
     new Set(selectedChoices.map(({ hostId }) => hostId)),
   );
   const hasAnsibleSelected = $derived(
-    selectedChoices.some(({ method }) => method === 'Ansible'),
+    selectedChoices.some(({ method }) => method === "Ansible"),
   );
 
   function selectTarget(value: string, checked: boolean) {
-    selected = checked ? [...selected, value] : selected.filter((item) => item !== value);
+    selected = checked
+      ? [...selected, value]
+      : selected.filter((item) => item !== value);
   }
 </script>
 
@@ -84,8 +103,8 @@
           {...props}
           variant="outline"
           size="sm"
-          disabled={!choices.length}
-        >Deploy</Button>
+          disabled={!choices.length}>Deploy</Button
+        >
       {/snippet}
     </Dialog.Trigger>
   {/if}
@@ -121,24 +140,29 @@
         <FieldSet>
           <FieldLegend variant="label" required>Hosts</FieldLegend>
           <Field>
-            <FieldLabel for="{id}-host-search" class="sr-only">Search deployment hosts</FieldLabel>
+            <FieldLabel for="{id}-host-search" class="sr-only"
+              >Search deployment hosts</FieldLabel
+            >
             <Input
               id="{id}-host-search"
               type="search"
               placeholder="Search host, endpoint, service, or method"
               bind:value={hostSearch}
               onkeydown={(event) => {
-                if (event.key === 'Enter') event.preventDefault();
+                if (event.key === "Enter") event.preventDefault();
               }}
             />
           </Field>
           <p class="text-xs text-muted-foreground" aria-live="polite">
-            {selectedChoices.length} selected · {visibleChoices.length} of {choices.length} endpoints shown
+            {selectedChoices.length} selected · {visibleChoices.length} of {choices.length}
+            endpoints shown
           </p>
           {#each selectedChoices as choice (choice.id)}
             <input type="hidden" name="deploymentTarget" value={choice.value} />
           {/each}
-          <FieldGroup class="max-h-64 gap-2 overflow-y-auto overscroll-contain border p-2">
+          <FieldGroup
+            class="max-h-64 gap-2 overflow-y-auto overscroll-contain border p-2"
+          >
             {#each visibleChoices as choice (choice.id)}
               <Field orientation="horizontal">
                 <span class="grid size-4 shrink-0 place-items-center">
@@ -146,7 +170,8 @@
                     type="checkbox"
                     id="{id}-{choice.id}"
                     checked={selectedValues.has(choice.value)}
-                    onchange={(event) => selectTarget(choice.value, event.currentTarget.checked)}
+                    onchange={(event) =>
+                      selectTarget(choice.value, event.currentTarget.checked)}
                     class="peer col-start-1 row-start-1 size-4 appearance-none border border-input bg-background checked:border-primary checked:bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50 forced-colors:appearance-auto"
                     disabled={pending ||
                       (selectedHosts.has(choice.hostId) &&
@@ -169,7 +194,9 @@
               </Field>
             {:else}
               <p class="px-2 py-3 text-xs text-muted-foreground">
-                {choices.length ? 'No endpoints match your search.' : 'No eligible endpoints are available.'}
+                {choices.length
+                  ? "No endpoints match your search."
+                  : "No eligible endpoints are available."}
               </p>
             {/each}
           </FieldGroup>
@@ -209,23 +236,51 @@
         </FieldSet>
         {#if hasAnsibleSelected}
           <FieldSet>
-            <FieldLegend variant="label" required>Ansible credentials</FieldLegend>
-            <FieldDescription>These credentials are used for this deployment only.</FieldDescription>
+            <FieldLegend variant="label" required
+              >Ansible credentials</FieldLegend
+            >
+            <FieldDescription
+              >These credentials are used for this deployment only.</FieldDescription
+            >
             <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field>
                 <FieldLabel for="{id}-ssh-username">SSH username</FieldLabel>
-                <Input id="{id}-ssh-username" name="sshUsername" autocomplete="username" maxlength={256} required />
+                <Input
+                  id="{id}-ssh-username"
+                  name="sshUsername"
+                  autocomplete="username"
+                  maxlength={256}
+                  required
+                />
               </Field>
               <Field>
                 <FieldLabel for="{id}-ssh-password">SSH password</FieldLabel>
-                <Input id="{id}-ssh-password" name="sshPassword" type="password" autocomplete="new-password" maxlength={1024} required />
+                <Input
+                  id="{id}-ssh-password"
+                  name="sshPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength={1024}
+                  required
+                />
               </Field>
             </FieldGroup>
             <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Field>
                 <FieldLabel for="{id}-become-method">Become method</FieldLabel>
-                <Select.Root type="single" value={becomeMethod} onValueChange={(value) => { if (value === 'sudo' || value === 'su') { becomeMethod = value; if (value === 'sudo') suPassword = ''; } }}>
-                  <Select.Trigger id="{id}-become-method">{becomeMethod}</Select.Trigger>
+                <Select.Root
+                  type="single"
+                  value={becomeMethod}
+                  onValueChange={(value) => {
+                    if (value === "sudo" || value === "su") {
+                      becomeMethod = value;
+                      if (value === "sudo") suPassword = "";
+                    }
+                  }}
+                >
+                  <Select.Trigger id="{id}-become-method"
+                    >{becomeMethod}</Select.Trigger
+                  >
                   <Select.Content>
                     <Select.Group>
                       <Select.Item value="sudo" label="sudo" />
@@ -237,7 +292,17 @@
               </Field>
               <Field class="sm:col-span-2">
                 <FieldLabel for="{id}-su-password">Root su password</FieldLabel>
-                <Input id="{id}-su-password" name="suPassword" type="password" autocomplete="new-password" maxlength={1024} bind:value={suPassword} disabled={becomeMethod !== 'su'} required={becomeMethod === 'su'} class="disabled:pointer-events-auto disabled:cursor-not-allowed" />
+                <Input
+                  id="{id}-su-password"
+                  name="suPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength={1024}
+                  bind:value={suPassword}
+                  disabled={becomeMethod !== "su"}
+                  required={becomeMethod === "su"}
+                  class="disabled:pointer-events-auto disabled:cursor-not-allowed"
+                />
               </Field>
             </FieldGroup>
           </FieldSet>

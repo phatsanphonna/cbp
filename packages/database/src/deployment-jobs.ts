@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 import { withAgentHost } from "./host-agents.js";
 import type { openDatabase } from "./index.js";
-import { saveHostReport, type HostReport } from './inventory.js';
+import { saveHostReport, type HostReport } from "./inventory.js";
 import {
   certificates,
   deploymentJobs,
@@ -27,16 +27,12 @@ type Database = ReturnType<typeof openDatabase>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Owner = { hostId: string } | { certificateId: string };
 type Job = typeof deploymentJobs.$inferSelect;
-type Worker = { method: 'Agent'; hash: string } | { method: 'Ansible'; endpoint: string };
+type Worker =
+  { method: "Agent"; hash: string } | { method: "Ansible"; endpoint: string };
 const inventoryId = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 type DeploymentPayload = Pick<
   Job,
-  | "id"
-  | "deploymentId"
-  | "hostId"
-  | "engine"
-  | "endpoint"
-  | "fullchain"
+  "id" | "deploymentId" | "hostId" | "engine" | "endpoint" | "fullchain"
 > & { method?: Job["method"] };
 const active = inArray(deploymentJobs.status, ["Queued", "Running"]);
 const unexpired = gt(deploymentJobs.expiresAt, sql`now()`);
@@ -242,7 +238,11 @@ export function listDeploymentTargets(
         ? eq(deploymentJobs.runId, filter.runId)
         : inArray(deploymentJobs.id, filter.jobIds),
     )
-    .orderBy(deploymentJobs.hostName, deploymentJobs.endpoint, deploymentJobs.id);
+    .orderBy(
+      deploymentJobs.hostName,
+      deploymentJobs.endpoint,
+      deploymentJobs.id,
+    );
 }
 
 export function listAnsibleDeploymentTargets(db: Database) {
@@ -334,17 +334,29 @@ export async function queueDeployments(
   const hostIds = [...new Set(payloads.map(({ hostId }) => hostId))];
   if (!hostIds.length || hostIds.length !== payloads.length)
     return { status: "invalid" } as const;
-  const methodFor = (payload: DeploymentPayload) => payload.method ?? defaultMethod;
+  const methodFor = (payload: DeploymentPayload) =>
+    payload.method ?? defaultMethod;
 
   return db.transaction(async (tx) => {
     // Use the same host locks as claim, completion and deletion, in a consistent order for batches.
     const eligible = await tx
       .select({ id: hosts.id, name: hosts.name })
       .from(hosts)
-      .where(or(...payloads.map((payload) => and(
-        eq(hosts.id, payload.hostId),
-        eq(methodFor(payload) === "Agent" ? hosts.agentManaged : hosts.ansibleManaged, true),
-      ))))
+      .where(
+        or(
+          ...payloads.map((payload) =>
+            and(
+              eq(hosts.id, payload.hostId),
+              eq(
+                methodFor(payload) === "Agent"
+                  ? hosts.agentManaged
+                  : hosts.ansibleManaged,
+                true,
+              ),
+            ),
+          ),
+        ),
+      )
       .orderBy(asc(hosts.id))
       .for("update");
     const eligibleIds = new Set(eligible.map(({ id }) => id));
@@ -352,18 +364,17 @@ export async function queueDeployments(
     const agentHostIds = payloads
       .filter((payload) => methodFor(payload) === "Agent")
       .map(({ hostId }) => hostId);
-    const agents = agentHostIds.length ? await tx
-      .select({ hostId: hostAgents.hostId, hash: hostAgents.tokenHash })
-      .from(hostAgents)
-      .where(
-        and(
-          inArray(
-            hostAgents.hostId,
-            agentHostIds,
-          ),
-          isNotNull(hostAgents.tokenHash),
-        ),
-      ) : [];
+    const agents = agentHostIds.length
+      ? await tx
+          .select({ hostId: hostAgents.hostId, hash: hostAgents.tokenHash })
+          .from(hostAgents)
+          .where(
+            and(
+              inArray(hostAgents.hostId, agentHostIds),
+              isNotNull(hostAgents.tokenHash),
+            ),
+          )
+      : [];
     const hashes = new Map(agents.map(({ hostId, hash }) => [hostId, hash]));
     const busy = await tx
       .select({ hostId: deploymentJobs.hostId })
@@ -381,7 +392,7 @@ export async function queueDeployments(
     const rows: (DeploymentPayload & {
       hostName: string;
       agentHash: string | null;
-      method: Job['method'];
+      method: Job["method"];
       status: "Queued";
       expiresAt: typeof expiresAt;
     })[] = [];
@@ -389,7 +400,7 @@ export async function queueDeployments(
       const { deploymentId, hostId, endpoint, engine, fullchain } = payload;
       const method = methodFor(payload);
       const hash = hashes.get(hostId) ?? null;
-      if (!eligibleIds.has(hostId) || (method === 'Agent' && !hash))
+      if (!eligibleIds.has(hostId) || (method === "Agent" && !hash))
         return { status: "unenrolled", endpoint, method } as const;
       if (busyHosts.has(hostId)) return { status: "busy", endpoint } as const;
       const source = current.get(deploymentId);
@@ -442,12 +453,14 @@ export async function findRecoverableDeployment(db: Database, jobId: string) {
       fullchain: deploymentJobs.fullchain,
     })
     .from(deploymentJobs)
-    .where(and(
-      eq(deploymentJobs.id, jobId),
-      inArray(deploymentJobs.status, ["Deployed", "Failed"]),
-      isNotNull(deploymentJobs.deploymentId),
-      isNotNull(deploymentJobs.hostId),
-    ));
+    .where(
+      and(
+        eq(deploymentJobs.id, jobId),
+        inArray(deploymentJobs.status, ["Deployed", "Failed"]),
+        isNotNull(deploymentJobs.deploymentId),
+        isNotNull(deploymentJobs.hostId),
+      ),
+    );
   return job ?? null;
 }
 
@@ -457,51 +470,73 @@ export async function queueDeploymentRecovery(
   id: string,
 ) {
   const source = await findRecoverableDeployment(db, sourceId);
-  if (!source?.hostId || !source.deploymentId) return { status: "missing" } as const;
+  if (!source?.hostId || !source.deploymentId)
+    return { status: "missing" } as const;
 
   return db.transaction(async (tx) => {
-    const [host] = await tx.select({
-      id: hosts.id,
-      name: hosts.name,
-      agentManaged: hosts.agentManaged,
-      ansibleManaged: hosts.ansibleManaged,
-    }).from(hosts).where(eq(hosts.id, source.hostId!)).for("update");
-    if (!host || (source.method === "Agent" ? !host.agentManaged : !host.ansibleManaged))
+    const [host] = await tx
+      .select({
+        id: hosts.id,
+        name: hosts.name,
+        agentManaged: hosts.agentManaged,
+        ansibleManaged: hosts.ansibleManaged,
+      })
+      .from(hosts)
+      .where(eq(hosts.id, source.hostId!))
+      .for("update");
+    if (
+      !host ||
+      (source.method === "Agent" ? !host.agentManaged : !host.ansibleManaged)
+    )
       return { status: "missing" } as const;
 
-    const [deployment] = await tx.select({
-      id: deployments.id,
-      certificateId: deployments.certificateId,
-      endpoint: deployments.endpoint,
-      engine: deployments.engine,
-      method: deployments.method,
-      hostId: deployments.hostId,
-      certificateName: certificates.domain,
-      certificateSans: certificates.sans,
-      certificateFingerprint: certificates.fingerprint,
-    }).from(deployments)
+    const [deployment] = await tx
+      .select({
+        id: deployments.id,
+        certificateId: deployments.certificateId,
+        endpoint: deployments.endpoint,
+        engine: deployments.engine,
+        method: deployments.method,
+        hostId: deployments.hostId,
+        certificateName: certificates.domain,
+        certificateSans: certificates.sans,
+        certificateFingerprint: certificates.fingerprint,
+      })
+      .from(deployments)
       .innerJoin(certificates, eq(certificates.id, deployments.certificateId))
-      .where(and(
-        eq(deployments.id, source.deploymentId),
-        eq(deployments.hostId, host.id),
-      )).for("share", { of: deployments });
-    if (!deployment || deployment.endpoint !== source.endpoint ||
-      deployment.engine !== source.engine || deployment.method !== source.method)
+      .where(
+        and(
+          eq(deployments.id, source.deploymentId),
+          eq(deployments.hostId, host.id),
+        ),
+      )
+      .for("share", { of: deployments });
+    if (
+      !deployment ||
+      deployment.endpoint !== source.endpoint ||
+      deployment.engine !== source.engine ||
+      deployment.method !== source.method
+    )
       return { status: "missing" } as const;
 
-    const [busy] = await tx.select({ id: deploymentJobs.id }).from(deploymentJobs)
+    const [busy] = await tx
+      .select({ id: deploymentJobs.id })
+      .from(deploymentJobs)
       .where(and(eq(deploymentJobs.hostId, host.id), active, unexpired));
     if (busy) return { status: "busy" } as const;
 
-    const currentAgentHash = source.method === "Agent" ? await agentHash(tx, host.id) : null;
+    const currentAgentHash =
+      source.method === "Agent" ? await agentHash(tx, host.id) : null;
     if (source.method === "Agent" && !currentAgentHash)
       return { status: "missing" } as const;
 
-    const [oldRun] = await tx.select({
-      certificateName: deploymentRuns.certificateName,
-      certificateSans: deploymentRuns.certificateSans,
-      certificateFingerprint: deploymentRuns.certificateFingerprint,
-    }).from(deploymentJobs)
+    const [oldRun] = await tx
+      .select({
+        certificateName: deploymentRuns.certificateName,
+        certificateSans: deploymentRuns.certificateSans,
+        certificateFingerprint: deploymentRuns.certificateFingerprint,
+      })
+      .from(deploymentJobs)
       .innerJoin(deploymentRuns, eq(deploymentRuns.id, deploymentJobs.runId))
       .where(eq(deploymentJobs.id, source.id));
     if (!oldRun) return { status: "missing" } as const;
@@ -536,15 +571,20 @@ function withDeploymentHost<T>(
   worker: Worker,
   work: (tx: Transaction) => Promise<T>,
 ) {
-  if (worker.method === 'Agent') {
+  if (worker.method === "Agent") {
     return withAgentHost(db, hostId, async (tx) =>
-      (await agentHash(tx, hostId)) === worker.hash ? work(tx) : 'denied' as const
+      (await agentHash(tx, hostId)) === worker.hash
+        ? work(tx)
+        : ("denied" as const),
     );
   }
   return db.transaction(async (tx) => {
-    const [host] = await tx.select({ id: hosts.id }).from(hosts)
-      .where(and(eq(hosts.id, hostId), eq(hosts.ansibleManaged, true))).for('update');
-    return host ? work(tx) : 'missing' as const;
+    const [host] = await tx
+      .select({ id: hosts.id })
+      .from(hosts)
+      .where(and(eq(hosts.id, hostId), eq(hosts.ansibleManaged, true)))
+      .for("update");
+    return host ? work(tx) : ("missing" as const);
   });
 }
 
@@ -552,7 +592,9 @@ function workerJobs(hostId: string, worker: Worker) {
   return and(
     eq(deploymentJobs.hostId, hostId),
     eq(deploymentJobs.method, worker.method),
-    worker.method === 'Agent' ? eq(deploymentJobs.agentHash, worker.hash) : eq(deploymentJobs.endpoint, worker.endpoint),
+    worker.method === "Agent"
+      ? eq(deploymentJobs.agentHash, worker.hash)
+      : eq(deploymentJobs.endpoint, worker.endpoint),
   );
 }
 
@@ -563,21 +605,34 @@ export function appendDeploymentLog(
   jobId: string,
   message: string,
 ) {
-  const worker = typeof identity === 'string' ? { method: 'Agent', hash: identity } as const : identity;
+  const worker =
+    typeof identity === "string"
+      ? ({ method: "Agent", hash: identity } as const)
+      : identity;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
-    const [job] = await tx.update(deploymentJobs).set({
-      log: sql`right(${deploymentJobs.log} || to_char(now(), 'YYYY-MM-DD HH24:MI:SS') || ' ' || ${message} || E'\\n', 65536)`,
-    }).where(and(
-      workerJobs(hostId, worker),
-      eq(deploymentJobs.id, jobId),
-      eq(deploymentJobs.status, 'Running'),
-      unexpired,
-    )).returning({ id: deploymentJobs.id });
-    return job ? 'ok' : 'missing';
+    const [job] = await tx
+      .update(deploymentJobs)
+      .set({
+        log: sql`right(${deploymentJobs.log} || to_char(now(), 'YYYY-MM-DD HH24:MI:SS') || ' ' || ${message} || E'\\n', 65536)`,
+      })
+      .where(
+        and(
+          workerJobs(hostId, worker),
+          eq(deploymentJobs.id, jobId),
+          eq(deploymentJobs.status, "Running"),
+          unexpired,
+        ),
+      )
+      .returning({ id: deploymentJobs.id });
+    return job ? "ok" : "missing";
   });
 }
 
-export function cancelQueuedDeployment(db: Database, id: string, runSlug: string) {
+export function cancelQueuedDeployment(
+  db: Database,
+  id: string,
+  runSlug: string,
+) {
   return db.transaction(async (tx) => {
     const [job] = await tx
       .select({ hostId: deploymentJobs.hostId, runId: deploymentJobs.runId })
@@ -596,7 +651,8 @@ export function cancelQueuedDeployment(db: Database, id: string, runSlug: string
       .update(deploymentJobs)
       .set({
         status: "Failed",
-        detail: "Canceled by an administrator before a worker claimed the deployment.",
+        detail:
+          "Canceled by an administrator before a worker claimed the deployment.",
         finishedAt: sql`now()`,
         log: sql`right(${deploymentJobs.log} || to_char(now(), 'YYYY-MM-DD HH24:MI:SS') || ' Deployment canceled before worker claim.' || E'\\n', 65536)`,
       })
@@ -618,7 +674,10 @@ export function claimDeployment<T>(
   identity: string | Worker,
   materialize: (job: Job, collectHostFacts: boolean) => T,
 ) {
-  const worker = typeof identity === 'string' ? { method: 'Agent', hash: identity } as const : identity;
+  const worker =
+    typeof identity === "string"
+      ? ({ method: "Agent", hash: identity } as const)
+      : identity;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
     const [job] = await tx
       .select()
@@ -634,7 +693,10 @@ export function claimDeployment<T>(
       .for("update");
     if (!job) return null;
     const [source] = job.deploymentId
-      ? await deploymentSources(tx, { hostId }, [job.deploymentId]).for("share", { of: deployments })
+      ? await deploymentSources(tx, { hostId }, [job.deploymentId]).for(
+          "share",
+          { of: deployments },
+        )
       : [];
     if (
       !job.deploymentId ||
@@ -655,7 +717,8 @@ export function claimDeployment<T>(
         .where(eq(deploymentJobs.id, job.id));
       return null;
     }
-    const collectHostFacts = worker.method === 'Ansible' && !(await agentHash(tx, hostId));
+    const collectHostFacts =
+      worker.method === "Ansible" && !(await agentHash(tx, hostId));
     const payload = materialize(job, collectHostFacts);
     await tx
       .update(deploymentJobs)
@@ -674,22 +737,25 @@ export function saveAnsibleHostReport(
   hostId: string,
   endpoint: string,
   jobId: string,
-  report: Omit<HostReport, 'httpsListeners'>,
+  report: Omit<HostReport, "httpsListeners">,
 ) {
-  const worker = { method: 'Ansible', endpoint } as const;
+  const worker = { method: "Ansible", endpoint } as const;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
     const [job] = await tx
       .select({ id: deploymentJobs.id })
       .from(deploymentJobs)
-      .where(and(
-        workerJobs(hostId, worker),
-        eq(deploymentJobs.id, jobId),
-        eq(deploymentJobs.status, 'Running'),
-        unexpired,
-      ));
-    if (!job) return 'missing';
-    if (!(await agentHash(tx, hostId))) await saveHostReport(tx, hostId, report);
-    return 'ok';
+      .where(
+        and(
+          workerJobs(hostId, worker),
+          eq(deploymentJobs.id, jobId),
+          eq(deploymentJobs.status, "Running"),
+          unexpired,
+        ),
+      );
+    if (!job) return "missing";
+    if (!(await agentHash(tx, hostId)))
+      await saveHostReport(tx, hostId, report);
+    return "ok";
   });
 }
 
@@ -701,12 +767,12 @@ export function finishDeployment(
   detail: string | null,
   servedExpiry?: Date,
 ) {
-  const worker = typeof identity === 'string' ? { method: 'Agent', hash: identity } as const : identity;
+  const worker =
+    typeof identity === "string"
+      ? ({ method: "Agent", hash: identity } as const)
+      : identity;
   return withDeploymentHost(db, hostId, worker, async (tx) => {
-    const owned = and(
-      eq(deploymentJobs.id, id),
-      workerJobs(hostId, worker),
-    );
+    const owned = and(eq(deploymentJobs.id, id), workerJobs(hostId, worker));
     const status = detail ? "Failed" : "Deployed";
     const [job] = await tx
       .update(deploymentJobs)
@@ -732,13 +798,17 @@ export function finishDeployment(
       return completed ? "ok" : "missing";
     }
     if (!job.deploymentId || !job.hostId) return "missing";
-    if (worker.method === 'Ansible') {
-      await tx.update(hosts).set({ ansibleRunAt: sql`now()`, ansibleSucceeded: !detail })
+    if (worker.method === "Ansible") {
+      await tx
+        .update(hosts)
+        .set({ ansibleRunAt: sql`now()`, ansibleSucceeded: !detail })
         .where(eq(hosts.id, hostId));
     }
     if (status === "Deployed") {
-      const [run] = await tx.select({ fingerprint: deploymentRuns.certificateFingerprint })
-        .from(deploymentRuns).where(eq(deploymentRuns.id, job.runId));
+      const [run] = await tx
+        .select({ fingerprint: deploymentRuns.certificateFingerprint })
+        .from(deploymentRuns)
+        .where(eq(deploymentRuns.id, job.runId));
       await tx
         .update(deployments)
         .set({
@@ -748,8 +818,12 @@ export function finishDeployment(
           listenerAddress: null,
           listenerCheckedAt: null,
           listenerFingerprint: null,
-          servedCertificateExpiresAt: worker.method === 'Ansible' ? servedExpiry : undefined,
-          servedCertificateObservedAt: worker.method === 'Ansible' && servedExpiry ? sql`now()` : undefined,
+          servedCertificateExpiresAt:
+            worker.method === "Ansible" ? servedExpiry : undefined,
+          servedCertificateObservedAt:
+            worker.method === "Ansible" && servedExpiry
+              ? sql`now()`
+              : undefined,
         })
         .where(
           and(

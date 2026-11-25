@@ -1,8 +1,8 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
-  import { toast } from 'svelte-sonner';
+  import { toast } from "svelte-sonner";
   import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
-  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import FormSelect from "#lib/components/svelte/form-select.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import {
@@ -27,12 +27,17 @@
 
   const id = $props.id();
   const label = $derived(target === "host" ? "Host" : "Certificate");
-  const targetOptions = $derived(options.map(({ id, label }) => ({ value: id, label })));
+  const targetOptions = $derived(
+    options.map(({ id, label }) => ({ value: id, label })),
+  );
   const serviceOptions = [
-    { value: '', label: 'Not specified' },
+    { value: "", label: "Not specified" },
     ...deploymentServices.map((value) => ({ value, label: value })),
   ];
-  const methodOptions = deploymentMethods.map((value) => ({ value, label: value }));
+  const methodOptions = deploymentMethods.map((value) => ({
+    value,
+    label: value,
+  }));
   let open = $state(false);
   let pending = $state(false);
 </script>
@@ -59,9 +64,9 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === 'success') {
+            if (result.type === "success") {
               open = false;
-              if (typeof result.data?.linkMessage === 'string') {
+              if (typeof result.data?.linkMessage === "string") {
                 toast.success(result.data.linkMessage);
               }
             }
@@ -76,7 +81,7 @@
           <FieldLabel for="{id}-target" required>{label}</FieldLabel>
           <FormSelect
             id="{id}-target"
-            name={target === 'host' ? 'hostId' : 'certificateId'}
+            name={target === "host" ? "hostId" : "certificateId"}
             items={targetOptions}
             placeholder={`Choose a ${target}`}
             required

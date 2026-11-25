@@ -1,18 +1,18 @@
 <script lang="ts">
-  import AlpineIcon from '@icons-pack/svelte-simple-icons/icons/SiAlpinelinux';
-  import ArchIcon from '@icons-pack/svelte-simple-icons/icons/SiArchlinux';
-  import DebianIcon from '@icons-pack/svelte-simple-icons/icons/SiDebian';
-  import FedoraIcon from '@icons-pack/svelte-simple-icons/icons/SiFedora';
-  import LinuxIcon from '@icons-pack/svelte-simple-icons/icons/SiLinux';
-  import RedHatIcon from '@icons-pack/svelte-simple-icons/icons/SiRedhat';
-  import UbuntuIcon from '@icons-pack/svelte-simple-icons/icons/SiUbuntu';
-  import { Info, Monitor } from '@lucide/svelte';
+  import AlpineIcon from "@icons-pack/svelte-simple-icons/icons/SiAlpinelinux";
+  import ArchIcon from "@icons-pack/svelte-simple-icons/icons/SiArchlinux";
+  import DebianIcon from "@icons-pack/svelte-simple-icons/icons/SiDebian";
+  import FedoraIcon from "@icons-pack/svelte-simple-icons/icons/SiFedora";
+  import LinuxIcon from "@icons-pack/svelte-simple-icons/icons/SiLinux";
+  import RedHatIcon from "@icons-pack/svelte-simple-icons/icons/SiRedhat";
+  import UbuntuIcon from "@icons-pack/svelte-simple-icons/icons/SiUbuntu";
+  import { Info, Monitor } from "@lucide/svelte";
   import { resolve } from "$app/paths";
   import AgentEnrollment from "#lib/components/svelte/agent-enrollment.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
-  import ServedCertificateExpiry from '#lib/components/svelte/served-certificate-expiry.svelte';
+  import ServedCertificateExpiry from "#lib/components/svelte/served-certificate-expiry.svelte";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -28,11 +28,18 @@
   let { data, form }: PageProps = $props();
   refreshHostPing();
   const host = $derived(data.host);
-  const architectureAliases = new Map([['x86_64', 'amd64'], ['aarch64', 'arm64']]);
+  const architectureAliases = new Map([
+    ["x86_64", "amd64"],
+    ["aarch64", "arm64"],
+  ]);
   const architecture = $derived(
-    host.architecture ? (architectureAliases.get(host.architecture) ?? host.architecture) : null,
+    host.architecture
+      ? (architectureAliases.get(host.architecture) ?? host.architecture)
+      : null,
   );
-  const platform = $derived([host.operatingSystem, architecture].filter(Boolean).join(' · '));
+  const platform = $derived(
+    [host.operatingSystem, architecture].filter(Boolean).join(" · "),
+  );
   const distroIcons = [
     [/^ubuntu\b/i, UbuntuIcon],
     [/^debian\b/i, DebianIcon],
@@ -44,7 +51,9 @@
   ] as const;
   const OSIcon = $derived(
     host.operatingSystem
-      ? (distroIcons.find(([pattern]) => pattern.test(host.operatingSystem ?? ''))?.[1] ?? Monitor)
+      ? (distroIcons.find(([pattern]) =>
+          pattern.test(host.operatingSystem ?? ""),
+        )?.[1] ?? Monitor)
       : null,
   );
   const hostname = $derived(host.hostname || host.name);
@@ -56,7 +65,7 @@
   const facts = $derived([
     { label: "Discovered hostname", value: host.hostname },
     { label: "IP address", value: host.ipAddress },
-    { label: 'Appliance type', value: host.applianceType ?? 'Not specified' },
+    { label: "Appliance type", value: host.applianceType ?? "Not specified" },
   ]);
   const listenerLabels = {
     ready: "TLS healthy",
@@ -148,8 +157,12 @@
       <div class="min-w-0">
         <dt class="text-muted-foreground">Platform</dt>
         <dd class="mt-1 flex items-center gap-1.5 wrap-anywhere">
-          {#if OSIcon}<OSIcon size={14} class="shrink-0" aria-hidden="true" />{/if}
-          <span>{platform || 'Not collected'}</span>
+          {#if OSIcon}<OSIcon
+              size={14}
+              class="shrink-0"
+              aria-hidden="true"
+            />{/if}
+          <span>{platform || "Not collected"}</span>
         </dd>
       </div>
       <div>
@@ -193,7 +206,11 @@
             {:else}
               {#each host.allowedDeploymentServices as service (service)}
                 {@const version = host.deploymentServiceVersions?.[service]}
-                <Badge variant="secondary">{service}{#if version}<span class="font-mono">({version})</span>{/if}</Badge>
+                <Badge variant="secondary"
+                  >{service}{#if version}<span class="font-mono"
+                      >({version})</span
+                    >{/if}</Badge
+                >
               {:else}
                 <span>None enabled</span>
               {/each}
@@ -220,7 +237,7 @@
       <AgentEnrollment
         hostId={host.id}
         agentManaged={host.agentManaged}
-        canEnroll={host.applianceType === 'Linux'}
+        canEnroll={host.applianceType === "Linux"}
         {...data.enrollment}
         code={form?.enrollmentCode}
         command={form?.enrollmentCommand}
@@ -294,7 +311,7 @@
               <Table.Cell>{deployment.engine ?? "Not specified"}</Table.Cell>
               <Table.Cell>{deployment.method}</Table.Cell>
               <Table.Cell>
-                {#if deployment.method !== 'Ansible' && deployment.listenerStatus}
+                {#if deployment.method !== "Ansible" && deployment.listenerStatus}
                   {#if deployment.listenerStatus === "ready"}
                     <Tooltip.Root>
                       <Tooltip.Trigger
@@ -315,26 +332,35 @@
                             <time
                               class="block text-background/80"
                               datetime={deployment.listenerCheckedAt.iso}
-                              >Checked {deployment.listenerCheckedAt.label}</time
+                              >Checked {deployment.listenerCheckedAt
+                                .label}</time
                             >
                           {:else}
                             <p>Check time unavailable.</p>
                           {/if}
                           {#if deployment.listenerFingerprint}
                             <div class="grid min-w-0 gap-0.5">
-                              <span class="text-background/70">Served certificate</span>
+                              <span class="text-background/70"
+                                >Served certificate</span
+                              >
                               <code
                                 class="block break-all font-mono text-[0.65rem] leading-relaxed"
-                                >{formatFingerprint(deployment.listenerFingerprint)}</code
+                                >{formatFingerprint(
+                                  deployment.listenerFingerprint,
+                                )}</code
                               >
                             </div>
                           {/if}
                           {#if deployment.expectedFingerprint}
                             <div class="grid min-w-0 gap-0.5">
-                              <span class="text-background/70">Expected certificate</span>
+                              <span class="text-background/70"
+                                >Expected certificate</span
+                              >
                               <code
                                 class="block break-all font-mono text-[0.65rem] leading-relaxed"
-                                >{formatFingerprint(deployment.expectedFingerprint)}</code
+                                >{formatFingerprint(
+                                  deployment.expectedFingerprint,
+                                )}</code
                               >
                             </div>
                           {/if}
@@ -342,7 +368,10 @@
                       </Tooltip.Content>
                     </Tooltip.Root>
                   {:else}
-                    <Badge variant={deployment.listenerStatus === 'drifted' ? "destructive" : "outline"}
+                    <Badge
+                      variant={deployment.listenerStatus === "drifted"
+                        ? "destructive"
+                        : "outline"}
                       >{listenerLabels[deployment.listenerStatus]}</Badge
                     >
                     {#if deployment.listenerAddress}
@@ -357,15 +386,25 @@
                         >{deployment.listenerCheckedAt.label}</time
                       >
                     {/if}
-                    {#if deployment.listenerStatus === 'drifted'}
+                    {#if deployment.listenerStatus === "drifted"}
                       {#if deployment.listenerFingerprint}
-                        <p class="mt-1 max-w-64 break-all text-muted-foreground">
-                          Served: <code>{formatFingerprint(deployment.listenerFingerprint)}</code>
+                        <p
+                          class="mt-1 max-w-64 break-all text-muted-foreground"
+                        >
+                          Served: <code
+                            >{formatFingerprint(
+                              deployment.listenerFingerprint,
+                            )}</code
+                          >
                         </p>
                       {/if}
                       {#if deployment.expectedFingerprint}
                         <p class="max-w-64 break-all text-muted-foreground">
-                          Expected: <code>{formatFingerprint(deployment.expectedFingerprint)}</code>
+                          Expected: <code
+                            >{formatFingerprint(
+                              deployment.expectedFingerprint,
+                            )}</code
+                          >
                         </p>
                       {/if}
                     {/if}

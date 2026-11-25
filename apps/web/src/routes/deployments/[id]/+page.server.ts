@@ -6,7 +6,10 @@ import {
   cancelQueuedDeploymentAction,
   recoverDeploymentAction,
 } from "#lib/server/agent-deployment.js";
-import { getAnsibleToken, getControllerToken } from "#lib/server/controller-config.js";
+import {
+  getAnsibleToken,
+  getControllerToken,
+} from "#lib/server/controller-config.js";
 import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
 import { resolve } from "$app/paths";
 import { error, redirect } from "@sveltejs/kit";

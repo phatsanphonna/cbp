@@ -52,22 +52,40 @@
     font-family: inherit;
   }
 
-  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]) {
+  :global(
+    .toaster [data-sonner-toast][data-styled="true"] [data-close-button]
+  ) {
     border-radius: var(--radius);
   }
 
-  :global(.toaster [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type]) [data-close-button]) {
+  :global(
+    .toaster
+      [data-sonner-toast][data-styled="true"]:not(
+        [data-rich-colors="true"][data-type]
+      )
+      [data-close-button]
+  ) {
     border-color: var(--border);
     color: var(--popover-foreground);
   }
 
-  :global(.toaster [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type]):hover [data-close-button]:hover) {
+  :global(
+    .toaster
+      [data-sonner-toast][data-styled="true"]:not(
+        [data-rich-colors="true"][data-type]
+      ):hover
+      [data-close-button]:hover
+  ) {
     background: var(--accent);
     border-color: var(--border);
     color: var(--accent-foreground);
   }
 
-  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible) {
+  :global(
+    .toaster
+      [data-sonner-toast][data-styled="true"]
+      [data-close-button]:focus-visible
+  ) {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }

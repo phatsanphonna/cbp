@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AlertSeverityBadge from '#lib/components/svelte/alert-severity-badge.svelte';
+  import AlertSeverityBadge from "#lib/components/svelte/alert-severity-badge.svelte";
   import { resolve } from "$app/paths";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";

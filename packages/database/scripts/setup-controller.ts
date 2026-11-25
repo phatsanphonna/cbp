@@ -1,6 +1,6 @@
 import { openDatabase } from "../src/index.js";
 import { sql } from "drizzle-orm";
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath } from "node:url";
 
 const webPassword = Bun.env.CBP_DATABASE_WEB_PASSWORD;
 if (webPassword !== undefined && !/^[A-Za-z0-9_-]{32,128}$/.test(webPassword)) {
@@ -20,15 +20,18 @@ try {
     where to_regclass('public.' || name) is not null
   `;
   if (schema.present === 0) {
-    const bootstrap = Bun.spawn([process.execPath, 'run', 'db:push'], {
-      cwd: fileURLToPath(new URL('../', import.meta.url)),
-      stdin: 'ignore',
-      stdout: 'inherit',
-      stderr: 'inherit',
+    const bootstrap = Bun.spawn([process.execPath, "run", "db:push"], {
+      cwd: fileURLToPath(new URL("../", import.meta.url)),
+      stdin: "ignore",
+      stdout: "inherit",
+      stderr: "inherit",
     });
-    if (await bootstrap.exited !== 0) throw new Error('Could not initialize the CBP database.');
+    if ((await bootstrap.exited) !== 0)
+      throw new Error("Could not initialize the CBP database.");
   } else if (schema.present !== 7) {
-    throw new Error('The CBP database has an incomplete base schema. Restore a complete database before upgrading.');
+    throw new Error(
+      "The CBP database has an incomplete base schema. Restore a complete database before upgrading.",
+    );
   }
 
   await db.$client`
@@ -195,7 +198,9 @@ try {
       add column if not exists started_at timestamp with time zone,
       add column if not exists finished_at timestamp with time zone,
       add column if not exists log text not null default ''`);
-    await tx.execute(sql`alter table cbp_deployment_jobs drop column if exists sealed_key`);
+    await tx.execute(
+      sql`alter table cbp_deployment_jobs drop column if exists sealed_key`,
+    );
     await tx.execute(sql`update cbp_deployment_jobs job set host_name = host.name
       from cbp_hosts host where job.host_id = host.id and job.host_name = 'Unknown host'`);
     await tx.execute(sql`insert into cbp_deployment_runs (id, certificate_id, submitted_at)
@@ -285,13 +290,21 @@ try {
         to cbp_web`);
       await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,
         public.cbp_deployment_jobs, public.cbp_notification_channels to cbp_web`);
-      await tx.execute(sql`grant delete on public.cbp_deployment_jobs, public.cbp_deployment_runs to cbp_web`);
+      await tx.execute(
+        sql`grant delete on public.cbp_deployment_jobs, public.cbp_deployment_runs to cbp_web`,
+      );
       await tx.execute(
         sql`grant select, insert on public.cbp_deployment_runs, public.cbp_audit_events to cbp_web`,
       );
-      await tx.execute(sql`grant select, insert, update on public.cbp_alerts to cbp_web`);
-      await tx.execute(sql`grant select, insert, update on public.cbp_alert_deliveries to cbp_web`);
-      await tx.execute(sql`grant delete on public.cbp_notification_channels to cbp_web`);
+      await tx.execute(
+        sql`grant select, insert, update on public.cbp_alerts to cbp_web`,
+      );
+      await tx.execute(
+        sql`grant select, insert, update on public.cbp_alert_deliveries to cbp_web`,
+      );
+      await tx.execute(
+        sql`grant delete on public.cbp_notification_channels to cbp_web`,
+      );
     });
   }
 } finally {

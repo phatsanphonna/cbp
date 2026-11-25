@@ -1,7 +1,7 @@
 import { resolve } from "$app/paths";
 import { registerHost } from "@cbp/database/inventory";
 import { fail, redirect } from "@sveltejs/kit";
-import { hostApplianceTypes } from '#lib/host-appliance-types.js';
+import { hostApplianceTypes } from "#lib/host-appliance-types.js";
 import { getDatabase } from "#lib/server/database.js";
 import { normalizeHostAddress } from "#lib/server/host-address.js";
 import type { Actions } from "./$types";
@@ -11,15 +11,17 @@ export const actions: Actions = {
     const fields = await request.formData();
     const value = fields.get("name");
     const name = typeof value === "string" ? value.trim() : "";
-    const submittedType = fields.get('applianceType') ?? 'Linux';
-    const applianceType = hostApplianceTypes.find((type) => type === submittedType);
+    const submittedType = fields.get("applianceType") ?? "Linux";
+    const applianceType = hostApplianceTypes.find(
+      (type) => type === submittedType,
+    );
     const values = { name: name.slice(0, 253), applianceType };
     const address = normalizeHostAddress(name);
     if (!address) {
       return fail(400, { message: "Enter a hostname or IP address.", values });
     }
     if (!applianceType) {
-      return fail(400, { message: 'Choose an appliance type.', values });
+      return fail(400, { message: "Choose an appliance type.", values });
     }
 
     const [saved] = await registerHost(getDatabase(), {

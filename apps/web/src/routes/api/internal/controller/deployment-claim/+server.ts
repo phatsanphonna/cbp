@@ -1,4 +1,7 @@
-import { claimDeployment, finishDeployment } from "@cbp/database/deployment-jobs";
+import {
+  claimDeployment,
+  finishDeployment,
+} from "@cbp/database/deployment-jobs";
 import { json } from "@sveltejs/kit";
 import { takeDeploymentSecret } from "#lib/server/deployment-secrets.js";
 import {
@@ -25,9 +28,17 @@ export const POST = controllerPost(async (db, { hostId, token }) => {
   if (!job) return 204;
   const privateKey = takeDeploymentSecret(job.id);
   if (!privateKey) {
-    await finishDeployment(db, hostId, digest(token).toString("hex"), job.id,
-      "The deployment key is no longer available in memory. Upload the private key and queue the deployment again.");
+    await finishDeployment(
+      db,
+      hostId,
+      digest(token).toString("hex"),
+      job.id,
+      "The deployment key is no longer available in memory. Upload the private key and queue the deployment again.",
+    );
     return 204;
   }
-  return json({ ...job, privateKey }, { headers: { "cache-control": "no-store" } });
+  return json(
+    { ...job, privateKey },
+    { headers: { "cache-control": "no-store" } },
+  );
 });

@@ -1,14 +1,14 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import { enhance } from '$app/forms';
+  import { enhance } from "$app/forms";
   import { resolve } from "$app/paths";
-  import AlertSeverityBadge from '#lib/components/svelte/alert-severity-badge.svelte';
+  import AlertSeverityBadge from "#lib/components/svelte/alert-severity-badge.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import { createColumnHelper, renderSnippet } from "@tanstack/svelte-table";
   import DataTable from "#lib/components/svelte/data-table.svelte";
   import type { DataTableFeatures } from "#lib/components/svelte/data-table-features.js";
-  import { untrack } from 'svelte';
-  import { toast } from 'svelte-sonner';
+  import { untrack } from "svelte";
+  import { toast } from "svelte-sonner";
 
   let { data, form }: PageProps = $props();
   $effect(() => {
@@ -22,24 +22,30 @@
     DataTableFeatures,
     PageProps["data"]["alerts"][number]
   >();
-  const columns = $derived(column.columns([
-    column.accessor("severity", {
-      header: "Severity",
-      cell: ({ getValue }) => renderSnippet(status, getValue()),
-    }),
-    column.accessor("message", { header: "Alert" }),
-    column.accessor("target", {
-      header: "Affected target",
-      filterFn: "includesString",
-    }),
-    column.accessor("detected", { header: "Detected" }),
-    column.accessor("status", { header: "Status" }),
-    ...(data.user?.isAdmin ? [column.accessor('id', {
-      header: 'Actions',
-      enableSorting: false,
-      cell: ({ row }) => renderSnippet(clearButton, row.original),
-    })] : []),
-  ]));
+  const columns = $derived(
+    column.columns([
+      column.accessor("severity", {
+        header: "Severity",
+        cell: ({ getValue }) => renderSnippet(status, getValue()),
+      }),
+      column.accessor("message", { header: "Alert" }),
+      column.accessor("target", {
+        header: "Affected target",
+        filterFn: "includesString",
+      }),
+      column.accessor("detected", { header: "Detected" }),
+      column.accessor("status", { header: "Status" }),
+      ...(data.user?.isAdmin
+        ? [
+            column.accessor("id", {
+              header: "Actions",
+              enableSorting: false,
+              cell: ({ row }) => renderSnippet(clearButton, row.original),
+            }),
+          ]
+        : []),
+    ]),
+  );
 </script>
 
 <svelte:head>
@@ -90,15 +96,20 @@
   </div>
 </section>
 
-{#snippet status(value: PageProps['data']['alerts'][number]['severity'])}
+{#snippet status(value: PageProps["data"]["alerts"][number]["severity"])}
   <AlertSeverityBadge severity={value} />
 {/snippet}
 
-{#snippet clearButton(alert: PageProps['data']['alerts'][number])}
-  {#if alert.status === 'Open'}
+{#snippet clearButton(alert: PageProps["data"]["alerts"][number])}
+  {#if alert.status === "Open"}
     <form method="POST" action="?/clear" use:enhance>
       <input type="hidden" name="id" value={alert.id} />
-      <Button type="submit" variant="outline" size="xs" aria-label={`Clear alert for ${alert.target}`}>Clear</Button>
+      <Button
+        type="submit"
+        variant="outline"
+        size="xs"
+        aria-label={`Clear alert for ${alert.target}`}>Clear</Button
+      >
     </form>
   {/if}
 {/snippet}

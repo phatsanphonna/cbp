@@ -6,10 +6,17 @@
   import { toast } from "svelte-sonner";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
-  import { CopyButton } from '#lib/components/ui/code-block/index.ts';
+  import { CopyButton } from "#lib/components/ui/code-block/index.ts";
   import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
-  import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "#lib/components/ui/field/index.ts";
+  import {
+    Field,
+    FieldDescription,
+    FieldGroup,
+    FieldLabel,
+    FieldLegend,
+    FieldSet,
+  } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
   import * as Select from "#lib/components/ui/select/index.ts";
   import * as Table from "#lib/components/ui/table/index.ts";
@@ -49,8 +56,16 @@
       : "Deployment status",
   );
   const queued = $derived(jobs.some(({ status }) => status === "Queued"));
-  const queuedAgent = $derived(jobs.some(({ method, status }) => method === 'Agent' && status === 'Queued'));
-  const queuedAnsible = $derived(jobs.some(({ method, status }) => method === 'Ansible' && status === 'Queued'));
+  const queuedAgent = $derived(
+    jobs.some(
+      ({ method, status }) => method === "Agent" && status === "Queued",
+    ),
+  );
+  const queuedAnsible = $derived(
+    jobs.some(
+      ({ method, status }) => method === "Ansible" && status === "Queued",
+    ),
+  );
   const active = $derived(
     queued || jobs.some(({ status }) => status === "Running"),
   );
@@ -60,21 +75,24 @@
   let recoveryOpen = $state(false);
   let cancelPendingId = $state<string | null>(null);
   let recoveryJobId = $state<string | null>(null);
-  let recoveryBecomeMethod = $state<'sudo' | 'su'>('sudo');
-  let recoverySuPassword = $state('');
+  let recoveryBecomeMethod = $state<"sudo" | "su">("sudo");
+  let recoverySuPassword = $state("");
   let logElement: HTMLElement | undefined = $state();
   let lastLogScrollTop = 0;
   let logNow = $state(Date.now());
   const selectedLogJob = $derived(jobs.find(({ id }) => id === logJobId));
-  const selectedRecoveryJob = $derived(jobs.find(({ id }) => id === recoveryJobId));
+  const selectedRecoveryJob = $derived(
+    jobs.find(({ id }) => id === recoveryJobId),
+  );
   const logElapsedSeconds = $derived.by(() => {
     if (!selectedLogJob?.startedAt) return null;
     const started = Date.parse(selectedLogJob.startedAt);
-    const finished = selectedLogJob.status === "Running"
-      ? logNow
-      : selectedLogJob.status === "Deployed" && selectedLogJob.finishedAt
-        ? Date.parse(selectedLogJob.finishedAt)
-        : NaN;
+    const finished =
+      selectedLogJob.status === "Running"
+        ? logNow
+        : selectedLogJob.status === "Deployed" && selectedLogJob.finishedAt
+          ? Date.parse(selectedLogJob.finishedAt)
+          : NaN;
     return Number.isFinite(started) && Number.isFinite(finished)
       ? Math.max(0, Math.floor((finished - started) / 1000))
       : null;
@@ -104,7 +122,8 @@
   function handleLogScroll() {
     if (!logElement) return;
     const scrollTop = logElement.scrollTop;
-    const atBottom = logElement.scrollHeight - scrollTop - logElement.clientHeight < 24;
+    const atBottom =
+      logElement.scrollHeight - scrollTop - logElement.clientHeight < 24;
     if (atBottom) logPinned = true;
     else if (scrollTop < lastLogScrollTop) logPinned = false;
     lastLogScrollTop = scrollTop;
@@ -116,17 +135,23 @@
     void tick().then(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          if (logOpen && logPinned && logElement)
-            stickLogToBottom();
+          if (logOpen && logPinned && logElement) stickLogToBottom();
         });
       });
     });
   });
 
   $effect(() => {
-    if (!logOpen || selectedLogJob?.status !== "Running" || !selectedLogJob.startedAt) return;
+    if (
+      !logOpen ||
+      selectedLogJob?.status !== "Running" ||
+      !selectedLogJob.startedAt
+    )
+      return;
     logNow = Date.now();
-    const timer = setInterval(() => { logNow = Date.now(); }, 1000);
+    const timer = setInterval(() => {
+      logNow = Date.now();
+    }, 1000);
     return () => clearInterval(timer);
   });
 
@@ -181,9 +206,8 @@
 
   {#if queuedAgent}
     <p class="mt-4 text-sm text-muted-foreground">
-      Agents check for jobs every five seconds after check-in. If a job stays queued, check that <code
-        >cbp-agent</code
-      >
+      Agents check for jobs every five seconds after check-in. If a job stays
+      queued, check that <code>cbp-agent</code>
       is running and <code>deploymentServices</code> is configured in its YAML
       file.
       <a
@@ -233,22 +257,31 @@
             </Table.Head>
             <Table.Cell class="max-w-60 whitespace-normal wrap-anywhere">
               {#if job.certificateId}
-                <a href={resolve("/certificates/[id]", { id: job.certificateId })}
-                  class="text-primary underline underline-offset-4">{job.certificateName}</a>
+                <a
+                  href={resolve("/certificates/[id]", {
+                    id: job.certificateId,
+                  })}
+                  class="text-primary underline underline-offset-4"
+                  >{job.certificateName}</a
+                >
               {:else}
                 {job.certificateName}
               {/if}
             </Table.Cell>
             <Table.Cell class="max-w-48 whitespace-normal wrap-anywhere">
               {#if job.hostId}
-                <a href={resolve("/hosts/[id]", { id: job.hostId })}
-                  class="text-primary underline underline-offset-4">{job.hostName}</a>
+                <a
+                  href={resolve("/hosts/[id]", { id: job.hostId })}
+                  class="text-primary underline underline-offset-4"
+                  >{job.hostName}</a
+                >
               {:else}
-                {job.hostName} <span class="text-muted-foreground">(removed)</span>
+                {job.hostName}
+                <span class="text-muted-foreground">(removed)</span>
               {/if}
             </Table.Cell>
             <Table.Cell>
-              {#if job.method === 'Ansible'}
+              {#if job.method === "Ansible"}
                 <span class="text-muted-foreground">—</span>
               {:else if job.agentSeenAt}
                 <time datetime={job.agentSeenAt}>{job.agentSeenLabel}</time>
@@ -265,12 +298,20 @@
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger>
                     {#snippet child({ props })}
-                      <Button {...props} variant="ghost" size="icon-sm" aria-label={`Actions for ${job.endpoint}`}>
+                      <Button
+                        {...props}
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Actions for ${job.endpoint}`}
+                      >
                         <Ellipsis />
                       </Button>
                     {/snippet}
                   </DropdownMenu.Trigger>
-                  <DropdownMenu.Content align="end" class="min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                  <DropdownMenu.Content
+                    align="end"
+                    class="min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                  >
                     {#if canCancel && job.status === "Queued"}
                       <form
                         id="cancel-{job.id}"
@@ -285,7 +326,10 @@
                               if (result.type === "success")
                                 toast.success("Queued deployment canceled.");
                               else
-                                toast.error(result.data?.cancelError ?? "Could not cancel the deployment.");
+                                toast.error(
+                                  result.data?.cancelError ??
+                                    "Could not cancel the deployment.",
+                                );
                             } finally {
                               cancelPendingId = null;
                             }
@@ -298,24 +342,42 @@
                         variant="destructive"
                         disabled={cancelPendingId === job.id}
                         onSelect={() =>
-                          (document.getElementById(`cancel-${job.id}`) as HTMLFormElement | null)?.requestSubmit()}
-                      >Cancel deployment</DropdownMenu.Item>
+                          (
+                            document.getElementById(
+                              `cancel-${job.id}`,
+                            ) as HTMLFormElement | null
+                          )?.requestSubmit()}
+                        >Cancel deployment</DropdownMenu.Item
+                      >
                     {/if}
                     {#if canRecover[job.method] && job.recoverable}
                       <DropdownMenu.Item
                         class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                        onSelect={() => { recoveryJobId = job.id; recoveryOpen = true; }}
-                      >Redeploy this version</DropdownMenu.Item>
+                        onSelect={() => {
+                          recoveryJobId = job.id;
+                          recoveryOpen = true;
+                        }}>Redeploy this version</DropdownMenu.Item
+                      >
                     {:else if job.status === "Failed" && job.certificateId}
                       <DropdownMenu.Item
                         class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                        onSelect={() => goto(resolve("/certificates/[id]", { id: job.certificateId! }))}
-                      >Deploy again</DropdownMenu.Item>
+                        onSelect={() =>
+                          goto(
+                            resolve("/certificates/[id]", {
+                              id: job.certificateId!,
+                            }),
+                          )}>Deploy again</DropdownMenu.Item
+                      >
                     {/if}
                     <DropdownMenu.Item
                       class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                        onSelect={() => { logJobId = job.id; logPinned = true; lastLogScrollTop = 0; logOpen = true; }}
-                    >Deployment log</DropdownMenu.Item>
+                      onSelect={() => {
+                        logJobId = job.id;
+                        logPinned = true;
+                        lastLogScrollTop = 0;
+                        logOpen = true;
+                      }}>Deployment log</DropdownMenu.Item
+                    >
                   </DropdownMenu.Content>
                 </DropdownMenu.Root>
               </div>
@@ -335,47 +397,110 @@
   </div>
   {#if selectedRecoveryJob}
     <Dialog.Root bind:open={recoveryOpen}>
-      <Dialog.Content class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
+      <Dialog.Content
+        class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg"
+      >
         <Dialog.Header>
           <Dialog.Title>Redeploy certificate</Dialog.Title>
-          <Dialog.Description>Upload the matching private key again. It is held temporarily in memory while the runner claims this job.</Dialog.Description>
+          <Dialog.Description
+            >Upload the matching private key again. It is held temporarily in
+            memory while the runner claims this job.</Dialog.Description
+          >
         </Dialog.Header>
         <form method="POST" action="?/recover" enctype="multipart/form-data">
           <input type="hidden" name="jobId" value={selectedRecoveryJob.id} />
           <FieldGroup>
             <FieldSet aria-describedby="recovery-key-hint">
-              <FieldLegend variant="label" required>Private key (PEM)</FieldLegend>
-              <FieldDescription id="recovery-key-hint">Choose a file or paste the PEM contents. Use the key matching this certificate.</FieldDescription>
+              <FieldLegend variant="label" required
+                >Private key (PEM)</FieldLegend
+              >
+              <FieldDescription id="recovery-key-hint"
+                >Choose a file or paste the PEM contents. Use the key matching
+                this certificate.</FieldDescription
+              >
               <FieldGroup>
                 <Field>
-                  <FieldLabel for="recovery-private-key">Upload private key file</FieldLabel>
-                  <Input id="recovery-private-key" type="file" name="privateKey" accept=".pem,.key" />
+                  <FieldLabel for="recovery-private-key"
+                    >Upload private key file</FieldLabel
+                  >
+                  <Input
+                    id="recovery-private-key"
+                    type="file"
+                    name="privateKey"
+                    accept=".pem,.key"
+                  />
                 </Field>
                 <Field>
-                  <FieldLabel for="recovery-private-key-pem">Or paste the private key</FieldLabel>
-                  <textarea id="recovery-private-key-pem" name="privateKeyPem" rows="4" maxlength={16384} autocomplete="off" autocapitalize="none" spellcheck={false} class="w-full resize-y border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring" placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
+                  <FieldLabel for="recovery-private-key-pem"
+                    >Or paste the private key</FieldLabel
+                  >
+                  <textarea
+                    id="recovery-private-key-pem"
+                    name="privateKeyPem"
+                    rows="4"
+                    maxlength={16384}
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck={false}
+                    class="w-full resize-y border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring"
+                    placeholder="-----BEGIN PRIVATE KEY-----"></textarea>
                 </Field>
               </FieldGroup>
             </FieldSet>
-            {#if selectedRecoveryJob.method === 'Ansible'}
+            {#if selectedRecoveryJob.method === "Ansible"}
               <FieldSet>
-                <FieldLegend variant="label" required>Ansible credentials</FieldLegend>
-                <FieldDescription>Enter credentials for this redeployment. The su password is required only when the become method is su.</FieldDescription>
+                <FieldLegend variant="label" required
+                  >Ansible credentials</FieldLegend
+                >
+                <FieldDescription
+                  >Enter credentials for this redeployment. The su password is
+                  required only when the become method is su.</FieldDescription
+                >
                 <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <Field>
-                    <FieldLabel for="recovery-ssh-username">SSH username</FieldLabel>
-                    <Input id="recovery-ssh-username" name="sshUsername" autocomplete="username" maxlength={256} required />
+                    <FieldLabel for="recovery-ssh-username"
+                      >SSH username</FieldLabel
+                    >
+                    <Input
+                      id="recovery-ssh-username"
+                      name="sshUsername"
+                      autocomplete="username"
+                      maxlength={256}
+                      required
+                    />
                   </Field>
                   <Field>
-                    <FieldLabel for="recovery-ssh-password">SSH password</FieldLabel>
-                    <Input id="recovery-ssh-password" name="sshPassword" type="password" autocomplete="new-password" maxlength={1024} required />
+                    <FieldLabel for="recovery-ssh-password"
+                      >SSH password</FieldLabel
+                    >
+                    <Input
+                      id="recovery-ssh-password"
+                      name="sshPassword"
+                      type="password"
+                      autocomplete="new-password"
+                      maxlength={1024}
+                      required
+                    />
                   </Field>
                 </FieldGroup>
                 <FieldGroup class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <Field>
-                    <FieldLabel for="recovery-become-method">Become method</FieldLabel>
-                    <Select.Root type="single" value={recoveryBecomeMethod} onValueChange={(value) => { if (value === 'sudo' || value === 'su') { recoveryBecomeMethod = value; if (value === 'sudo') recoverySuPassword = ''; } }}>
-                      <Select.Trigger id="recovery-become-method">{recoveryBecomeMethod}</Select.Trigger>
+                    <FieldLabel for="recovery-become-method"
+                      >Become method</FieldLabel
+                    >
+                    <Select.Root
+                      type="single"
+                      value={recoveryBecomeMethod}
+                      onValueChange={(value) => {
+                        if (value === "sudo" || value === "su") {
+                          recoveryBecomeMethod = value;
+                          if (value === "sudo") recoverySuPassword = "";
+                        }
+                      }}
+                    >
+                      <Select.Trigger id="recovery-become-method"
+                        >{recoveryBecomeMethod}</Select.Trigger
+                      >
                       <Select.Content>
                         <Select.Group>
                           <Select.Item value="sudo" label="sudo" />
@@ -383,18 +508,38 @@
                         </Select.Group>
                       </Select.Content>
                     </Select.Root>
-                    <input type="hidden" name="becomeMethod" value={recoveryBecomeMethod} />
+                    <input
+                      type="hidden"
+                      name="becomeMethod"
+                      value={recoveryBecomeMethod}
+                    />
                   </Field>
                   <Field class="sm:col-span-2">
-                    <FieldLabel for="recovery-su-password">Root su password</FieldLabel>
-                    <Input id="recovery-su-password" name="suPassword" type="password" autocomplete="new-password" maxlength={1024} bind:value={recoverySuPassword} disabled={recoveryBecomeMethod !== 'su'} required={recoveryBecomeMethod === 'su'} class="disabled:pointer-events-auto disabled:cursor-not-allowed" />
+                    <FieldLabel for="recovery-su-password"
+                      >Root su password</FieldLabel
+                    >
+                    <Input
+                      id="recovery-su-password"
+                      name="suPassword"
+                      type="password"
+                      autocomplete="new-password"
+                      maxlength={1024}
+                      bind:value={recoverySuPassword}
+                      disabled={recoveryBecomeMethod !== "su"}
+                      required={recoveryBecomeMethod === "su"}
+                      class="disabled:pointer-events-auto disabled:cursor-not-allowed"
+                    />
                   </Field>
                 </FieldGroup>
               </FieldSet>
             {/if}
             <Dialog.Footer>
               <Dialog.Close>
-                {#snippet child({ props })}<Button {...props} type="button" variant="outline">Cancel</Button>{/snippet}
+                {#snippet child({ props })}<Button
+                    {...props}
+                    type="button"
+                    variant="outline">Cancel</Button
+                  >{/snippet}
               </Dialog.Close>
               <Button type="submit">Queue redeployment</Button>
             </Dialog.Footer>
@@ -405,7 +550,9 @@
   {/if}
   {#if selectedLogJob}
     <Dialog.Root bind:open={logOpen}>
-      <Dialog.Content class="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-hidden sm:max-w-5xl">
+      <Dialog.Content
+        class="max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] overflow-hidden sm:max-w-5xl"
+      >
         <Dialog.Header>
           <div class="flex flex-wrap items-center gap-2 pr-10">
             <Dialog.Title>Deployment log</Dialog.Title>
@@ -416,22 +563,36 @@
             />
           </div>
           <Dialog.Description class="pr-10">
-            {selectedLogJob.endpoint} · {selectedLogJob.hostName} · {selectedLogJob.method}{#if logTimeText}{" · "}<span aria-live="off">{logTimeText}</span>{/if}
+            {selectedLogJob.endpoint} · {selectedLogJob.hostName} · {selectedLogJob.method}{#if logTimeText}{" · "}<span
+                aria-live="off">{logTimeText}</span
+              >{/if}
           </Dialog.Description>
         </Dialog.Header>
         <div class="relative rounded-md bg-muted">
           <div class="flex justify-end border-b border-border px-2 py-1">
             <CopyButton
-              value={selectedLogJob.log ?? ''}
+              value={selectedLogJob.log ?? ""}
               title="Copy log"
               aria-label="Copy deployment log"
               disabled={!selectedLogJob.log}
             />
           </div>
           {#if !logPinned}
-            <Button type="button" variant="secondary" size="sm" class="absolute bottom-3 right-3 z-10 shadow-md" onclick={stickLogToBottom}><ArrowDown data-icon="inline-start" aria-hidden="true" />Stick to bottom</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              class="absolute bottom-3 right-3 z-10 shadow-md"
+              onclick={stickLogToBottom}
+              ><ArrowDown data-icon="inline-start" aria-hidden="true" />Stick to
+              bottom</Button
+            >
           {/if}
-          <pre bind:this={logElement} onscroll={handleLogScroll} class="min-h-72 max-h-[calc(100dvh-14rem)] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs text-muted-foreground">{selectedLogJob.log || "Waiting for deployment output…"}</pre>
+          <pre
+            bind:this={logElement}
+            onscroll={handleLogScroll}
+            class="min-h-72 max-h-[calc(100dvh-14rem)] overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs text-muted-foreground">{selectedLogJob.log ||
+              "Waiting for deployment output…"}</pre>
         </div>
         <Dialog.Footer>
           <Dialog.Close>

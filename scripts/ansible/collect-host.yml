@@ -12,7 +12,7 @@
     - name: Read basic host facts
       ansible.builtin.setup:
         gather_subset:
-          - '!all'
+          - "!all"
       no_log: true
 
     - name: Read the full operating system name
@@ -46,7 +46,7 @@
             'architecture': cbp_host_facts.architecture
           } | to_json }}
         dest: "{{ cbp_host_report_path }}"
-        mode: '0600'
+        mode: "0600"
       vars:
         ansible_connection: local
         cbp_host_facts: "{{ hostvars[inventory_hostname].ansible_facts }}"

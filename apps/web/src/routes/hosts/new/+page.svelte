@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from "$app/paths";
-  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import FormSelect from "#lib/components/svelte/form-select.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
   import {
     Field,
@@ -8,11 +8,14 @@
     FieldLabel,
   } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
-  import { hostApplianceTypes } from '#lib/host-appliance-types.js';
+  import { hostApplianceTypes } from "#lib/host-appliance-types.js";
   import type { PageProps } from "./$types";
 
   let { form }: PageProps = $props();
-  const applianceOptions = hostApplianceTypes.map((type) => ({ value: type, label: type }));
+  const applianceOptions = hostApplianceTypes.map((type) => ({
+    value: type,
+    label: type,
+  }));
 </script>
 
 <svelte:head>
@@ -56,7 +59,7 @@
           id="appliance-type"
           name="applianceType"
           items={applianceOptions}
-          value={form?.values?.applianceType ?? 'Linux'}
+          value={form?.values?.applianceType ?? "Linux"}
           required
         />
       </Field>

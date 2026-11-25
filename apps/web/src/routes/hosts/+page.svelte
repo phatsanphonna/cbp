@@ -53,7 +53,8 @@
         Hosts
       </h1>
       <p class="text-xs text-muted-foreground">
-        Reachability, management activity, and certificate coverage in one place.
+        Reachability, management activity, and certificate coverage in one
+        place.
       </p>
     </div>
     <Button href={resolve("/hosts/new")}>Add host</Button>
@@ -80,7 +81,8 @@
     <a
       href={resolve("/hosts/[id]", { id: host.id })}
       class="font-medium text-primary underline underline-offset-4 wrap-anywhere"
-    >{host.hostname ?? host.name}</a>
+      >{host.hostname ?? host.name}</a
+    >
     {#if host.ipAddress && host.ipAddress !== (host.hostname ?? host.name)}
       <span class="text-muted-foreground">({host.ipAddress})</span>
     {/if}
@@ -144,7 +146,11 @@
             class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
             aria-label="Agent. Show last check-in"
           >
-            <Badge variant={host.agent === "Never checked in" ? "outline" : "secondary"}>
+            <Badge
+              variant={host.agent === "Never checked in"
+                ? "outline"
+                : "secondary"}
+            >
               Agent <Info data-icon="inline-end" aria-hidden="true" />
             </Badge>
           </Tooltip.Trigger>
@@ -190,7 +196,8 @@
     href={`${resolve("/hosts/[id]", { id: host.id })}#host-deployments-heading`}
     aria-label={`View ${host.certificates} certificate deployments for ${host.name}`}
     class="block text-right tabular-nums text-primary underline underline-offset-4"
-  >{host.certificates}</a>
+    >{host.certificates}</a
+  >
 {/snippet}
 
 {#snippet rightAligned(value: string)}

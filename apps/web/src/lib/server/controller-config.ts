@@ -1,7 +1,4 @@
-import {
-  CBP_ANSIBLE_TOKEN,
-  CBP_CONTROLLER_TOKEN,
-} from "$app/env/private";
+import { CBP_ANSIBLE_TOKEN, CBP_CONTROLLER_TOKEN } from "$app/env/private";
 
 const controllerTokenPattern = /^[A-Za-z0-9_-]{43,128}$/;
 export function getControllerToken() {
@@ -13,6 +10,9 @@ export function getControllerToken() {
 
 export function getAnsibleToken() {
   const token = CBP_ANSIBLE_TOKEN;
-  return token && controllerTokenPattern.test(token) && token !== getControllerToken() ? token : null;
+  return token &&
+    controllerTokenPattern.test(token) &&
+    token !== getControllerToken()
+    ? token
+    : null;
 }
-

@@ -35,57 +35,63 @@
   const overview = resolve("/");
   const navigation = [
     {
-      id: 'workspace',
-      label: 'Workspace',
+      id: "workspace",
+      label: "Workspace",
       items: [
-        { label: 'Overview', route: '/', icon: LayoutDashboard },
-        { label: 'Certificates', route: '/certificates', icon: FileBadge },
-        { label: 'Hosts', route: '/hosts', icon: Server },
-        { label: 'Deployments', route: '/deployments', icon: Send },
-        { label: 'Renewals', icon: RefreshCw },
+        { label: "Overview", route: "/", icon: LayoutDashboard },
+        { label: "Certificates", route: "/certificates", icon: FileBadge },
+        { label: "Hosts", route: "/hosts", icon: Server },
+        { label: "Deployments", route: "/deployments", icon: Send },
+        { label: "Renewals", icon: RefreshCw },
       ],
     },
     {
-      id: 'monitoring',
-      label: 'Monitoring',
+      id: "monitoring",
+      label: "Monitoring",
       items: [
-        { label: 'Alerts', route: '/alerts', icon: Bell },
-        { label: 'Audit log', route: '/audit', icon: History },
+        { label: "Alerts", route: "/alerts", icon: Bell },
+        { label: "Audit log", route: "/audit", icon: History },
       ],
     },
     {
-      id: 'administration',
-      label: 'Administration',
+      id: "administration",
+      label: "Administration",
       adminOnly: true,
-      items: [{ label: 'Users', route: '/users', icon: Users }],
+      items: [{ label: "Users", route: "/users", icon: Users }],
     },
     {
-      id: 'docs',
-      label: 'Docs',
+      id: "docs",
+      label: "Docs",
       items: [
-        { label: 'Alert', route: '/docs/alert', icon: BookOpen },
-        { label: 'Controller', route: '/docs/controller', icon: Network },
-        { label: 'Agent', route: '/docs/agent', icon: Terminal },
+        { label: "Alert", route: "/docs/alert", icon: BookOpen },
+        { label: "Controller", route: "/docs/controller", icon: Network },
+        { label: "Agent", route: "/docs/agent", icon: Terminal },
       ],
     },
   ] as const;
-  type NavigationLink = Extract<(typeof navigation)[number]['items'][number], { route: string }>;
+  type NavigationLink = Extract<
+    (typeof navigation)[number]["items"][number],
+    { route: string }
+  >;
 </script>
 
 {#snippet navigationLink(item: NavigationLink)}
   {@const current = page.route.id === item.route}
-  {@const active = current || page.route.id?.startsWith(`${item.route}/`) === true}
+  {@const active =
+    current || page.route.id?.startsWith(`${item.route}/`) === true}
   <Sidebar.MenuItem>
     <Sidebar.MenuButton isActive={active} tooltipContent={item.label}>
       {#snippet child({ props })}
         <a
           {...props}
           href={resolve(item.route)}
-          aria-current={current ? 'page' : undefined}
+          aria-current={current ? "page" : undefined}
           onclick={() => sidebar.setOpenMobile(false)}
         >
           <item.icon aria-hidden="true" />
-          <span class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0">
+          <span
+            class="transition-opacity duration-300 ease-in-out group-data-[collapsible=icon]:opacity-0"
+          >
             {item.label}
           </span>
         </a>
@@ -114,17 +120,26 @@
   <Sidebar.Content>
     <nav aria-label="Main navigation">
       {#each navigation as group (group.id)}
-        {#if !('adminOnly' in group) || user?.isAdmin}
-          <Sidebar.Group role="group" aria-labelledby={`sidebar-${group.id}-label`}>
-            <Sidebar.GroupLabel id={`sidebar-${group.id}-label`}>{group.label}</Sidebar.GroupLabel>
+        {#if !("adminOnly" in group) || user?.isAdmin}
+          <Sidebar.Group
+            role="group"
+            aria-labelledby={`sidebar-${group.id}-label`}
+          >
+            <Sidebar.GroupLabel id={`sidebar-${group.id}-label`}
+              >{group.label}</Sidebar.GroupLabel
+            >
             <Sidebar.GroupContent>
               <Sidebar.Menu>
                 {#each group.items as item (item.label)}
-                  {#if 'route' in item}
+                  {#if "route" in item}
                     {@render navigationLink(item)}
                   {:else}
                     <Sidebar.MenuItem>
-                      <Sidebar.MenuButton aria-disabled="true" tabindex={-1} tooltipContent={item.label}>
+                      <Sidebar.MenuButton
+                        aria-disabled="true"
+                        tabindex={-1}
+                        tooltipContent={item.label}
+                      >
                         <item.icon aria-hidden="true" />
                         <span>{item.label}</span>
                       </Sidebar.MenuButton>

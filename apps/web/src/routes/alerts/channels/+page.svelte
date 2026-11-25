@@ -1,66 +1,100 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { enhance } from "$app/forms";
   import { resolve } from "$app/paths";
-  import DiscordIcon from '@icons-pack/svelte-simple-icons/icons/SiDiscord';
-  import LineIcon from '@icons-pack/svelte-simple-icons/icons/SiLine';
-  import TelegramIcon from '@icons-pack/svelte-simple-icons/icons/SiTelegram';
-  import { Ellipsis, Hash, Mail, UsersRound, Webhook } from '@lucide/svelte';
-  import { untrack } from 'svelte';
-  import { toast } from 'svelte-sonner';
-  import AlertSeverityBadge from '#lib/components/svelte/alert-severity-badge.svelte';
-  import FormSelect from '#lib/components/svelte/form-select.svelte';
-  import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
+  import DiscordIcon from "@icons-pack/svelte-simple-icons/icons/SiDiscord";
+  import LineIcon from "@icons-pack/svelte-simple-icons/icons/SiLine";
+  import TelegramIcon from "@icons-pack/svelte-simple-icons/icons/SiTelegram";
+  import { Ellipsis, Hash, Mail, UsersRound, Webhook } from "@lucide/svelte";
+  import { untrack } from "svelte";
+  import { toast } from "svelte-sonner";
+  import AlertSeverityBadge from "#lib/components/svelte/alert-severity-badge.svelte";
+  import FormSelect from "#lib/components/svelte/form-select.svelte";
+  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
-  import * as Dialog from '#lib/components/ui/dialog/index.ts';
-  import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.ts';
-  import { Field, FieldDescription, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import {
+    Field,
+    FieldDescription,
+    FieldLabel,
+  } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
-  import * as Select from '#lib/components/ui/select/index.ts';
+  import * as Select from "#lib/components/ui/select/index.ts";
   import * as Table from "#lib/components/ui/table/index.ts";
   import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
 
   const providers = {
-    Slack: { label: 'Slack channel ID', placeholder: 'C0123456789', secretLabel: 'Slack bot token', icon: Hash },
-    LINE: { label: 'LINE recipient ID', placeholder: 'Group, room, or user ID', secretLabel: 'LINE channel access token', icon: LineIcon },
-    Telegram: { label: 'Telegram chat ID or channel username', placeholder: '-1001234567890', secretLabel: 'Telegram bot token', icon: TelegramIcon },
-    Email: { label: 'Recipient email address', placeholder: 'ops@example.test', secretLabel: 'Resend API key', icon: Mail },
+    Slack: {
+      label: "Slack channel ID",
+      placeholder: "C0123456789",
+      secretLabel: "Slack bot token",
+      icon: Hash,
+    },
+    LINE: {
+      label: "LINE recipient ID",
+      placeholder: "Group, room, or user ID",
+      secretLabel: "LINE channel access token",
+      icon: LineIcon,
+    },
+    Telegram: {
+      label: "Telegram chat ID or channel username",
+      placeholder: "-1001234567890",
+      secretLabel: "Telegram bot token",
+      icon: TelegramIcon,
+    },
+    Email: {
+      label: "Recipient email address",
+      placeholder: "ops@example.test",
+      secretLabel: "Resend API key",
+      icon: Mail,
+    },
     Webhook: {
-      label: 'Display name',
-      placeholder: 'Operations',
-      secretLabel: 'HTTPS webhook URL',
+      label: "Display name",
+      placeholder: "Operations",
+      secretLabel: "HTTPS webhook URL",
       icon: Webhook,
     },
-    'Microsoft Teams': {
-      label: 'Display name',
-      placeholder: 'Ops alerts',
-      secretLabel: 'Teams Workflows webhook URL',
+    "Microsoft Teams": {
+      label: "Display name",
+      placeholder: "Ops alerts",
+      secretLabel: "Teams Workflows webhook URL",
       icon: UsersRound,
     },
     Discord: {
-      label: 'Display name',
-      placeholder: 'Ops alerts',
-      secretLabel: 'Discord webhook URL',
+      label: "Display name",
+      placeholder: "Ops alerts",
+      secretLabel: "Discord webhook URL",
       icon: DiscordIcon,
     },
   };
   type Provider = keyof typeof providers;
-  const providerOptions = Object.entries(providers).map(([value, { icon }]) => ({ value, label: value, icon }));
-  const severityOptions = ['Info', 'Warning', 'High', 'Critical'].map((value) => ({ value, label: value }));
-  const certificateLabels = $derived(new Map(data.certificates.map(({ value, label }) => [value, label])));
-  const certificateContext = $derived(data.certificateId ? certificateLabels.get(data.certificateId) : undefined);
-  const certificateOptions = $derived(data.certificates.map(({ value, label, serial }) => ({
-    value,
-    label: `${label} · ${serial.slice(-8)}`,
-  })));
-  let provider = $state<Provider>('Slack');
+  const providerOptions = Object.entries(providers).map(
+    ([value, { icon }]) => ({ value, label: value, icon }),
+  );
+  const severityOptions = ["Info", "Warning", "High", "Critical"].map(
+    (value) => ({ value, label: value }),
+  );
+  const certificateLabels = $derived(
+    new Map(data.certificates.map(({ value, label }) => [value, label])),
+  );
+  const certificateContext = $derived(
+    data.certificateId ? certificateLabels.get(data.certificateId) : undefined,
+  );
+  const certificateOptions = $derived(
+    data.certificates.map(({ value, label, serial }) => ({
+      value,
+      label: `${label} · ${serial.slice(-8)}`,
+    })),
+  );
+  let provider = $state<Provider>("Slack");
   let testingChannel = $state<number | null>(null);
   let removingChannel = $state<number | null>(null);
   let editingChannel = $state<number | null>(null);
   let savingChannel = $state(false);
 
-  function submitChannelAction(action: 'test' | 'toggle' | 'bind', id: number) {
+  function submitChannelAction(action: "test" | "toggle" | "bind", id: number) {
     const actionForm = document.getElementById(`channel-${action}-${id}`);
     if (actionForm instanceof HTMLFormElement) actionForm.requestSubmit();
   }
@@ -81,73 +115,110 @@
   });
 </script>
 
-{#snippet channelFields(fieldProvider: Provider, prefix: string, existing?: PageProps['data']['channels'][number])}
-  {@const usesWebhook = fieldProvider === 'Webhook' || fieldProvider === 'Microsoft Teams' || fieldProvider === 'Discord'}
-  {@const selectedCertificates = existing ? (existing.certificateIds ?? []) : data.certificateId ? [data.certificateId] : []}
+{#snippet channelFields(
+  fieldProvider: Provider,
+  prefix: string,
+  existing?: PageProps["data"]["channels"][number],
+)}
+  {@const usesWebhook =
+    fieldProvider === "Webhook" ||
+    fieldProvider === "Microsoft Teams" ||
+    fieldProvider === "Discord"}
+  {@const selectedCertificates = existing
+    ? (existing.certificateIds ?? [])
+    : data.certificateId
+      ? [data.certificateId]
+      : []}
   {@const scopeOptions = [
     ...certificateOptions,
     ...selectedCertificates
       .filter((id) => !certificateLabels.has(id))
-      .map((value) => ({ value, label: 'Removed certificate' })),
+      .map((value) => ({ value, label: "Removed certificate" })),
   ]}
   {#key fieldProvider}
     <Field>
-      <FieldLabel for={`${prefix}-secret`} required={!existing}>{providers[fieldProvider].secretLabel}</FieldLabel>
+      <FieldLabel for={`${prefix}-secret`} required={!existing}
+        >{providers[fieldProvider].secretLabel}</FieldLabel
+      >
       <Input
         id={`${prefix}-secret`}
         name="secret"
-        type={usesWebhook ? 'url' : 'password'}
-        autocomplete={usesWebhook ? 'off' : 'new-password'}
+        type={usesWebhook ? "url" : "password"}
+        autocomplete={usesWebhook ? "off" : "new-password"}
         spellcheck={false}
         autocapitalize="none"
         required={!existing}
         maxlength={2048}
       />
     </Field>
-    {#if fieldProvider === 'Email'}
+    {#if fieldProvider === "Email"}
       <Field>
-        <FieldLabel for={`${prefix}-sender`} required={!existing}>Verified sender email address</FieldLabel>
-        <Input id={`${prefix}-sender`} name="sender" type="email" required={!existing} maxlength={120} />
+        <FieldLabel for={`${prefix}-sender`} required={!existing}
+          >Verified sender email address</FieldLabel
+        >
+        <Input
+          id={`${prefix}-sender`}
+          name="sender"
+          type="email"
+          required={!existing}
+          maxlength={120}
+        />
       </Field>
     {/if}
   {/key}
 
   <Field>
-    <FieldLabel for={`${prefix}-destination`} required>{providers[fieldProvider].label}</FieldLabel>
+    <FieldLabel for={`${prefix}-destination`} required
+      >{providers[fieldProvider].label}</FieldLabel
+    >
     <Input
       id={`${prefix}-destination`}
       name="destination"
-      type={fieldProvider === 'Email' ? 'email' : 'text'}
-      aria-describedby={usesWebhook ? `${prefix}-destination-description` : undefined}
+      type={fieldProvider === "Email" ? "email" : "text"}
+      aria-describedby={usesWebhook
+        ? `${prefix}-destination-description`
+        : undefined}
       placeholder={providers[fieldProvider].placeholder}
       value={existing?.destination}
       required
       maxlength={120}
     />
     {#if usesWebhook}
-      <FieldDescription id={`${prefix}-destination-description`}>This name is only used in CBP.</FieldDescription>
+      <FieldDescription id={`${prefix}-destination-description`}
+        >This name is only used in CBP.</FieldDescription
+      >
     {/if}
   </Field>
 
   <Field>
-    <FieldLabel for={`${prefix}-severity`} required>Minimum severity</FieldLabel>
+    <FieldLabel for={`${prefix}-severity`} required>Minimum severity</FieldLabel
+    >
     <FormSelect
       id={`${prefix}-severity`}
       name="severity"
       items={severityOptions}
-      value={existing?.severity ?? 'Warning'}
+      value={existing?.severity ?? "Warning"}
       required
     />
   </Field>
   <Field>
     <FieldLabel for={`${prefix}-certificates`}>Certificates</FieldLabel>
-    <Select.Root type="multiple" name="certificateIds" value={selectedCertificates} items={scopeOptions}>
-      <Select.Trigger id={`${prefix}-certificates`} class="w-full" aria-describedby={`${prefix}-scope-description`}>
+    <Select.Root
+      type="multiple"
+      name="certificateIds"
+      value={selectedCertificates}
+      items={scopeOptions}
+    >
+      <Select.Trigger
+        id={`${prefix}-certificates`}
+        class="w-full"
+        aria-describedby={`${prefix}-scope-description`}
+      >
         <Select.Value placeholder="All alerts">
           {#snippet children({ selection })}
-            {#if selection.type === 'multiple' && selection.selected.length === 1}
+            {#if selection.type === "multiple" && selection.selected.length === 1}
               {selection.selected[0]?.label}
-            {:else if selection.type === 'multiple' && selection.selected.length > 1}
+            {:else if selection.type === "multiple" && selection.selected.length > 1}
               {selection.selected.length} certificates selected
             {:else}
               All alerts
@@ -160,13 +231,16 @@
           {#each scopeOptions as option (option.value)}
             <Select.Item value={option.value} label={option.label} />
           {:else}
-            <Select.GroupHeading>No certificates in inventory</Select.GroupHeading>
+            <Select.GroupHeading
+              >No certificates in inventory</Select.GroupHeading
+            >
           {/each}
         </Select.Group>
       </Select.Content>
     </Select.Root>
     <FieldDescription id={`${prefix}-scope-description`}>
-      Select certificates to receive only their expiry alerts. Clear the selection to receive all alerts.
+      Select certificates to receive only their expiry alerts. Clear the
+      selection to receive all alerts.
     </FieldDescription>
   </Field>
 {/snippet}
@@ -190,12 +264,17 @@
 
   <p class="mt-4 text-xs text-muted-foreground">
     Each enabled channel receives open alerts at or above its minimum severity.
-    <a href={resolve('/docs/alert') + '#notification-setup'} class="underline underline-offset-4">Provider setup guide</a>
+    <a
+      href={resolve("/docs/alert") + "#notification-setup"}
+      class="underline underline-offset-4">Provider setup guide</a
+    >
   </p>
   {#if certificateContext}
     <p class="mt-2 text-xs text-muted-foreground">
-      Managing notifications for <strong class="text-foreground">{certificateContext}</strong>.
-      New channels have this certificate selected. Use a channel’s Actions menu to bind it.
+      Managing notifications for <strong class="text-foreground"
+        >{certificateContext}</strong
+      >. New channels have this certificate selected. Use a channel’s Actions
+      menu to bind it.
     </p>
   {/if}
   {#if data.user?.isAdmin}
@@ -212,12 +291,14 @@
           name="provider"
           items={providerOptions}
           value={provider}
-          onValueChange={(value) => { if (Object.hasOwn(providers, value)) provider = value as Provider; }}
+          onValueChange={(value) => {
+            if (Object.hasOwn(providers, value)) provider = value as Provider;
+          }}
           required
         />
       </Field>
 
-      {@render channelFields(provider, 'channel')}
+      {@render channelFields(provider, "channel")}
 
       <div class="sm:col-span-2">
         <Button type="submit">Add channel</Button>
@@ -243,21 +324,32 @@
       <Table.Body>
         {#each data.channels as channel (channel.id)}
           {@const ProviderIcon = providers[channel.provider]?.icon}
-          {@const scopeLabels = channel.certificateIds?.map((id) => certificateLabels.get(id) ?? 'Removed certificate')}
-          {@const canBind = data.certificateId && !channel.certificateIds?.includes(data.certificateId)}
+          {@const scopeLabels = channel.certificateIds?.map(
+            (id) => certificateLabels.get(id) ?? "Removed certificate",
+          )}
+          {@const canBind =
+            data.certificateId &&
+            !channel.certificateIds?.includes(data.certificateId)}
           <Table.Row>
             <Table.Cell>
               <span class="inline-flex items-center gap-2">
-                {#if ProviderIcon}<ProviderIcon size={16} aria-hidden="true" />{/if}
+                {#if ProviderIcon}<ProviderIcon
+                    size={16}
+                    aria-hidden="true"
+                  />{/if}
                 {channel.provider}
               </span>
             </Table.Cell>
             <Table.Head scope="row">{channel.destination}</Table.Head>
-            <Table.Cell><AlertSeverityBadge severity={channel.severity} /></Table.Cell>
+            <Table.Cell
+              ><AlertSeverityBadge severity={channel.severity} /></Table.Cell
+            >
             <Table.Cell>
               {#if scopeLabels}
-                <span title={scopeLabels.join(', ')}>
-                  {scopeLabels.length === 1 ? scopeLabels[0] : `${scopeLabels.length} certificates`}
+                <span title={scopeLabels.join(", ")}>
+                  {scopeLabels.length === 1
+                    ? scopeLabels[0]
+                    : `${scopeLabels.length} certificates`}
                 </span>
               {:else}
                 All alerts
@@ -265,7 +357,7 @@
             </Table.Cell>
             <Table.Cell>
               {#if channel.enabled}
-                {channel.ready ? 'Enabled' : 'Setup required'}
+                {channel.ready ? "Enabled" : "Setup required"}
               {:else}
                 <span class="text-destructive">Paused</span>
               {/if}
@@ -274,9 +366,19 @@
               {#if data.user?.isAdmin}
                 <div class="flex justify-end">
                   {#if canBind}
-                    <form id={`channel-bind-${channel.id}`} method="POST" action="?/bindCertificate" hidden use:enhance>
+                    <form
+                      id={`channel-bind-${channel.id}`}
+                      method="POST"
+                      action="?/bindCertificate"
+                      hidden
+                      use:enhance
+                    >
                       <input type="hidden" name="id" value={channel.id} />
-                      <input type="hidden" name="certificateId" value={data.certificateId} />
+                      <input
+                        type="hidden"
+                        name="certificateId"
+                        value={data.certificateId}
+                      />
                     </form>
                   {/if}
                   <form
@@ -297,7 +399,13 @@
                   >
                     <input type="hidden" name="id" value={channel.id} />
                   </form>
-                  <form id={`channel-toggle-${channel.id}`} method="POST" action="?/setEnabled" hidden use:enhance>
+                  <form
+                    id={`channel-toggle-${channel.id}`}
+                    method="POST"
+                    action="?/setEnabled"
+                    hidden
+                    use:enhance
+                  >
                     <input type="hidden" name="id" value={channel.id} />
                     <input
                       type="hidden"
@@ -322,29 +430,50 @@
                     <DropdownMenu.Content
                       align="end"
                       onCloseAutoFocus={(event) => {
-                        if (removingChannel === channel.id || editingChannel === channel.id) event.preventDefault();
+                        if (
+                          removingChannel === channel.id ||
+                          editingChannel === channel.id
+                        )
+                          event.preventDefault();
                       }}
                     >
                       <DropdownMenu.Group>
-                        <DropdownMenu.Item onSelect={() => (editingChannel = channel.id)}>Edit</DropdownMenu.Item>
+                        <DropdownMenu.Item
+                          onSelect={() => (editingChannel = channel.id)}
+                          >Edit</DropdownMenu.Item
+                        >
                         {#if canBind}
-                          <DropdownMenu.Item onSelect={() => submitChannelAction('bind', channel.id)}>
-                            {channel.certificateIds === null ? 'Restrict to this certificate' : 'Add this certificate'}
+                          <DropdownMenu.Item
+                            onSelect={() =>
+                              submitChannelAction("bind", channel.id)}
+                          >
+                            {channel.certificateIds === null
+                              ? "Restrict to this certificate"
+                              : "Add this certificate"}
                           </DropdownMenu.Item>
                         {/if}
                         <DropdownMenu.Item
                           disabled={!channel.ready || testingChannel !== null}
-                          onSelect={() => submitChannelAction('test', channel.id)}
+                          onSelect={() =>
+                            submitChannelAction("test", channel.id)}
                         >
-                          {testingChannel === channel.id ? 'Sending…' : 'Send test'}
+                          {testingChannel === channel.id
+                            ? "Sending…"
+                            : "Send test"}
                         </DropdownMenu.Item>
-                        <DropdownMenu.Item onSelect={() => submitChannelAction('toggle', channel.id)}>
-                          {channel.enabled ? 'Pause' : 'Enable'}
+                        <DropdownMenu.Item
+                          onSelect={() =>
+                            submitChannelAction("toggle", channel.id)}
+                        >
+                          {channel.enabled ? "Pause" : "Enable"}
                         </DropdownMenu.Item>
                       </DropdownMenu.Group>
                       <DropdownMenu.Separator />
                       <DropdownMenu.Group>
-                        <DropdownMenu.Item variant="destructive" onSelect={() => (removingChannel = channel.id)}>
+                        <DropdownMenu.Item
+                          variant="destructive"
+                          onSelect={() => (removingChannel = channel.id)}
+                        >
                           Remove
                         </DropdownMenu.Item>
                       </DropdownMenu.Group>
@@ -353,17 +482,22 @@
                   <Dialog.Root
                     open={editingChannel === channel.id}
                     onOpenChange={(open) => {
-                      if (!open && editingChannel === channel.id) editingChannel = null;
+                      if (!open && editingChannel === channel.id)
+                        editingChannel = null;
                     }}
                   >
                     <Dialog.Content
                       class="max-h-[calc(100dvh-2rem)] overflow-y-auto"
-                      onCloseAutoFocus={(event) => restoreChannelFocus(event, channel.id)}
+                      onCloseAutoFocus={(event) =>
+                        restoreChannelFocus(event, channel.id)}
                     >
                       <Dialog.Header>
-                        <Dialog.Title>Edit {channel.provider} channel</Dialog.Title>
+                        <Dialog.Title
+                          >Edit {channel.provider} channel</Dialog.Title
+                        >
                         <Dialog.Description>
-                          Leave the credential fields blank to keep their current values.
+                          Leave the credential fields blank to keep their
+                          current values.
                         </Dialog.Description>
                       </Dialog.Header>
                       <form
@@ -375,7 +509,11 @@
                           return async ({ result, update }) => {
                             try {
                               await update({ reset: false });
-                              if (result.type === 'success' && editingChannel === channel.id) editingChannel = null;
+                              if (
+                                result.type === "success" &&
+                                editingChannel === channel.id
+                              )
+                                editingChannel = null;
                             } finally {
                               savingChannel = false;
                             }
@@ -383,15 +521,21 @@
                         }}
                       >
                         <input type="hidden" name="id" value={channel.id} />
-                        {@render channelFields(channel.provider, `edit-channel-${channel.id}`, channel)}
+                        {@render channelFields(
+                          channel.provider,
+                          `edit-channel-${channel.id}`,
+                          channel,
+                        )}
                         <Dialog.Footer>
                           <Dialog.Close>
                             {#snippet child({ props })}
-                              <Button {...props} type="button" variant="outline">Cancel</Button>
+                              <Button {...props} type="button" variant="outline"
+                                >Cancel</Button
+                              >
                             {/snippet}
                           </Dialog.Close>
                           <Button type="submit" disabled={savingChannel}>
-                            {savingChannel ? 'Saving…' : 'Save changes'}
+                            {savingChannel ? "Saving…" : "Save changes"}
                           </Button>
                         </Dialog.Footer>
                       </form>
@@ -400,14 +544,18 @@
                   <AlertDialog.Root
                     open={removingChannel === channel.id}
                     onOpenChange={(open) => {
-                      if (!open && removingChannel === channel.id) removingChannel = null;
+                      if (!open && removingChannel === channel.id)
+                        removingChannel = null;
                     }}
                   >
                     <AlertDialog.Content
-                      onCloseAutoFocus={(event) => restoreChannelFocus(event, channel.id)}
+                      onCloseAutoFocus={(event) =>
+                        restoreChannelFocus(event, channel.id)}
                     >
                       <AlertDialog.Header>
-                        <AlertDialog.Title>Remove notification channel?</AlertDialog.Title>
+                        <AlertDialog.Title
+                          >Remove notification channel?</AlertDialog.Title
+                        >
                         <AlertDialog.Description>
                           {channel.destination} will stop receiving alerts.
                         </AlertDialog.Description>
@@ -416,7 +564,9 @@
                         <AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
                         <form method="POST" action="?/remove" use:enhance>
                           <input type="hidden" name="id" value={channel.id} />
-                          <Button type="submit" variant="destructive">Remove channel</Button>
+                          <Button type="submit" variant="destructive"
+                            >Remove channel</Button
+                          >
                         </form>
                       </AlertDialog.Footer>
                     </AlertDialog.Content>

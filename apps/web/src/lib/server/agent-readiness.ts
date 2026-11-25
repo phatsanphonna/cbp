@@ -3,7 +3,7 @@ import {
   type AgentReadiness,
 } from "@cbp/database/host-agents";
 import { deploymentServices } from "#lib/deployment-services.js";
-import { parseServedCertificateExpiry } from './served-certificate.js';
+import { parseServedCertificateExpiry } from "./served-certificate.js";
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const states = ["ready", "unreachable", "tls-error", "not-allowed"] as const;
@@ -12,7 +12,8 @@ const fingerprintPattern = /^[\da-f]{64}$/i;
 export function parseAgentReadiness(
   report: Record<string, unknown>,
 ): AgentReadiness | null | undefined {
-  const { allowedServices, serviceVersions, listenerResults, listenerCursor } = report;
+  const { allowedServices, serviceVersions, listenerResults, listenerCursor } =
+    report;
   if (
     allowedServices === undefined &&
     listenerResults === undefined &&
@@ -34,11 +35,20 @@ export function parseAgentReadiness(
 
   const versions: Record<string, string> = {};
   if (serviceVersions !== undefined) {
-    if (!serviceVersions || typeof serviceVersions !== "object" || Array.isArray(serviceVersions))
+    if (
+      !serviceVersions ||
+      typeof serviceVersions !== "object" ||
+      Array.isArray(serviceVersions)
+    )
       return null;
     for (const [service, version] of Object.entries(serviceVersions)) {
-      if (!allowedServices.includes(service) || typeof version !== "string" ||
-          !version.trim() || version.length > 128 || /[\x00-\x1f\x7f]/.test(version))
+      if (
+        !allowedServices.includes(service) ||
+        typeof version !== "string" ||
+        !version.trim() ||
+        version.length > 128 ||
+        /[\x00-\x1f\x7f]/.test(version)
+      )
         return null;
       versions[service] = version;
     }
@@ -48,10 +58,8 @@ export function parseAgentReadiness(
   const seen = new Set<string>();
   for (const result of listenerResults) {
     if (!result || typeof result !== "object") return null;
-    const { id, endpoint, engine, status, address, fingerprint, expiresAt } = result as Record<
-      string,
-      unknown
-    >;
+    const { id, endpoint, engine, status, address, fingerprint, expiresAt } =
+      result as Record<string, unknown>;
     const state = states.find((value) => value === status);
     const service = deploymentServices.find((value) => value === engine);
     const servedExpiry = parseServedCertificateExpiry(expiresAt);
@@ -64,9 +72,14 @@ export function parseAgentReadiness(
       endpoint.length > 261 ||
       !service ||
       !state ||
-      (expiresAt !== undefined && (!servedExpiry || state !== 'ready' || typeof fingerprint !== 'string')) ||
-      (fingerprint !== undefined && fingerprint !== null &&
-        (typeof fingerprint !== "string" || !fingerprintPattern.test(fingerprint))) ||
+      (expiresAt !== undefined &&
+        (!servedExpiry ||
+          state !== "ready" ||
+          typeof fingerprint !== "string")) ||
+      (fingerprint !== undefined &&
+        fingerprint !== null &&
+        (typeof fingerprint !== "string" ||
+          !fingerprintPattern.test(fingerprint))) ||
       (state === "not-allowed"
         ? address != null
         : typeof address !== "string" ||
@@ -82,7 +95,8 @@ export function parseAgentReadiness(
       engine: service,
       status: state,
       address: typeof address === "string" ? address : null,
-      fingerprint: typeof fingerprint === "string" ? fingerprint.toLowerCase() : null,
+      fingerprint:
+        typeof fingerprint === "string" ? fingerprint.toLowerCase() : null,
       expiresAt: servedExpiry ?? undefined,
     });
   }

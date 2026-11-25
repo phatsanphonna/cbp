@@ -1,26 +1,32 @@
 <script lang="ts">
-  import type { Component } from 'svelte';
-  import * as Select from '#lib/components/ui/select/index.ts';
+  import type { Component } from "svelte";
+  import * as Select from "#lib/components/ui/select/index.ts";
 
   let {
     id,
     name,
     items,
-    value = $bindable(''),
-    placeholder = 'Choose an option',
+    value = $bindable(""),
+    placeholder = "Choose an option",
     required = false,
     onValueChange,
   }: {
     id: string;
     name: string;
-    items: { value: string; label: string; icon?: Component<{ size?: number; 'aria-hidden'?: 'true' }> }[];
+    items: {
+      value: string;
+      label: string;
+      icon?: Component<{ size?: number; "aria-hidden"?: "true" }>;
+    }[];
     value?: string;
     placeholder?: string;
     required?: boolean;
     onValueChange?: (value: string) => void;
   } = $props();
 
-  const SelectedIcon = $derived(items.find((item) => item.value === value)?.icon);
+  const SelectedIcon = $derived(
+    items.find((item) => item.value === value)?.icon,
+  );
 </script>
 
 <Select.Root type="single" {name} {items} bind:value {required} {onValueChange}>

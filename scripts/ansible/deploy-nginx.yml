@@ -59,7 +59,7 @@
                 dest: "{{ cbp_nginx_certificate }}"
                 owner: root
                 group: root
-                mode: '0644'
+                mode: "0644"
               register: cbp_certificate_write
 
             - name: Install the private key
@@ -68,7 +68,7 @@
                 dest: "{{ cbp_nginx_key }}"
                 owner: root
                 group: root
-                mode: '0600'
+                mode: "0600"
               register: cbp_key_write
               no_log: true
               diff: false
@@ -127,7 +127,10 @@
                 group: "{{ item.original.stat.gid | string }}"
                 mode: "{{ item.original.stat.mode }}"
               loop:
-                - { original: "{{ cbp_current.results[0] }}", name: certificate }
+                - {
+                    original: "{{ cbp_current.results[0] }}",
+                    name: certificate,
+                  }
                 - { original: "{{ cbp_current.results[1] }}", name: key }
               when: item.original.stat.exists
               no_log: true

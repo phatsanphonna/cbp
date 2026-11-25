@@ -1,10 +1,15 @@
 import { building, dev } from "$app/env";
 import { resolve as resolvePath } from "$app/paths";
-import { reconcileAlerts } from '@cbp/database/alerts';
+import { reconcileAlerts } from "@cbp/database/alerts";
 import { expireDeploymentJobs } from "@cbp/database/deployment-jobs";
-import { error, redirect, type Handle, type HandleServerError } from "@sveltejs/kit";
+import {
+  error,
+  redirect,
+  type Handle,
+  type HandleServerError,
+} from "@sveltejs/kit";
 import { auditUserAction } from "#lib/server/audit-action.js";
-import { deliverAlertNotifications } from '#lib/server/alert-notifications.js';
+import { deliverAlertNotifications } from "#lib/server/alert-notifications.js";
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
 import { isDirectHttps } from "#lib/server/trusted-transport.js";
@@ -44,8 +49,12 @@ export function init() {
     try {
       await expireDeploymentJobs(getDatabase());
     } catch (failure) {
-      const cause = failure instanceof Error ? failure.cause ?? failure : failure;
-      console.error('Could not clear expired certificate deployment jobs', cause);
+      const cause =
+        failure instanceof Error ? (failure.cause ?? failure) : failure;
+      console.error(
+        "Could not clear expired certificate deployment jobs",
+        cause,
+      );
     } finally {
       expiringJobs = false;
     }
@@ -62,13 +71,14 @@ export function init() {
     try {
       await reconcileAlerts(getDatabase());
     } catch (failure) {
-      const cause = failure instanceof Error ? failure.cause ?? failure : failure;
-      console.error('Could not reconcile alerts', cause);
+      const cause =
+        failure instanceof Error ? (failure.cause ?? failure) : failure;
+      console.error("Could not reconcile alerts", cause);
     }
     try {
       await deliverAlertNotifications(getDatabase());
     } catch {
-      console.error('Could not process alert notifications');
+      console.error("Could not process alert notifications");
     } finally {
       reconcilingAlerts = false;
     }
@@ -100,7 +110,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (isDirectHttps(event)) error(404, "Not found");
     return resolve(event);
   }
-  if (id === '/api/internal/ansible') return resolve(event);
+  if (id === "/api/internal/ansible") return resolve(event);
 
   const session = await getAuth().api.getSession({
     headers: event.request.headers,
@@ -142,12 +152,16 @@ export const handle: Handle = async ({ event, resolve }) => {
   });
 };
 
-export const handleError: HandleServerError = ({ error: cause, event, kind }) => {
-  if (!event.route.id?.startsWith('/deployments')) return;
+export const handleError: HandleServerError = ({
+  error: cause,
+  event,
+  kind,
+}) => {
+  if (!event.route.id?.startsWith("/deployments")) return;
 
-  const status = kind === 'unknown' ? 500 : cause.status;
+  const status = kind === "unknown" ? 500 : cause.status;
   console.error(`Deployment page failed with HTTP ${status}`, cause);
-  if (dev && kind === 'unknown' && cause instanceof Error) {
+  if (dev && kind === "unknown" && cause instanceof Error) {
     return { message: cause.message };
   }
 };

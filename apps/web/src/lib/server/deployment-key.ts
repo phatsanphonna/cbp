@@ -1,7 +1,4 @@
-import {
-  createPrivateKey,
-  X509Certificate,
-} from "node:crypto";
+import { createPrivateKey, X509Certificate } from "node:crypto";
 
 const maxKeySize = 16_384;
 const invalidKey =
@@ -47,4 +44,3 @@ export async function readDeploymentKey(
     return { message: invalidKey };
   }
 }
-

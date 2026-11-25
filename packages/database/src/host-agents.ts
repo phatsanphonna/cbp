@@ -15,13 +15,21 @@ const hostIdPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 export async function withAgentHost<T>(
   db: Database,
   hostId: string,
-  work: (tx: Transaction, name: string, applianceType: string | null) => Promise<T>,
+  work: (
+    tx: Transaction,
+    name: string,
+    applianceType: string | null,
+  ) => Promise<T>,
   allowUnmanaged = false,
 ) {
   if (!hostIdPattern.test(hostId)) return "missing" as const;
   return db.transaction(async (tx) => {
     const [host] = await tx
-      .select({ agentManaged: hosts.agentManaged, name: hosts.name, applianceType: hosts.applianceType })
+      .select({
+        agentManaged: hosts.agentManaged,
+        name: hosts.name,
+        applianceType: hosts.applianceType,
+      })
       .from(hosts)
       .where(eq(hosts.id, hostId))
       .for("update");
@@ -56,7 +64,7 @@ export function inviteHostAgent(
     db,
     hostId,
     async (tx, _name, applianceType) => {
-      if (applianceType !== 'Linux') return 'unsupported';
+      if (applianceType !== "Linux") return "unsupported";
       const now = new Date();
       const invite = {
         inviteHash,
@@ -95,7 +103,7 @@ export function enrollHostAgent(
   address?: string,
 ) {
   return withAgentHost(db, hostId, async (tx, name, applianceType) => {
-    if (applianceType !== 'Linux') return 'unsupported';
+    if (applianceType !== "Linux") return "unsupported";
     const pendingInvite = and(
       eq(hostAgents.hostId, hostId),
       eq(hostAgents.inviteHash, inviteHash),
@@ -145,7 +153,7 @@ export type AgentReadiness = {
     id: string;
     endpoint: string;
     engine: string;
-    status: 'ready' | 'unreachable' | 'tls-error' | 'not-allowed';
+    status: "ready" | "unreachable" | "tls-error" | "not-allowed";
     address: string | null;
     fingerprint: string | null;
     expiresAt?: Date;
@@ -191,17 +199,23 @@ export function saveAgentCheckIn(
     if (!readiness) return "ok";
 
     for (const result of readiness.results) {
-      const [deployment] = await tx.select({ fingerprint: deployments.expectedFingerprint })
+      const [deployment] = await tx
+        .select({ fingerprint: deployments.expectedFingerprint })
         .from(deployments)
-        .where(and(eq(deployments.id, result.id), eq(deployments.hostId, hostId)));
+        .where(
+          and(eq(deployments.id, result.id), eq(deployments.hostId, hostId)),
+        );
       const expectedFingerprint = deployment?.fingerprint
         ?.replace(/^sha256:/i, "")
         .replaceAll(":", "")
         .toLowerCase();
-      const listenerStatus = result.status === 'ready' && result.fingerprint && expectedFingerprint &&
+      const listenerStatus =
+        result.status === "ready" &&
+        result.fingerprint &&
+        expectedFingerprint &&
         result.fingerprint.toLowerCase() !== expectedFingerprint
-        ? 'drifted'
-        : result.status;
+          ? "drifted"
+          : result.status;
       const observedAt = sql`${report.lastProbedAt.toISOString()}::timestamptz`;
       const latestObservation = sql`${deployments.servedCertificateObservedAt} is null or
         ${deployments.servedCertificateObservedAt} <= ${observedAt}`;
@@ -292,13 +306,16 @@ export function revokeHostAgent(
         .where(
           and(
             eq(deploymentJobs.hostId, hostId),
-            eq(deploymentJobs.method, 'Agent'),
+            eq(deploymentJobs.method, "Agent"),
             inArray(deploymentJobs.status, ["Queued", "Running"]),
           ),
         );
       await tx
         .update(hosts)
-        .set({ allowedDeploymentServices: null, deploymentServiceVersions: null })
+        .set({
+          allowedDeploymentServices: null,
+          deploymentServiceVersions: null,
+        })
         .where(eq(hosts.id, hostId));
       await tx
         .update(deployments)
@@ -308,7 +325,9 @@ export function revokeHostAgent(
           listenerCheckedAt: null,
           listenerFingerprint: null,
         })
-        .where(and(eq(deployments.hostId, hostId), eq(deployments.method, 'Agent')));
+        .where(
+          and(eq(deployments.hostId, hostId), eq(deployments.method, "Agent")),
+        );
       return "ok";
     },
     true,
