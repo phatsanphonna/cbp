@@ -85,6 +85,8 @@
               if (typeof result.data?.endpointMessage === "string") {
                 toast.success(result.data.endpointMessage);
               }
+            } else if (result.type === 'failure' && typeof result.data?.endpointError === 'string') {
+              toast.error(result.data.endpointError);
             }
           } finally {
             pending = false;
@@ -115,9 +117,6 @@
             required
           />
         </Field>
-        {#if message}
-          <p class="text-xs text-destructive" role="alert">{message}</p>
-        {/if}
       </FieldGroup>
     </form>
     <Dialog.Footer class="sm:justify-between">

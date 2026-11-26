@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Copy, Download } from "@lucide/svelte";
   import { enhance } from "$app/forms";
+  import { notifyFormResult } from './form-feedback.js';
+  import { toast } from 'svelte-sonner';
   import { resolve } from "$app/paths";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
@@ -92,9 +94,11 @@
         use:enhance={() => {
           pending = true;
           copyFeedback = "";
-          return async ({ update }) => {
+          return async ({ result, update }) => {
             try {
               await update();
+              notifyFormResult(result, { error: 'enrollmentError' });
+              if (result.type === 'success' && typeof result.data?.enrollmentCode === 'string') toast.success('Enrollment code generated.');
             } finally {
               pending = false;
             }
@@ -128,7 +132,7 @@
               new code to enroll an agent again.
             </AlertDialog.Description>
           </AlertDialog.Header>
-          <form method="POST" action="?/resetAgent" use:enhance>
+          <form method="POST" action="?/resetAgent" use:enhance={() => async ({ result, update }) => { await update(); notifyFormResult(result, { success: 'enrollmentMessage', error: 'enrollmentError' }); }}>
             <AlertDialog.Footer>
               <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
               <AlertDialog.Action type="submit" variant="destructive"
@@ -171,8 +175,6 @@
       {/if}
     </div>
   {/if}
-  {#if error}<p class="text-xs text-destructive" role="alert">{error}</p>{/if}
-  {#if message}<p class="text-xs" role="status">{message}</p>{/if}
   {#if canEnroll && code && command && status === "pending"}
     <div class="grid gap-3 border bg-muted/40 p-3">
       <p class="text-xs">

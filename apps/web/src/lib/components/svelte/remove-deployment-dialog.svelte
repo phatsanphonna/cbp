@@ -52,6 +52,8 @@
               if (typeof result.data?.removeDeploymentMessage === "string") {
                 toast.success(result.data.removeDeploymentMessage);
               }
+            } else if (result.type === 'failure' && typeof result.data?.removeDeploymentError === 'string') {
+              toast.error(result.data.removeDeploymentError);
             }
           } finally {
             pending = false;
@@ -60,9 +62,6 @@
       }}
     >
       <input type="hidden" name="deploymentId" value={deploymentId} />
-      {#if message}<p class="mb-3 text-xs text-destructive" role="alert">
-          {message}
-        </p>{/if}
       <AlertDialog.Footer>
         <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
         <Button type="submit" variant="destructive" disabled={pending}

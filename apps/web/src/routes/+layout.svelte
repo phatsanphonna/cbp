@@ -72,7 +72,7 @@
     <AppSidebar />
     <Sidebar.Inset class="min-w-0">
       <header
-        class="flex h-14 items-center gap-2 border-b px-3 sm:gap-3 sm:px-4"
+        class="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur sm:gap-3 sm:px-4"
       >
         <Sidebar.Trigger />
         {#if pageTitle}

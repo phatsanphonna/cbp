@@ -27,6 +27,8 @@ import {
 import { loadAgentDeployments } from "#lib/server/agent-deployment.js";
 import { getDatabase } from "#lib/server/database.js";
 import { dateFormatter } from "#lib/server/date-formatter.js";
+import { listAnsibleProfiles, readAnsibleProfile } from '#lib/server/ansible-credentials.js';
+import { deleteSavedCredential, readHostCredentialBinding, saveCredential, savedCredentialsAvailable } from '#lib/server/deployment-secrets.js';
 import { hostIpAddress } from "#lib/server/host-address.js";
 import { parseHostReport } from "#lib/server/host-report.js";
 import {
@@ -56,8 +58,16 @@ export const load: PageServerLoad = async (event) => {
       event,
     ),
   ]);
+  let credentials: { available: boolean; profiles: { id: string; name: string }[]; bound: string | null; error: boolean } = { available: false, profiles: [], bound: null, error: false };
+  if (event.locals.user?.isAdmin && savedCredentialsAvailable() && hasTrustedTransport(event)) {
+    try {
+      const [profiles, bound] = await Promise.all([listAnsibleProfiles(), readHostCredentialBinding(host.id)]);
+      credentials = { available: true, profiles, bound, error: false };
+    } catch { credentials.error = true; }
+  }
   return {
     agentDeployments,
+    credentials,
     enrollment: {
       canDownloadAgent: Boolean(
         event.locals.user?.isAdmin && hasTrustedTransport(event),
@@ -104,6 +114,23 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+  bindCredential: async (event) => {
+    if (!event.locals.user?.isAdmin || !hasTrustedTransport(event)) error(403, 'Administrator access and a trusted connection are required.');
+    const host = await findHost(getDatabase(), event.params.id);
+    if (!host) error(404, 'Host not found');
+    const id = (await event.request.formData()).get('credentialId');
+    if (typeof id !== 'string' || (id !== 'none' && !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id))) return fail(400, { credentialError: 'Choose a valid credential.' });
+    if (id !== 'none' && !host.ansibleManaged) return fail(400, { credentialError: 'This host is not managed by Ansible.' });
+    try {
+      if (id === 'none') {
+        if (await readHostCredentialBinding(host.id)) await deleteSavedCredential('host-binding', host.id);
+      } else {
+        await readAnsibleProfile(id);
+        await saveCredential('host-binding', host.id, id);
+      }
+    } catch { return fail(503, { credentialError: 'Could not update the host credential in Vault.' }); }
+    return { credentialMessage: id === 'none' ? 'Credential unbound.' : 'Credential bound.' };
+  },
   inviteAgent: async ({ params, setHeaders }) => {
     setHeaders({ "cache-control": "no-store" });
     const address = normalizeAgentControllerAddress(
@@ -181,6 +208,11 @@ export const actions: Actions = {
     return { ping };
   },
   remove: async ({ params }) => {
+    if (savedCredentialsAvailable()) {
+      try {
+        if (await readHostCredentialBinding(params.id)) return fail(409, { credentialError: 'Unbind the Ansible credential before removing this host.' });
+      } catch { return fail(503, { credentialError: 'Vault must be available to check this host’s credential.' }); }
+    }
     if (!(await removeHost(getDatabase(), params.id)))
       error(404, "Host not found");
     redirect(303, resolve("/hosts"));

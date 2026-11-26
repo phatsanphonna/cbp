@@ -57,7 +57,10 @@
       id: "administration",
       label: "Administration",
       adminOnly: true,
-      items: [{ label: "Users", route: "/users", icon: Users }],
+      items: [
+        { label: 'Ansible credentials', route: '/ansible-credentials', icon: KeyRound },
+        { label: "Users", route: "/users", icon: Users },
+      ],
     },
     {
       id: "docs",
@@ -99,14 +102,14 @@
 
 <Sidebar.Root collapsible="icon">
   <Sidebar.Header
-    class="h-14 justify-center border-b border-sidebar-border px-4 group-data-[collapsible=icon]:px-0"
+    class="h-14 justify-center border-b border-sidebar-border px-4 group-data-[collapsible=icon]:px-[15px]"
   >
     <a
       href={overview}
-      class="inline-flex items-center gap-2.5 text-sm font-semibold transition-[gap] duration-300 ease-in-out group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
+      class="inline-flex w-full items-center gap-2.5 text-sm font-semibold transition-[gap] duration-300 ease-in-out group-data-[collapsible=icon]:gap-0"
       onclick={() => sidebar.setOpenMobile(false)}
     >
-      <ShieldCheck size={18} class="text-sidebar-primary" aria-hidden="true" />
+      <ShieldCheck size={18} class="shrink-0 text-sidebar-primary" aria-hidden="true" />
       <span
         class="max-w-40 overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity] duration-300 ease-in-out group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0"
         >Certified by Pat</span
@@ -140,13 +143,13 @@
   <Sidebar.Footer class="border-t border-sidebar-border">
     {#if user}
       <div
-        class="flex min-w-0 items-center gap-2.5 px-2 py-1.5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
+        class="flex min-w-0 items-center gap-2.5 px-2 py-1.5 transition-[gap,padding] duration-300 ease-in-out group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:px-0"
       >
         <Avatar.Root aria-hidden="true">
           {#if user.image}<Avatar.Image src={user.image} alt="" />{/if}
           <Avatar.Fallback>{initials}</Avatar.Fallback>
         </Avatar.Root>
-        <div class="min-w-0 group-data-[collapsible=icon]:hidden">
+        <div class="min-w-0 max-w-40 overflow-hidden opacity-100 transition-[max-width,opacity] duration-300 ease-in-out group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0">
           <p class="truncate text-xs font-medium">{user.name}</p>
           <p class="truncate text-xs text-muted-foreground">
             {user.username ? `@${user.username}` : user.email}

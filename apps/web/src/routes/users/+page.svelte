@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
+  import { toast } from 'svelte-sonner';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from "$app/paths";
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -6,6 +10,14 @@
   import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
+  $effect(() => {
+    const created = data.created;
+    const removed = data.removed;
+    untrack(() => {
+      if (created) toast.success('User account created.');
+      else if (removed) toast.success('User account removed.');
+    });
+  });
 </script>
 
 <svelte:head>
@@ -17,15 +29,6 @@
     <h1 id="users-heading" class="font-heading text-xl font-semibold">Users</h1>
     <Button href={resolve("/users/new")}>Create user</Button>
   </header>
-
-  {#if data.created}
-    <p role="status" class="mt-4 text-sm">User account created.</p>
-  {:else if data.removed}
-    <p role="status" class="mt-4 text-sm">User account removed.</p>
-  {/if}
-  {#if form?.message}
-    <p role="alert" class="mt-4 text-sm text-destructive">{form.message}</p>
-  {/if}
 
   <div class="mt-6 border">
     <Table.Root>
@@ -66,7 +69,7 @@
                         Remove {user.email} from CBP and sign them out of all sessions.
                       </AlertDialog.Description>
                     </AlertDialog.Header>
-                    <form method="POST" action="?/remove">
+                    <form method="POST" action="?/remove" use:enhance={() => async ({ result, update }) => { await update(); notifyFormResult(result, {}); }}>
                       <input type="hidden" name="userId" value={user.id} />
                       <AlertDialog.Footer>
                         <AlertDialog.Cancel type="button"

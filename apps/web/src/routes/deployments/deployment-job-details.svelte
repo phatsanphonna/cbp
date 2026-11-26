@@ -227,9 +227,6 @@
       {missing === 1 ? "target is" : "targets are"} no longer available.
     </p>
   {/if}
-  {#if recoverError}
-    <p class="mt-4 text-sm text-destructive" role="alert">{recoverError}</p>
-  {/if}
 
   <div class="mt-4 border">
     <Table.Root>
@@ -403,11 +400,11 @@
         <Dialog.Header>
           <Dialog.Title>Redeploy certificate</Dialog.Title>
           <Dialog.Description
-            >Upload the matching private key again. It is held temporarily in
-            memory while the runner claims this job.</Dialog.Description
+            >Upload the matching private key again. It is held temporarily
+            while the runner claims this job.</Dialog.Description
           >
         </Dialog.Header>
-        <form method="POST" action="?/recover" enctype="multipart/form-data">
+        <form method="POST" action="?/recover" enctype="multipart/form-data" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'failure' && typeof result.data?.recoverError === 'string') toast.error(result.data.recoverError); else if (result.type === 'redirect') toast.success('Redeployment queued.'); }}>
           <input type="hidden" name="jobId" value={selectedRecoveryJob.id} />
           <FieldGroup>
             <FieldSet aria-describedby="recovery-key-hint">

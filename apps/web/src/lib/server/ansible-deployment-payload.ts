@@ -14,11 +14,12 @@ function isPassword(value: unknown): value is string {
   );
 }
 
-export function readAnsibleCredentials(fields: FormData) {
-  const sshUsername = fields.get("sshUsername");
-  const sshPassword = fields.get("sshPassword");
-  const becomeMethod = fields.get("becomeMethod");
-  const suPassword = fields.get("suPassword");
+export function readAnsibleCredentials(fields: FormData, hostId?: string): { message: string; credentials?: never } | { credentials: AnsibleCredentials; message?: never } {
+  const name = (field: string) => hostId ? `${field}:${hostId}` : field;
+  const sshUsername = fields.get(name("sshUsername"));
+  const sshPassword = fields.get(name("sshPassword"));
+  const becomeMethod = fields.get(name("becomeMethod"));
+  const suPassword = fields.get(name("suPassword"));
   if (
     typeof sshUsername !== "string" ||
     !sshUsername.trim() ||

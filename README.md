@@ -63,6 +63,35 @@ Create the first administrator, then open `BETTER_AUTH_URL` and verify enrollmen
 
 Enable the optional `ansible` profile to run the Ansible worker alongside the controller in its own container. [Ansible container setup](scripts/ansible/README.md#run-the-ansible-worker-in-docker)
 
+## Vault deployment secrets
+
+CBP can store temporary deployment private keys and Ansible credentials in a Vault KV v2 engine mounted at `cbp`. Set both `CBP_VAULT_ADDR` and `CBP_VAULT_TOKEN` in `.env.local` for local development or `.env` for Compose, and restart the web app. The address must use HTTPS unless Vault is on the web app's loopback interface. When neither value is set, deployment credentials remain in memory as before. If only one is set, deployments cannot be submitted.
+
+Create a dedicated Vault policy for the app token:
+
+```hcl
+path "cbp/data/deployments/*" {
+  capabilities = ["create", "read", "update"]
+}
+path "cbp/metadata/deployments" {
+  capabilities = ["list"]
+}
+path "cbp/metadata/deployments/*" {
+  capabilities = ["read", "delete"]
+}
+path "cbp/data/credentials/*" {
+  capabilities = ["create", "read", "update"]
+}
+path "cbp/metadata/credentials/*" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+path "cbp/metadata/credentials/ansible-profile" {
+  capabilities = ["list"]
+}
+```
+
+The web app removes temporary credentials when a worker claims a job or an administrator cancels it. It also cleans up temporary entries older than one hour, including entries left by interrupted requests. Administrators can save a private key and shared Ansible credentials per certificate, or create named Ansible credentials and bind them to hosts. Bound host credentials are used for deployments unless a host-specific override is supplied. Saved credentials retain one Vault version. Saved keys are checked against the current certificate before use. Unbind host credentials before deleting them or their hosts, and delete saved certificate credentials before removing a certificate. Vault must remain available and unsealed for cleanup and deployments. Job expiration remains ten minutes, and this integration does not add approvals or staged rollouts. For Compose, the Vault address must be reachable from the web container; its loopback address refers to the container itself. Protect the token and replace it before it expires.
+
 ## Alert notifications
 
 As an administrator, open **Alerts → Notification channels** to add, edit, pause, or remove destinations for Slack, LINE, Telegram, Resend email, HTTPS webhooks, Microsoft Teams, or Discord. Enter the provider credentials or webhook URL in the form. For Teams, use an incoming webhook URL from a Teams Workflows workflow configured to post to the destination channel. **Docs → Alert** has provider instructions.

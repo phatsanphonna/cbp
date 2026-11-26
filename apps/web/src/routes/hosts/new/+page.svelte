@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
+  import { toast } from 'svelte-sonner';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from "$app/paths";
   import FormSelect from "#lib/components/svelte/form-select.svelte";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -38,7 +41,7 @@
     <Button href={resolve("/hosts")} variant="outline">Back to hosts</Button>
   </header>
 
-  <form method="POST" class="mt-6 border p-4 sm:p-5">
+  <form method="POST" class="mt-6 border p-4 sm:p-5" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'redirect') toast.success('Host added.'); else notifyFormResult(result, {}); }}>
     <FieldGroup>
       <Field>
         <FieldLabel for="host-name" required>Hostname or IP address</FieldLabel>
@@ -63,9 +66,6 @@
           required
         />
       </Field>
-      {#if form?.message}
-        <p role="alert" class="text-xs text-destructive">{form.message}</p>
-      {/if}
       <div class="flex justify-end">
         <Button type="submit">Add host</Button>
       </div>

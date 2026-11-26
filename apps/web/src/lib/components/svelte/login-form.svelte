@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
+  import { notifyFormResult } from './form-feedback.js';
+  import { toast } from 'svelte-sonner';
   import * as Card from "#lib/components/ui/card/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
   import {
@@ -28,7 +31,7 @@
     </Card.Description>
   </Card.Header>
   <Card.Content>
-    <form method="POST">
+    <form method="POST" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'redirect') toast.success('Signed in.'); else notifyFormResult(result, {}); }}>
       <FieldGroup>
         <Field>
           <FieldLabel for="identifier-{id}" required
@@ -54,9 +57,6 @@
             required
           />
         </Field>
-        {#if message}
-          <p role="alert" class="text-xs text-destructive">{message}</p>
-        {/if}
         <Field>
           <Button type="submit" class="w-full">Sign in</Button>
         </Field>

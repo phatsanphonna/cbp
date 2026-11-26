@@ -7,12 +7,16 @@
   import RedHatIcon from "@icons-pack/svelte-simple-icons/icons/SiRedhat";
   import UbuntuIcon from "@icons-pack/svelte-simple-icons/icons/SiUbuntu";
   import { Info, Monitor } from "@lucide/svelte";
+  import { enhance } from '$app/forms';
   import { resolve } from "$app/paths";
+  import { toast } from 'svelte-sonner';
   import AgentEnrollment from "#lib/components/svelte/agent-enrollment.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
   import ServedCertificateExpiry from "#lib/components/svelte/served-certificate-expiry.svelte";
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import { Field, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
   import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
   import { Badge } from "#lib/components/ui/badge/index.ts";
   import { Button } from "#lib/components/ui/button/index.ts";
@@ -26,6 +30,8 @@
   import type { PageProps } from "./$types";
 
   let { data, form }: PageProps = $props();
+  let selectedCredential = $state('none');
+  $effect(() => { selectedCredential = data.credentials.bound ?? 'none'; });
   refreshHostPing();
   const host = $derived(data.host);
   const architectureAliases = new Map([
@@ -127,7 +133,7 @@
               the certificate inventory without a linked host.
             </AlertDialog.Description>
           </AlertDialog.Header>
-          <form method="POST" action="?/remove">
+          <form method="POST" action="?/remove" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'failure' && typeof result.data?.credentialError === 'string') toast.error(result.data.credentialError); else if (result.type === 'redirect') toast.success('Host removed.'); }}>
             <AlertDialog.Footer>
               <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
               <AlertDialog.Action type="submit" variant="destructive"
@@ -233,6 +239,34 @@
         </dd>
       </div>
     </dl>
+    {#if data.user?.isAdmin && (host.ansibleManaged || data.credentials.bound)}
+      <div class="border-t p-4">
+        <h3 class="text-sm font-medium">Ansible credential</h3>
+        {#if data.credentials.available}
+          <form method="POST" action="?/bindCredential" class="mt-3 max-w-md" use:enhance={() => {
+            return async ({ result, update }) => {
+              await update();
+              if (result.type === 'success' && typeof result.data?.credentialMessage === 'string') {
+                toast.success(result.data.credentialMessage);
+              } else if (result.type === 'failure' && typeof result.data?.credentialError === 'string') {
+                toast.error(result.data.credentialError);
+              }
+            };
+          }}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel for="host-credential">Credential for this host</FieldLabel>
+                <FormSelect id="host-credential" name="credentialId" bind:value={selectedCredential} items={[{ value: 'none', label: 'No credential' }, ...data.credentials.profiles.map((profile) => ({ value: profile.id, label: profile.name }))]} />
+              </Field>
+              <Button type="submit" size="sm">Save binding</Button>
+            </FieldGroup>
+          </form>
+          <a href={resolve('/ansible-credentials')} class="mt-3 inline-block text-xs text-primary underline underline-offset-4">Manage credentials</a>
+        {:else if data.credentials.error}
+          <p class="mt-2 text-xs text-destructive">Could not load credentials from Vault.</p>
+        {/if}
+      </div>
+    {/if}
     {#key host.id}
       <AgentEnrollment
         hostId={host.id}
@@ -417,11 +451,7 @@
                   >
                 {/if}
               </Table.Cell>
-              <Table.Cell
-                ><span class:text-destructive={deployment.status === "Failed"}
-                  >{deployment.status}</span
-                ></Table.Cell
-              >
+              <Table.Cell><Badge variant={deployment.status === 'Failed' ? 'destructive' : deployment.status === 'Verified' ? 'secondary' : 'outline'}>{deployment.status}</Badge></Table.Cell>
               <Table.Cell>
                 <ServedCertificateExpiry
                   expiry={deployment.servedCertificateExpiresAt}

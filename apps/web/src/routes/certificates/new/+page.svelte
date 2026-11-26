@@ -38,12 +38,6 @@
     >
   </header>
 
-  {#snippet feedback()}
-    {#if form?.message}
-      <p role="alert" class="text-xs text-destructive">{form.message}</p>
-    {/if}
-  {/snippet}
-
   <Tabs.Root
     class="mt-6"
     value={data.issue ? 'letsencrypt' : 'upload'}
@@ -70,6 +64,7 @@
                 return;
               }
               await update();
+              if (result.type === 'redirect') toast.success('Certificate issued.');
             } finally {
               issuing = false;
             }
@@ -107,7 +102,6 @@
               Successful issuance registers the certificate and enables automatic renewal.
             </p>
           {/if}
-          {@render feedback()}
           <div class="flex justify-end">
             <Button type="submit" disabled={issuing || !data.renewalAvailable}>
               {#if issuing}
@@ -122,10 +116,9 @@
       </form>
     </Tabs.Content>
     <Tabs.Content value="upload">
-      <form class="mt-3 border p-4 sm:p-5" method="POST" action={registration} enctype="multipart/form-data">
+      <form class="mt-3 border p-4 sm:p-5" method="POST" action={registration} enctype="multipart/form-data" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'failure' && typeof result.data?.message === 'string') toast.error(result.data.message); else if (result.type === 'redirect') toast.success('Certificate registered.'); }}>
         <FieldGroup>
           <CertificateChainFields />
-          {@render feedback()}
           <div class="flex justify-end">
             <Button type="submit">Register certificate</Button>
           </div>

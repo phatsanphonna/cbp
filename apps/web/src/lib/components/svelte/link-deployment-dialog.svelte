@@ -69,6 +69,8 @@
               if (typeof result.data?.linkMessage === "string") {
                 toast.success(result.data.linkMessage);
               }
+            } else if (result.type === 'failure' && typeof result.data?.linkError === 'string') {
+              toast.error(result.data.linkError);
             }
           } finally {
             pending = false;
@@ -107,9 +109,6 @@
             required
           />
         </Field>
-        {#if message}
-          <p class="text-xs text-destructive" role="alert">{message}</p>
-        {/if}
         <Dialog.Footer>
           <Dialog.Close>
             {#snippet child({ props })}

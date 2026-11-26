@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { enhance } from '$app/forms';
+  import { toast } from 'svelte-sonner';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from '$app/paths';
   import { Badge } from '#lib/components/ui/badge/index.ts';
   import { Button } from '#lib/components/ui/button/index.ts';
@@ -24,10 +27,6 @@
     <p class="mt-4 text-sm text-muted-foreground">
       Set <code>CBP_LETS_ENCRYPT_EMAIL</code> on the server to enable renewals.
     </p>
-  {/if}
-
-  {#if form?.message}
-    <p class="mt-4 text-sm text-destructive" role="alert">{form.message}</p>
   {/if}
 
   <div class="mt-6">
@@ -74,7 +73,7 @@
             </Table.Cell>
             {#if data.user?.isAdmin}
               <Table.Cell class="text-right">
-                <form method="POST" action={certificate.enabled ? '?/disable' : '?/enable'}>
+                <form method="POST" action={certificate.enabled ? '?/disable' : '?/enable'} use:enhance={() => { const message = certificate.enabled ? 'Automatic renewal disabled.' : 'Automatic renewal enabled.'; return async ({ result, update }) => { await update(); if (result.type === 'redirect') toast.success(message); else notifyFormResult(result, {}); }; }}>
                   <input type="hidden" name="certificateId" value={certificate.id} />
                   <Button
                     type="submit"

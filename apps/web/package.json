@@ -17,7 +17,8 @@
     "@icons-pack/svelte-simple-icons": "^7.2.0",
     "@sveltejs/adapter-bun": "^1.0.2",
     "acme-client": "^5.4.0",
-    "better-auth": "^1.6.0"
+    "better-auth": "^1.6.0",
+    "node-vault": "^0.13.0"
   },
   "devDependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
@@ -27,6 +28,7 @@
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tailwindcss/vite": "^4.1.0",
     "@tanstack/svelte-table": "^9.3.2",
+    "@types/node-vault": "^0.9.1",
     "bits-ui": "^2.20.0",
     "cn": "^0.5.0",
     "mode-watcher": "^1.1.0",

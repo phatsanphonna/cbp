@@ -18,6 +18,9 @@ import {
 } from "#lib/server/agent-deployment.js";
 import { getDatabase } from "#lib/server/database.js";
 import { dateFormatter } from "#lib/server/date-formatter.js";
+import { boundAnsibleCredential } from '#lib/server/ansible-credentials.js';
+import { deleteSavedCredential, hasSavedCredential, savedCredentialsAvailable } from '#lib/server/deployment-secrets.js';
+import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
 import {
   linkDeploymentAction,
   removeDeploymentAction,
@@ -43,8 +46,26 @@ export const load: PageServerLoad = async (event) => {
       event,
     ),
   ]);
+  let savedCredentials = { available: false, key: false, ansible: false, error: false };
+  let boundCredentials: Record<string, string> = {};
+  if (event.locals.user?.isAdmin && savedCredentialsAvailable() && hasTrustedTransport(event)) {
+    try {
+      const [key, ansible] = await Promise.all([
+        hasSavedCredential('certificate', params.id),
+        hasSavedCredential('ansible', params.id),
+      ]);
+      savedCredentials = { available: true, key, ansible, error: false };
+      const hostIds = [...new Set(certificate.deployments.filter((deployment) => deployment.method === 'Ansible' && deployment.hostId).map((deployment) => deployment.hostId!))];
+      const bound = await Promise.all(hostIds.map(async (hostId) => ({ hostId, credential: await boundAnsibleCredential(hostId) })));
+      boundCredentials = Object.fromEntries(bound.filter(({ credential }) => credential).map(({ hostId, credential }) => [hostId, credential!.name]));
+    } catch {
+      savedCredentials.error = true;
+    }
+  }
   return {
     agentDeployments,
+    savedCredentials,
+    boundCredentials,
     hostOptions: hosts.map(({ id, name, hostname }) => ({
       id,
       label: hostname && hostname !== name ? `${hostname} (${name})` : name,
@@ -74,6 +95,19 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+  deleteCredential: async (event) => {
+    if (!event.locals.user?.isAdmin) return fail(403, { credentialError: 'Administrator access required.' });
+    if (!hasTrustedTransport(event)) return fail(403, { credentialError: 'A trusted connection is required.' });
+    const kind = (await event.request.formData()).get('kind');
+    if (kind !== 'certificate' && kind !== 'ansible') return fail(400, { credentialError: 'Invalid credential type.' });
+    if (!(await findCertificateDomain(getDatabase(), event.params.id))) error(404, 'Certificate not found');
+    try {
+      await deleteSavedCredential(kind, event.params.id);
+    } catch {
+      return fail(503, { credentialError: 'Could not delete the credential from Vault.' });
+    }
+    return { credentialMessage: 'Saved credential deleted.' };
+  },
   deploy: (event) => deployCertificateAction(event, event.params.id),
   deployAnsible: (event) =>
     deployCertificateAction(event, event.params.id, "Ansible"),
@@ -152,6 +186,14 @@ export const actions: Actions = {
     };
   },
   remove: async ({ params }) => {
+    if (savedCredentialsAvailable()) {
+      try {
+        if ((await hasSavedCredential('certificate', params.id)) || (await hasSavedCredential('ansible', params.id)))
+          return fail(409, { message: 'Delete the saved Vault credentials before removing this certificate.' });
+      } catch {
+        return fail(503, { message: 'Vault must be available to check saved credentials before removing this certificate.' });
+      }
+    }
     if (!(await removeCertificate(getDatabase(), params.id)))
       error(404, "Certificate not found");
     redirect(303, resolve("/certificates"));

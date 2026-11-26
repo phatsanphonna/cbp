@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { Button } from "#lib/components/ui/button/index.ts";
   import {
     Field,
@@ -27,9 +28,10 @@
     class="mt-6 max-w-xl border p-4 sm:p-5"
     use:enhance={() => {
       submitting = true;
-      return async ({ update }) => {
+      return async ({ result, update }) => {
         try {
           await update();
+          notifyFormResult(result, {});
         } finally {
           submitting = false;
         }
@@ -75,12 +77,6 @@
           maxlength={128}
         />
       </Field>
-      {#if form?.message}<p role="alert" class="text-sm text-destructive">
-          {form.message}
-        </p>{/if}
-      {#if form?.success}<p role="status" class="text-sm">
-          {form.success}
-        </p>{/if}
       <div class="flex justify-end">
         <Button type="submit" disabled={submitting}
           >{submitting ? "Changing password…" : "Change password"}</Button

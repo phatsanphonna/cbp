@@ -19,11 +19,15 @@ import {
 import { getAnsibleToken, getControllerToken } from "./controller-config.js";
 import { getDatabase } from "./database.js";
 import { readDeploymentKey } from "./deployment-key.js";
+import { boundAnsibleCredential } from './ansible-credentials.js';
 import { decryptSecret } from './encrypted-secret.js';
 import { renewalKeyContext } from './lets-encrypt.js';
 import {
   discardDeploymentSecret,
   keepDeploymentSecret,
+  readSavedCredential,
+  saveCredential,
+  savedCredentialsAvailable,
 } from "./deployment-secrets.js";
 import { hasTrustedTransport, type Connection } from "./trusted-transport.js";
 
@@ -150,6 +154,15 @@ export async function deployCertificateAction(
     return reject(503, "Ansible deployment is unavailable.");
   const nextChain = targets[0].fullchain;
   const upload = fields.get('privateKey');
+  if (fields.get('useSavedKey') === 'yes') {
+    if ((upload instanceof File && upload.size) || fields.get('privateKeyPem'))
+      return reject(400, 'Choose either the saved private key or a new key.');
+    try {
+      fields.set('privateKeyPem', await readSavedCredential('certificate', certificateId));
+    } catch {
+      return reject(503, 'Could not read the saved private key from Vault.');
+    }
+  }
   if (
     fields.get('useRenewalKey') === 'yes' &&
     (upload === null || (upload instanceof File && upload.size === 0)) &&
@@ -162,31 +175,73 @@ export async function deployCertificateAction(
   }
   const key = await readDeploymentKey(fields, nextChain);
   if ("message" in key) return reject(400, key.message);
-  const ansible = targets.some(({ method }) => method === "Ansible")
+  const ansibleTargets = targets.filter(({ method }) => method === 'Ansible');
+  const boundCredentials = new Map<string, Awaited<ReturnType<typeof boundAnsibleCredential>>>();
+  if (savedCredentialsAvailable()) {
+    try {
+      for (const target of ansibleTargets) {
+        if (fields.get(`ansibleOverride:${target.hostId}`) !== 'yes')
+          boundCredentials.set(target.hostId, await boundAnsibleCredential(target.hostId));
+      }
+    } catch {
+      return reject(503, 'Could not read a host’s bound credential from Vault.');
+    }
+  }
+  const needsSharedAnsible = ansibleTargets.some(({ hostId }) => fields.get(`ansibleOverride:${hostId}`) !== 'yes' && !boundCredentials.get(hostId));
+  if (fields.get('useSavedAnsible') === 'yes' && needsSharedAnsible) {
+    try {
+      const saved: unknown = JSON.parse(await readSavedCredential('ansible', certificateId));
+      if (!saved || typeof saved !== 'object' || Array.isArray(saved)) throw new Error('Invalid credential');
+      for (const name of ['sshUsername', 'sshPassword', 'becomeMethod', 'suPassword']) {
+        const value = (saved as Record<string, unknown>)[name];
+        fields.delete(name);
+        if (typeof value === 'string') fields.set(name, value);
+      }
+    } catch {
+      return reject(503, 'Could not read the saved Ansible credentials from Vault.');
+    }
+  }
+  const ansible = needsSharedAnsible
     ? readAnsibleCredentials(fields)
     : undefined;
   if (ansible?.message) return reject(400, ansible.message);
+  const hostCredentials = new Map<string, NonNullable<typeof ansible>['credentials']>();
+  for (const target of ansibleTargets) {
+    if (fields.get(`ansibleOverride:${target.hostId}`) !== 'yes') continue;
+    const credentials = readAnsibleCredentials(fields, target.hostId);
+    if (credentials.message) return reject(400, `${target.endpoint}: ${credentials.message}`);
+    hostCredentials.set(target.hostId, credentials.credentials);
+  }
   let runId: string;
   let runSlug: string;
   let secretIds: string[] = [];
+  let stage: 'save-key' | 'save-ansible' | 'store-job-secret' | 'queue' = 'save-key';
   try {
-    const jobs = targets.map((target) => {
+    if (fields.get('saveKey') === 'yes')
+      await saveCredential('certificate', certificateId, key.pem);
+    stage = 'save-ansible';
+    if (fields.get('saveAnsible') === 'yes' && ansible?.credentials)
+      await saveCredential('ansible', certificateId, JSON.stringify(ansible.credentials));
+    stage = 'store-job-secret';
+    const jobs = [];
+    for (const target of targets) {
       const id = randomUUID();
-      keepDeploymentSecret(
+      secretIds.push(id);
+      await keepDeploymentSecret(
         id,
         target.method === "Ansible"
-          ? packAnsibleDeployment(key.pem, ansible!.credentials)
+          ? packAnsibleDeployment(key.pem, hostCredentials.get(target.hostId) ?? boundCredentials.get(target.hostId)?.credentials ?? ansible?.credentials)
           : key.pem,
       );
-      secretIds.push(id);
-      return {
+      jobs.push({
         ...target,
         id,
-      };
-    });
+      });
+    }
+    stage = 'queue';
     const result = await queueDeployments(database, owner, jobs);
     if (result.status !== "queued")
-      jobs.forEach(({ id }) => discardDeploymentSecret(id));
+      await Promise.allSettled(jobs.map(({ id }) => discardDeploymentSecret(id)));
     if (result.status === "busy")
       return reject(
         409,
@@ -208,10 +263,19 @@ export async function deployCertificateAction(
       return reject(400, "Select one linked endpoint per host.");
     runId = result.id;
     runSlug = result.slug;
-  } catch {
-    secretIds.forEach(discardDeploymentSecret);
-    console.error("Could not queue certificate deployment");
-    return reject(503, "Could not queue the deployment.");
+  } catch (error) {
+    await Promise.allSettled(secretIds.map(discardDeploymentSecret));
+    const failure = error as { code?: unknown; cause?: { code?: unknown }; response?: { statusCode?: unknown } };
+    const code = failure?.response?.statusCode ?? failure?.code ?? failure?.cause?.code;
+    console.error('Could not queue certificate deployment', { stage, code: typeof code === 'string' || typeof code === 'number' ? code : undefined });
+    const message = stage === 'save-key'
+      ? 'Could not save the private key in Vault.'
+      : stage === 'save-ansible'
+        ? 'Could not save the Ansible credentials in Vault.'
+        : stage === 'store-job-secret'
+          ? 'Could not store deployment credentials. Check Vault availability and permissions.'
+          : 'Could not queue the deployment in the database.';
+    return reject(503, message);
   }
   locals.auditTargetId = runId;
   redirect(303, resolve("/deployments/[id]", { id: runSlug }));
@@ -268,19 +332,19 @@ export async function recoverDeploymentAction(
     source.method === "Ansible" ? readAnsibleCredentials(form!) : undefined;
   if (ansible?.message) return reject(400, ansible.message);
   const id = randomUUID();
-  keepDeploymentSecret(
-    id,
-    packAnsibleDeployment(key.pem, ansible?.credentials),
-  );
   let result;
   try {
+    await keepDeploymentSecret(
+      id,
+      packAnsibleDeployment(key.pem, ansible?.credentials),
+    );
     result = await queueDeploymentRecovery(database, source.id, id);
   } catch (error) {
-    discardDeploymentSecret(id);
+    await Promise.allSettled([discardDeploymentSecret(id)]);
     console.error("Could not queue certificate deployment recovery", error);
     return reject(503, "Could not queue the redeployment.");
   }
-  if (result.status !== "queued") discardDeploymentSecret(id);
+  if (result.status !== "queued") await Promise.allSettled([discardDeploymentSecret(id)]);
   if (result.status === "busy")
     return reject(409, "This host already has an active deployment.");
   if (result.status !== "queued")
@@ -306,7 +370,7 @@ export async function cancelQueuedDeploymentAction(
   const result = await cancelQueuedDeployment(
     getDatabase(),
     id,
-    event.params.id,
+    event.params.id ?? '',
   );
   if (result === "missing")
     return fail(404, { cancelError: "This deployment could not be found." });
@@ -315,7 +379,7 @@ export async function cancelQueuedDeploymentAction(
       cancelError:
         "This deployment is no longer queued and cannot be canceled.",
     });
-  discardDeploymentSecret(id);
+  await Promise.allSettled([discardDeploymentSecret(id)]);
   locals.auditTargetId = id;
   return { cancelMessage: "Queued deployment canceled." };
 }

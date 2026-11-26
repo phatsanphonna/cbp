@@ -1,9 +1,10 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { toast } from 'svelte-sonner';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from "$app/paths";
-  import { ChevronDown } from "@lucide/svelte";
+  import { ChevronDown, KeyRound } from "@lucide/svelte";
   import CertificateChainFields from "#lib/components/svelte/certificate-chain-fields.svelte";
-  import DeployCertificateDialog from "#lib/components/svelte/deploy-certificate-dialog.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
   import LinkDeploymentDialog from "#lib/components/svelte/link-deployment-dialog.svelte";
@@ -88,11 +89,6 @@
           : [],
     ),
   );
-  const canDeployAnsible = $derived(
-    data.agentDeployments.ansibleEnabled &&
-      !data.agentDeployments.httpsRequired,
-  );
-
   function focusCertificateActions(event: Event) {
     const trigger = document.getElementById("certificate-actions");
     if (!trigger) return;
@@ -124,6 +120,12 @@
             ? "secondary"
             : "destructive"}>{certificate.status}</Badge
         >
+        {#if data.savedCredentials.key}
+          <Badge variant="outline">
+            <KeyRound data-icon="inline-start" aria-hidden="true" />
+            Private key saved
+          </Badge>
+        {/if}
       </div>
     </div>
     <div class="flex flex-wrap gap-2">
@@ -158,6 +160,27 @@
               {/snippet}
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
+            {#if data.user?.isAdmin && data.savedCredentials.key}
+              <DropdownMenu.Item variant="destructive">
+                {#snippet child({ props })}
+                  <form
+                    method="POST"
+                    action="?/deleteCredential"
+                    use:enhance={() => async ({ result, update }) => {
+                      await update();
+                      notifyFormResult(result, {
+                        success: 'credentialMessage',
+                        error: 'credentialError',
+                      });
+                    }}
+                  >
+                    <input type="hidden" name="kind" value="certificate" />
+                    <button {...props} type="submit">Delete saved private key</button>
+                  </form>
+                {/snippet}
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator />
+            {/if}
             <DropdownMenu.Item onSelect={() => (updateOpen = true)}
               >Update fullchain</DropdownMenu.Item
             >
@@ -194,16 +217,12 @@
             use:enhance={() =>
               async ({ result, update }) => {
                 await update();
-                if (result.type === "redirect") updateOpen = false;
+                if (result.type === "redirect") { updateOpen = false; toast.success('Certificate chain updated.'); }
+                else notifyFormResult(result, {});
               }}
           >
             <FieldGroup>
               <CertificateChainFields />
-              {#if form?.message}
-                <p role="alert" class="text-xs text-destructive">
-                  {form.message}
-                </p>
-              {/if}
               <Dialog.Footer>
                 <Dialog.Close>
                   {#snippet child({ props })}
@@ -238,6 +257,7 @@
                   try {
                     await update();
                     if (result.type === "success") restoreOpen = false;
+                    notifyFormResult(result, { success: 'restoreMessage', error: 'restoreError' });
                   } finally {
                     restorePending = false;
                   }
@@ -249,12 +269,6 @@
                 name="previousChainRevision"
                 value={certificate.previousChainRevision}
               />
-              {#if form?.restoreError}<p
-                  role="alert"
-                  class="mb-3 text-xs text-destructive"
-                >
-                  {form.restoreError}
-                </p>{/if}
               <AlertDialog.Footer>
                 <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
                 <Button type="submit" disabled={restorePending}
@@ -274,7 +288,7 @@
               can register the certificate again later.
             </AlertDialog.Description>
           </AlertDialog.Header>
-          <form method="POST" action="?/remove">
+          <form method="POST" action="?/remove" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'redirect') toast.success('Certificate removed.'); else notifyFormResult(result, {}); }}>
             <AlertDialog.Footer>
               <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
               <AlertDialog.Action type="submit" variant="destructive"
@@ -286,13 +300,6 @@
       </AlertDialog.Root>
     </div>
   </header>
-  {#if form?.restoreMessage}
-    <p class="mt-3 text-xs" role="status">{form.restoreMessage}</p>
-  {:else if form?.restoreError && !restoreOpen}
-    <p class="mt-3 text-xs text-destructive" role="alert">
-      {form.restoreError}
-    </p>
-  {/if}
 
   <section class="mt-6 border" aria-labelledby="metadata-heading">
     <h2
@@ -356,16 +363,14 @@
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        {#if data.user?.isAdmin}
-          {#key certificate.id}
-            <DeployCertificateDialog
-              agentTargets={deploymentTargets}
-              {ansibleTargets}
-              canDeployAgent={!data.agentDeployments.blocked}
-              {canDeployAnsible}
-              hasRenewalKey={certificate.hasRenewalKey}
-            />
-          {/key}
+        {#if data.user?.isAdmin && (deploymentTargets.length || ansibleTargets.length)}
+          <Button
+            href={resolve("/certificates/[id]/deploy", { id: certificate.id })}
+            variant="outline"
+            size="sm"
+          >
+            Deploy
+          </Button>
         {/if}
         {#if data.hostOptions.length}
           <LinkDeploymentDialog
@@ -380,6 +385,18 @@
         {/if}
       </div>
     </div>
+    {#if data.user?.isAdmin && data.savedCredentials.ansible}
+      <div class="mb-3 flex flex-wrap items-center gap-3">
+        <span class="text-xs text-muted-foreground">Saved Ansible credentials:</span>
+        <form method="POST" action="?/deleteCredential" use:enhance={() => async ({ result, update }) => { await update(); notifyFormResult(result, { success: 'credentialMessage', error: 'credentialError' }); }}>
+          <input type="hidden" name="kind" value="ansible" />
+          <Button type="submit" variant="outline" size="sm">Delete saved Ansible credentials</Button>
+        </form>
+      </div>
+    {/if}
+    {#if data.savedCredentials.error}
+      <p class="mb-3 text-xs text-destructive" role="alert">Could not load saved credentials from Vault.</p>
+    {/if}
     {#if data.agentDeployments.httpsRequired && (deploymentTargets.length || ansibleTargets.length)}
       <p class="mb-3 text-xs text-muted-foreground">
         Private-key uploads require a trusted HTTPS connection.
@@ -438,11 +455,7 @@
               </Table.Cell>
               <Table.Cell>{deployment.engine ?? "Not specified"}</Table.Cell>
               <Table.Cell>{deployment.method}</Table.Cell>
-              <Table.Cell
-                ><span class:text-destructive={deployment.status === "Failed"}
-                  >{deployment.status}</span
-                ></Table.Cell
-              >
+              <Table.Cell><Badge variant={deployment.status === 'Failed' ? 'destructive' : deployment.status === 'Verified' ? 'secondary' : 'outline'}>{deployment.status}</Badge></Table.Cell>
               <Table.Cell>
                 <ServedCertificateExpiry
                   expiry={deployment.servedCertificateExpiresAt}

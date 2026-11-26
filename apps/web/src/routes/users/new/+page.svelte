@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from "$app/paths";
   import { Button } from "#lib/components/ui/button/index.ts";
   import {
@@ -40,9 +41,10 @@
     class="mt-6 max-w-xl border p-4 sm:p-5"
     use:enhance={() => {
       submitting = true;
-      return async ({ update }) => {
+      return async ({ result, update }) => {
         try {
           await update();
+          notifyFormResult(result, {});
         } finally {
           submitting = false;
         }
@@ -104,9 +106,6 @@
           >8 to 128 characters.</FieldDescription
         >
       </Field>
-      {#if form?.message}
-        <p role="alert" class="text-xs text-destructive">{form.message}</p>
-      {/if}
       <div class="flex justify-end">
         <Button type="submit" disabled={submitting}
           >{submitting ? "Creating user…" : "Create user"}</Button

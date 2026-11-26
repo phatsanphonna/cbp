@@ -4,7 +4,6 @@
   import { Button } from "#lib/components/ui/button/index.ts";
 
   const isDark = $derived(mode.current === "dark");
-  const Icon = $derived(isDark ? Moon : Sun);
   const label = $derived(`Switch to ${isDark ? "light" : "dark"} theme`);
 </script>
 
@@ -15,5 +14,6 @@
   aria-label={label}
   title={label}
 >
-  <Icon aria-hidden="true" />
+  <Sun class="block dark:hidden" aria-hidden="true" />
+  <Moon class="hidden dark:block" aria-hidden="true" />
 </Button>

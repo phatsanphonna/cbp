@@ -12,6 +12,7 @@ import { auditUserAction } from "#lib/server/audit-action.js";
 import { deliverAlertNotifications } from "#lib/server/alert-notifications.js";
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
+import { cleanupDeploymentSecrets } from "#lib/server/deployment-secrets.js";
 import { renewalAvailable, renewDueCertificate } from '#lib/server/lets-encrypt.js';
 import { isDirectHttps } from "#lib/server/trusted-transport.js";
 
@@ -67,6 +68,8 @@ export function init() {
   cleanup.cbpDeploymentExpiryTimer = expiryTimer;
   expiryTimer.unref();
 
+  void cleanupDeploymentSecrets().catch(() => console.error('Could not clean up Vault deployment secrets'));
+
   clearInterval(cleanup.cbpAlertReconcileTimer);
   const reconcile = async () => {
     if (reconcilingAlerts) return;
@@ -84,6 +87,11 @@ export function init() {
       console.error("Could not process alert notifications");
     } finally {
       reconcilingAlerts = false;
+    }
+    try {
+      await cleanupDeploymentSecrets();
+    } catch {
+      console.error('Could not clean up Vault deployment secrets');
     }
   };
   void reconcile();

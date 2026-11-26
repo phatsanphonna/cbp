@@ -55,14 +55,14 @@ const run = controllerPost(
       );
       if (job === "missing" || job === "denied") return 404;
       if (!job) return 204;
-      const payload = takeDeploymentSecret(job.id);
+      const payload = await takeDeploymentSecret(job.id).catch(() => null);
       if (!payload) {
         await finishDeployment(
           db,
           hostId,
           worker,
           job.id,
-          "The deployment key is no longer available in memory. Upload the private key and queue the deployment again.",
+          "The deployment key could not be retrieved. Upload the private key and queue the deployment again.",
         );
         return 204;
       }

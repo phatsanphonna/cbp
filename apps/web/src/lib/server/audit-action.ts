@@ -21,7 +21,9 @@ const actionLabels: Record<string, Record<string, string>> = {
     importReport: "Import host report",
     ping: "Ping host",
     remove: "Remove host",
+    bindCredential: 'Bind Ansible credential',
   },
+  '/ansible-credentials': { create: 'Create Ansible credential', remove: 'Delete Ansible credential', bind: 'Bind Ansible credential', unbind: 'Unbind Ansible credential' },
   '/certificates/new': {
     default: 'Register certificate',
     letsencrypt: 'Issue Let’s Encrypt certificate',
@@ -31,6 +33,7 @@ const actionLabels: Record<string, Record<string, string>> = {
     deploy: "Deploy certificate",
     deployAnsible: "Deploy certificate via Ansible",
     deployMixed: "Deploy certificate",
+    deleteCredential: "Delete saved deployment credential",
     updateChain: "Update fullchain",
     restoreChain: "Restore fullchain",
     remove: "Remove certificate",
