@@ -5,9 +5,8 @@ import { getDatabase } from "#lib/server/database.js";
 import { dateFormatter } from "#lib/server/date-formatter.js";
 import type { Actions, PageServerLoad } from "./$types";
 
-const format = dateFormatter("UTC");
-
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, cookies }) => {
+  const format = dateFormatter(cookies.get("cbp-time-zone"));
   const openOnly = url.searchParams.get("status") === "open";
   return {
     openOnly,

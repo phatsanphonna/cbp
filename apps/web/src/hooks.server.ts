@@ -12,6 +12,7 @@ import { auditUserAction } from "#lib/server/audit-action.js";
 import { deliverAlertNotifications } from "#lib/server/alert-notifications.js";
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
+import { renewalAvailable, renewDueCertificate } from '#lib/server/lets-encrypt.js';
 import { isDirectHttps } from "#lib/server/trusted-transport.js";
 
 const controllerRoutes = [
@@ -33,9 +34,11 @@ type AlertTimer = ReturnType<typeof setInterval>;
 const cleanup = globalThis as typeof globalThis & {
   cbpDeploymentExpiryTimer?: ExpiryTimer;
   cbpAlertReconcileTimer?: AlertTimer;
+  cbpRenewalTimer?: ReturnType<typeof setInterval>;
 };
 let expiryTimer: ExpiryTimer | undefined;
 let alertTimer: AlertTimer | undefined;
+let renewalTimer: ReturnType<typeof setInterval> | undefined;
 let expiringJobs = false;
 let reconcilingAlerts = false;
 
@@ -87,11 +90,33 @@ export function init() {
   alertTimer = setInterval(reconcile, 60_000);
   cleanup.cbpAlertReconcileTimer = alertTimer;
   alertTimer.unref();
+
+  if (renewalAvailable) {
+    clearInterval(cleanup.cbpRenewalTimer);
+    let renewing = false;
+    const renew = async () => {
+      if (renewing) return;
+      renewing = true;
+      try {
+        await renewDueCertificate();
+      } catch {
+        console.error('Could not process the certificate renewal queue');
+      } finally {
+        renewing = false;
+      }
+    };
+    void renew();
+    renewalTimer = setInterval(renew, 60_000);
+    cleanup.cbpRenewalTimer = renewalTimer;
+    renewalTimer.unref();
+  }
 }
 
 import.meta.hot?.dispose(() => {
   clearInterval(expiryTimer);
   clearInterval(alertTimer);
+  clearInterval(renewalTimer);
+  if (cleanup.cbpRenewalTimer === renewalTimer) delete cleanup.cbpRenewalTimer;
   if (cleanup.cbpDeploymentExpiryTimer === expiryTimer) {
     delete cleanup.cbpDeploymentExpiryTimer;
   }
@@ -100,6 +125,7 @@ import.meta.hot?.dispose(() => {
   }
   expiryTimer = undefined;
   alertTimer = undefined;
+  renewalTimer = undefined;
 });
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -111,6 +137,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     return resolve(event);
   }
   if (id === "/api/internal/ansible") return resolve(event);
+  if (id === '/[x+2e]well-known/acme-challenge/[token]') return resolve(event);
 
   const session = await getAuth().api.getSession({
     headers: event.request.headers,

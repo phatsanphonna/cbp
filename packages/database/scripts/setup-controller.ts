@@ -50,7 +50,26 @@ try {
     create index if not exists cbp_audit_events_occurred_at_idx on cbp_audit_events (occurred_at, id)
   `;
   await db.$client`
-    alter table cbp_certificates add column if not exists previous_fullchain text
+    alter table cbp_certificates
+      add column if not exists previous_fullchain text,
+      add column if not exists auto_renew boolean not null default false,
+      add column if not exists renewal_retry_at timestamp with time zone,
+      add column if not exists renewal_error text,
+      add column if not exists renewal_key text,
+      add column if not exists previous_renewal_key text
+  `;
+  await db.$client`
+    create table if not exists cbp_acme_accounts (
+      id text primary key,
+      encrypted_key text not null
+    )
+  `;
+  await db.$client`
+    create table if not exists cbp_acme_challenges (
+      token text primary key,
+      key_authorization text not null,
+      expires_at timestamp with time zone not null
+    )
   `;
   await db.transaction(async (tx) => {
     await tx.execute(
@@ -288,6 +307,8 @@ try {
         public.cbp_auth_user, public.cbp_auth_session, public.cbp_auth_account, public.cbp_auth_verification,
         public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_deployments
         to cbp_web`);
+      await tx.execute(sql`grant select, insert on public.cbp_acme_accounts to cbp_web`);
+      await tx.execute(sql`grant select, insert, delete on public.cbp_acme_challenges to cbp_web`);
       await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,
         public.cbp_deployment_jobs, public.cbp_notification_channels to cbp_web`);
       await tx.execute(

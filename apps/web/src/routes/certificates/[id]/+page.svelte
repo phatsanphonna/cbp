@@ -363,6 +363,7 @@
               {ansibleTargets}
               canDeployAgent={!data.agentDeployments.blocked}
               {canDeployAnsible}
+              hasRenewalKey={certificate.hasRenewalKey}
             />
           {/key}
         {/if}

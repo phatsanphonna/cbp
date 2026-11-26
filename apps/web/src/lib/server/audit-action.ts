@@ -22,7 +22,10 @@ const actionLabels: Record<string, Record<string, string>> = {
     ping: "Ping host",
     remove: "Remove host",
   },
-  "/certificates/new": { default: "Register certificate" },
+  '/certificates/new': {
+    default: 'Register certificate',
+    letsencrypt: 'Issue Let’s Encrypt certificate',
+  },
   "/certificates/[id]": {
     ...deploymentActions,
     deploy: "Deploy certificate",
@@ -33,6 +36,10 @@ const actionLabels: Record<string, Record<string, string>> = {
     remove: "Remove certificate",
   },
   "/deployments/[id]": { cancel: "Cancel queued deployment" },
+  '/renewals': {
+    enable: 'Enable Let’s Encrypt renewal',
+    disable: 'Disable Let’s Encrypt renewal',
+  },
   "/alerts": { clear: "Clear alert" },
   "/alerts/channels": {
     add: "Add notification channel",
@@ -58,7 +65,10 @@ export async function auditUserAction(
   const key =
     [...event.url.searchParams.keys()]
       .find((key) => key.startsWith("/"))
-      ?.slice(1) ?? "default";
+      ?.slice(1) ??
+    (route === '/certificates/new' && event.url.searchParams.get('method') === 'letsencrypt'
+      ? 'letsencrypt'
+      : 'default');
   const labels = actionLabels[route];
   const action =
     labels && Object.hasOwn(labels, key) ? labels[key] : "Submit form";

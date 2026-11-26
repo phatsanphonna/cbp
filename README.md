@@ -73,6 +73,16 @@ For an existing local database, run `bun --filter @cbp/database db:setup-control
 
 An enabled channel receives matching open alerts, including ones already open when the channel is enabled. CBP records one successful delivery per alert, severity, and channel, and retries failed deliveries up to five attempts in total, five minutes apart. Webhook receivers get a JSON payload with `event`, `alertId`, `severity`, `message`, and `target` and can use the `Idempotency-Key` header to deduplicate retries.
 
+## Let’s Encrypt renewals
+
+Set `CBP_LETS_ENCRYPT_EMAIL` in `.env` for Compose or `.env.local` for local development. By setting it, you agree to the [Let’s Encrypt Subscriber Agreement](https://letsencrypt.org/repository/). Existing installations need the database setup command above.
+
+In **Certificates → Register certificate**, choose **Create with Let’s Encrypt** and enter one DNS hostname per line. CLM registers the new certificate and enables automatic renewal after issuance. For an existing Let’s Encrypt certificate, upload the fullchain and enable it in **Renewals**.
+
+Each DNS name on the certificate must allow public HTTP on port 80. Configure the reverse proxy or web server for each name to forward `/.well-known/acme-challenge/*` to the CLM web app without authentication or rewriting that path. HTTP-01 supports regular DNS names. Wildcards and IP addresses are ineligible. Allow enough time for domain validation on the proxy’s certificate registration requests.
+
+CLM starts trying after two-thirds of the current certificate’s lifetime and retries failures hourly. It saves the renewed chain in the same certificate record and encrypts the matching key using `BETTER_AUTH_SECRET`. Keep that secret stable across restarts. To install the renewed certificate, open the certificate’s **Deploy** dialog and choose the target hosts. Leave the private-key fields blank to use the stored key.
+
 ## Develop locally
 
 Use Bun 1.4.5 and Docker Compose. The development Compose project runs PostgreSQL on `127.0.0.1:5433` with its own named volume. Run Vite on the host for hot reload.

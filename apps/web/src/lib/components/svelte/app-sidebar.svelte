@@ -42,7 +42,7 @@
         { label: "Certificates", route: "/certificates", icon: FileBadge },
         { label: "Hosts", route: "/hosts", icon: Server },
         { label: "Deployments", route: "/deployments", icon: Send },
-        { label: "Renewals", icon: RefreshCw },
+        { label: 'Renewals', route: '/renewals', icon: RefreshCw },
       ],
     },
     {
@@ -69,10 +69,7 @@
       ],
     },
   ] as const;
-  type NavigationLink = Extract<
-    (typeof navigation)[number]["items"][number],
-    { route: string }
-  >;
+  type NavigationLink = (typeof navigation)[number]['items'][number];
 </script>
 
 {#snippet navigationLink(item: NavigationLink)}
@@ -131,20 +128,7 @@
             <Sidebar.GroupContent>
               <Sidebar.Menu>
                 {#each group.items as item (item.label)}
-                  {#if "route" in item}
-                    {@render navigationLink(item)}
-                  {:else}
-                    <Sidebar.MenuItem>
-                      <Sidebar.MenuButton
-                        aria-disabled="true"
-                        tabindex={-1}
-                        tooltipContent={item.label}
-                      >
-                        <item.icon aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </Sidebar.MenuButton>
-                    </Sidebar.MenuItem>
-                  {/if}
+                  {@render navigationLink(item)}
                 {/each}
               </Sidebar.Menu>
             </Sidebar.GroupContent>

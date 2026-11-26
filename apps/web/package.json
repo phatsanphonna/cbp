@@ -16,6 +16,7 @@
     "@cbp/database": "workspace:*",
     "@icons-pack/svelte-simple-icons": "^7.2.0",
     "@sveltejs/adapter-bun": "^1.0.2",
+    "acme-client": "^5.4.0",
     "better-auth": "^1.6.0"
   },
   "devDependencies": {

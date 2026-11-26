@@ -28,11 +28,13 @@
     ansibleTargets,
     canDeployAgent,
     canDeployAnsible,
+    hasRenewalKey,
   }: {
     agentTargets: Target[];
     ansibleTargets: Target[];
     canDeployAgent: boolean;
     canDeployAnsible: boolean;
+    hasRenewalKey: boolean;
   } = $props();
   const id = $props.id();
   let pending = $state(false);
@@ -202,10 +204,14 @@
           </FieldGroup>
         </FieldSet>
         <FieldSet aria-describedby="{id}-key-hint">
-          <FieldLegend variant="label" required>Private key (PEM)</FieldLegend>
+          <FieldLegend variant="label" required={!hasRenewalKey}>Private key (PEM)</FieldLegend>
+          {#if hasRenewalKey}
+            <input type="hidden" name="useRenewalKey" value="yes" />
+          {/if}
           <FieldDescription id="{id}-key-hint"
-            >Choose a file or paste the PEM contents. Use an unencrypted key up
-            to 16 KB.</FieldDescription
+            >{hasRenewalKey
+              ? 'Leave these fields blank to use the stored Let’s Encrypt key.'
+              : 'Choose a file or paste the PEM contents. Use an unencrypted key up to 16 KB.'}</FieldDescription
           >
           <FieldGroup>
             <Field>

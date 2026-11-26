@@ -12,6 +12,7 @@
     "./deployment-jobs": "./src/deployment-jobs.ts",
     "./host-agents": "./src/host-agents.ts",
     "./inventory": "./src/inventory.ts",
+    "./renewals": "./src/renewals.ts",
     "./overview": "./src/overview.ts"
   },
   "scripts": {

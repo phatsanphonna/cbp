@@ -35,6 +35,11 @@ const {
   previousFullchain: _previousFullchain,
   owner: _legacyOwner,
   groupId: _legacyGroup,
+  autoRenew: _autoRenew,
+  renewalRetryAt: _renewalRetryAt,
+  renewalError: _renewalError,
+  renewalKey: _renewalKey,
+  previousRenewalKey: _previousRenewalKey,
   ...certificateMetadata
 } = getTableColumns(certificates);
 const previousChainRevision = sql<
@@ -444,7 +449,11 @@ export function listCertificates(
 export async function findCertificate(db: Database, id: string) {
   if (!inventoryId.test(id)) return null;
   const [certificate] = await db
-    .select({ ...certificateMetadata, previousChainRevision })
+    .select({
+      ...certificateMetadata,
+      previousChainRevision,
+      hasRenewalKey: sql<boolean>`${certificates.renewalKey} is not null`,
+    })
     .from(certificates)
     .where(eq(certificates.id, id));
   if (!certificate) return null;
@@ -506,6 +515,7 @@ export async function updateCertificateChain(
   id: string,
   replacement: CertificateReplacement,
   expectedPrevious?: string,
+  renewal?: { fingerprint: string | null; retryAt: Date; encryptedKey: string },
 ) {
   if (!inventoryId.test(id)) return false;
 
@@ -516,11 +526,22 @@ export async function updateCertificateChain(
           fingerprint: certificates.fingerprint,
           fullchain: certificates.fullchain,
           previousFullchain: certificates.previousFullchain,
+          autoRenew: certificates.autoRenew,
+          renewalRetryAt: certificates.renewalRetryAt,
+          renewalKey: certificates.renewalKey,
+          previousRenewalKey: certificates.previousRenewalKey,
         })
         .from(certificates)
         .where(eq(certificates.id, id))
         .for("update");
       if (!current) return false;
+      if (
+        renewal &&
+        (!current.autoRenew ||
+          current.fingerprint !== renewal.fingerprint ||
+          current.renewalRetryAt?.getTime() !== renewal.retryAt.getTime())
+      )
+        return 'changed' as const;
       if (
         expectedPrevious !== undefined &&
         current.previousFullchain !== expectedPrevious
@@ -532,6 +553,20 @@ export async function updateCertificateChain(
         .update(certificates)
         .set({
           ...replacement,
+          ...(renewal || chainChanged
+            ? {
+                renewalKey: renewal?.encryptedKey ??
+                  (expectedPrevious !== undefined
+                    ? current.previousRenewalKey
+                    : current.fingerprint === replacement.fingerprint ? current.renewalKey : null),
+                renewalRetryAt: null,
+                renewalError: null,
+              }
+            : {}),
+          previousRenewalKey:
+            chainChanged && current.fullchain
+              ? current.renewalKey
+              : current.previousRenewalKey,
           previousFullchain:
             chainChanged && current.fullchain
               ? current.fullchain

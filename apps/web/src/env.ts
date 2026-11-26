@@ -10,4 +10,5 @@ export const variables = defineEnvVars({
   CBP_AGENT_CONTROLLER_ADDRESS: { schema: (value) => value },
   CBP_AGENT_CA_FILE: { schema: (value) => value },
   CBP_AGENT_CA_DOWNLOAD_FILE: { schema: (value) => value },
+  CBP_LETS_ENCRYPT_EMAIL: { schema: (value) => value },
 });

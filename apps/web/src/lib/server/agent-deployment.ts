@@ -9,6 +9,7 @@ import {
   queueDeploymentRecovery,
   queueDeployments,
 } from "@cbp/database/deployment-jobs";
+import { findRenewalKey } from '@cbp/database/renewals';
 import { fail, redirect, type RequestEvent } from "@sveltejs/kit";
 import { deploymentServices } from "#lib/deployment-services.js";
 import {
@@ -18,6 +19,8 @@ import {
 import { getAnsibleToken, getControllerToken } from "./controller-config.js";
 import { getDatabase } from "./database.js";
 import { readDeploymentKey } from "./deployment-key.js";
+import { decryptSecret } from './encrypted-secret.js';
+import { renewalKeyContext } from './lets-encrypt.js';
 import {
   discardDeploymentSecret,
   keepDeploymentSecret,
@@ -145,7 +148,19 @@ export async function deployCertificateAction(
     return reject(503, "Agent deployment is unavailable.");
   if (targets.some(({ method }) => method === "Ansible") && !getAnsibleToken())
     return reject(503, "Ansible deployment is unavailable.");
-  const key = await readDeploymentKey(fields, targets[0].fullchain);
+  const nextChain = targets[0].fullchain;
+  const upload = fields.get('privateKey');
+  if (
+    fields.get('useRenewalKey') === 'yes' &&
+    (upload === null || (upload instanceof File && upload.size === 0)) &&
+    (fields.get('privateKeyPem') ?? '') === ''
+  ) {
+    const encrypted = await findRenewalKey(database, certificateId, nextChain);
+    const pem = encrypted && decryptSecret(encrypted, renewalKeyContext(certificateId));
+    if (!pem) return reject(409, 'The stored renewal key is unavailable. Refresh and try again or supply a matching key.');
+    fields.set('privateKeyPem', pem);
+  }
+  const key = await readDeploymentKey(fields, nextChain);
   if ("message" in key) return reject(400, key.message);
   const ansible = targets.some(({ method }) => method === "Ansible")
     ? readAnsibleCredentials(fields)
