@@ -8,10 +8,14 @@
     status,
     detail,
     showTooltip = true,
+    href,
+    linkLabel,
   }: {
     status: "Queued" | "Running" | "Expired" | "Failed" | "Deployed";
     detail: string | null;
     showTooltip?: boolean;
+    href?: string;
+    linkLabel?: string;
   } = $props();
 
   const explanation = $derived.by(() => {
@@ -50,14 +54,27 @@
 
 {#if explanation && showTooltip}
   <Tooltip.Root>
-    <Tooltip.Trigger
-      class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
-      aria-label={status === "Failed"
-        ? "Failed. Show failure details"
-        : undefined}
-    >
-      {@render badge()}
-    </Tooltip.Trigger>
+    {#if href}
+      <Tooltip.Trigger>
+        {#snippet child({ props })}
+          <a
+            {...props}
+            href={href}
+            aria-label={linkLabel ?? `View ${status} deployment details`}
+            class="inline-flex cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
+          >{@render badge()}</a>
+        {/snippet}
+      </Tooltip.Trigger>
+    {:else}
+      <Tooltip.Trigger
+        class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
+        aria-label={status === "Failed"
+          ? "Failed. Show failure details"
+          : undefined}
+      >
+        {@render badge()}
+      </Tooltip.Trigger>
+    {/if}
     <Tooltip.Content
       role="tooltip"
       sideOffset={4}
@@ -65,5 +82,13 @@
     >
   </Tooltip.Root>
 {:else}
-  {@render badge()}
+  {#if href}
+    <a
+      href={href}
+      aria-label={linkLabel ?? `View ${status} deployment details`}
+      class="inline-flex focus-visible:outline-2 focus-visible:outline-ring"
+    >{@render badge()}</a>
+  {:else}
+    {@render badge()}
+  {/if}
 {/if}

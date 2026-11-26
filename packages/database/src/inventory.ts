@@ -451,6 +451,10 @@ export async function findCertificate(db: Database, id: string) {
   const [certificate] = await db
     .select({
       ...certificateMetadata,
+      fullchain: certificates.fullchain,
+      autoRenew: certificates.autoRenew,
+      renewalRetryAt: certificates.renewalRetryAt,
+      renewalError: certificates.renewalError,
       previousChainRevision,
       hasRenewalKey: sql<boolean>`${certificates.renewalKey} is not null`,
     })
@@ -515,7 +519,12 @@ export async function updateCertificateChain(
   id: string,
   replacement: CertificateReplacement,
   expectedPrevious?: string,
-  renewal?: { fingerprint: string | null; retryAt: Date; encryptedKey: string },
+  renewal?: {
+    fingerprint: string | null;
+    retryAt: Date;
+    encryptedKey: string | null;
+    previousEncryptedKey?: string | null;
+  },
 ) {
   if (!inventoryId.test(id)) return false;
 
@@ -526,7 +535,6 @@ export async function updateCertificateChain(
           fingerprint: certificates.fingerprint,
           fullchain: certificates.fullchain,
           previousFullchain: certificates.previousFullchain,
-          autoRenew: certificates.autoRenew,
           renewalRetryAt: certificates.renewalRetryAt,
           renewalKey: certificates.renewalKey,
           previousRenewalKey: certificates.previousRenewalKey,
@@ -537,8 +545,7 @@ export async function updateCertificateChain(
       if (!current) return false;
       if (
         renewal &&
-        (!current.autoRenew ||
-          current.fingerprint !== renewal.fingerprint ||
+        (current.fingerprint !== renewal.fingerprint ||
           current.renewalRetryAt?.getTime() !== renewal.retryAt.getTime())
       )
         return 'changed' as const;
@@ -555,17 +562,20 @@ export async function updateCertificateChain(
           ...replacement,
           ...(renewal || chainChanged
             ? {
-                renewalKey: renewal?.encryptedKey ??
-                  (expectedPrevious !== undefined
+                renewalKey: renewal
+                  ? renewal.encryptedKey
+                  : expectedPrevious !== undefined
                     ? current.previousRenewalKey
-                    : current.fingerprint === replacement.fingerprint ? current.renewalKey : null),
+                    : current.fingerprint === replacement.fingerprint
+                      ? current.renewalKey
+                      : null,
                 renewalRetryAt: null,
                 renewalError: null,
               }
             : {}),
           previousRenewalKey:
             chainChanged && current.fullchain
-              ? current.renewalKey
+              ? renewal?.previousEncryptedKey ?? current.renewalKey
               : current.previousRenewalKey,
           previousFullchain:
             chainChanged && current.fullchain

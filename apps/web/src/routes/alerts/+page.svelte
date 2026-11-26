@@ -35,7 +35,7 @@
       }),
       column.accessor("detected", { header: "Detected" }),
       column.accessor("status", { header: "Status" }),
-      ...(data.user?.isAdmin
+      ...(data.canManageAlerts
         ? [
             column.accessor("id", {
               header: "Actions",
@@ -49,7 +49,7 @@
 </script>
 
 <svelte:head>
-  <title>Alerts | Certified by Pat</title>
+  <title>Alerts | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="alerts-heading">

@@ -31,7 +31,7 @@ printf '\n'`;
 </script>
 
 <svelte:head>
-  <title>Controller setup | Certified by Pat</title>
+  <title>Controller setup | CBP</title>
 </svelte:head>
 
 <section

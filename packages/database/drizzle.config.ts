@@ -22,5 +22,7 @@ export default defineConfig({
     "cbp_notification_channels",
     "cbp_user_groups",
     "cbp_user_group_members",
+    "cbp_user_group_permissions",
+    "cbp_user_permissions",
   ],
 });

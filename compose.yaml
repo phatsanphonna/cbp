@@ -73,6 +73,24 @@ services:
         protocol: tcp
     restart: unless-stopped
 
+  vault:
+    profiles: [vault]
+    build:
+      context: .
+      target: vault
+    command: ["server", "-config=/vault/config/cbp.hcl"]
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+    network_mode: service:web
+    depends_on:
+      web:
+        condition: service_started
+        restart: true
+    cap_add: [IPC_LOCK]
+    volumes:
+      - cbp-vault:/vault/file
+    restart: unless-stopped
+
   controller:
     build:
       context: .
@@ -127,4 +145,5 @@ services:
 
 volumes:
   cbp-db:
+  cbp-vault:
   cbp-ansible-ssh:

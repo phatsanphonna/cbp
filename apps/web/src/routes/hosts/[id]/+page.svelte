@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-  <title>{hostTitle} | Certified by Pat</title>
+  <title>{hostTitle} | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="host-heading">
@@ -119,7 +119,8 @@
     </div>
     <div class="flex flex-wrap gap-2">
       <Button href={resolve("/hosts")} variant="outline">Back to hosts</Button>
-      <AlertDialog.Root>
+      {#if data.canManageHosts}
+        <AlertDialog.Root>
         <AlertDialog.Trigger>
           {#snippet child({ props })}
             <Button {...props} variant="destructive">Remove host</Button>
@@ -142,7 +143,8 @@
             </AlertDialog.Footer>
           </form>
         </AlertDialog.Content>
-      </AlertDialog.Root>
+        </AlertDialog.Root>
+      {/if}
     </div>
   </header>
 
@@ -239,7 +241,7 @@
         </dd>
       </div>
     </dl>
-    {#if data.user?.isAdmin && (host.ansibleManaged || data.credentials.bound)}
+    {#if data.canManageCredentials && (host.ansibleManaged || data.credentials.bound)}
       <div class="border-t p-4">
         <h3 class="text-sm font-medium">Ansible credential</h3>
         {#if data.credentials.available}
@@ -286,13 +288,13 @@
       <h2 id="host-deployments-heading" class="text-sm font-medium">
         Certificate deployments
       </h2>
-      {#if data.certificateOptions.length}
+      {#if data.canManageDeployments && data.certificateOptions.length}
         <LinkDeploymentDialog
           target="certificate"
           options={data.certificateOptions}
           message={form?.linkError}
         />
-      {:else}
+      {:else if !data.certificateOptions.length && data.canManageCertificates}
         <Button href={resolve("/certificates/new")} variant="outline" size="sm"
           >Register a certificate</Button
         >
@@ -459,6 +461,7 @@
                 />
               </Table.Cell>
               <Table.Cell class="text-right">
+                {#if data.canManageDeployments}
                 <EditDeploymentEndpointDialog
                   deploymentId={deployment.id}
                   endpoint={deployment.endpoint}
@@ -471,6 +474,7 @@
                     ? form.removeDeploymentError
                     : undefined}
                 />
+                {/if}
               </Table.Cell>
             </Table.Row>
           {:else}

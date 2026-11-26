@@ -29,6 +29,7 @@
     "/audit": "Audit log",
     "/users": "Users",
     "/users/new": "Create user",
+    "/groups": "Groups",
     "/docs/alert": "Alert guide",
     "/docs/controller": "Controller setup",
     "/docs/agent": "Agent setup",

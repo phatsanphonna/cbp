@@ -31,7 +31,32 @@ export const userGroupMembers = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [primaryKey({ columns: [table.groupId, table.userId] })],
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.userId] }),
+    index("cbp_user_group_members_user_idx").on(table.userId),
+  ],
+);
+
+export const userGroupPermissions = pgTable(
+  "cbp_user_group_permissions",
+  {
+    groupId: integer("group_id")
+      .notNull()
+      .references(() => userGroups.id, { onDelete: "cascade" }),
+    permission: text().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.groupId, table.permission] })],
+);
+
+export const userPermissions = pgTable(
+  "cbp_user_permissions",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    permission: text().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.permission] })],
 );
 
 export const hosts = pgTable("cbp_hosts", {

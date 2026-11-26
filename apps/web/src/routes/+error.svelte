@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-  <title>{page.status} {message} | Certified by Pat</title>
+  <title>{page.status} {message} | CBP</title>
 </svelte:head>
 
 <section

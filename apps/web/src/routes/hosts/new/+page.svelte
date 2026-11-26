@@ -22,7 +22,7 @@
 </script>
 
 <svelte:head>
-  <title>Add host | Certified by Pat</title>
+  <title>Add host | CBP</title>
 </svelte:head>
 
 <section

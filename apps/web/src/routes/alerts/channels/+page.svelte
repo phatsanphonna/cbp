@@ -246,7 +246,7 @@
 {/snippet}
 
 <svelte:head>
-  <title>Notification channels | Certified by Pat</title>
+  <title>Notification channels | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="channels-heading">
@@ -277,7 +277,7 @@
       menu to bind it.
     </p>
   {/if}
-  {#if data.user?.isAdmin}
+  {#if data.canManageAlerts}
     <form
       class="mt-6 grid gap-4 border p-4 sm:grid-cols-2"
       method="POST"
@@ -363,7 +363,7 @@
               {/if}
             </Table.Cell>
             <Table.Cell class="text-right">
-              {#if data.user?.isAdmin}
+              {#if data.canManageAlerts}
                 <div class="flex justify-end">
                   {#if canBind}
                     <form

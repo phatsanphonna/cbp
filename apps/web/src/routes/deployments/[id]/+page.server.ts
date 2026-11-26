@@ -21,6 +21,7 @@ import {
   jobIdPattern,
 } from "../deployment-view.server.js";
 import type { Actions, PageServerLoad } from "./$types";
+import { hasPermission } from "#lib/server/access-control.js";
 
 export const load: PageServerLoad = async (event) => {
   const { params, cookies, depends } = event;
@@ -49,7 +50,7 @@ export const load: PageServerLoad = async (event) => {
       ? dateFormatter(timeZone).format(run.submittedAt)
       : undefined,
     jobs: formatDeploymentTargets(targets, timeZone),
-    canCancel: Boolean(event.locals.user?.isAdmin),
+    canCancel: hasPermission(event.locals.user, "deployments.manage"),
     canRecover: {
       Agent: Boolean(getControllerToken() && hasTrustedTransport(event)),
       Ansible: Boolean(getAnsibleToken() && hasTrustedTransport(event)),

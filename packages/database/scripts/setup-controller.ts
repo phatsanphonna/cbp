@@ -117,6 +117,41 @@ try {
     )
   `;
   await db.$client`
+    create table if not exists cbp_user_groups (
+      id integer generated always as identity primary key,
+      name text not null,
+      constraint cbp_user_groups_name_unique unique (name)
+    )
+  `;
+  await db.$client`
+    create table if not exists cbp_user_group_members (
+      group_id integer not null references cbp_user_groups(id) on delete cascade,
+      user_id text not null references cbp_auth_user(id) on delete cascade,
+      constraint cbp_user_group_members_group_id_user_id_pk
+        primary key (group_id, user_id)
+    )
+  `;
+  await db.$client`
+    create table if not exists cbp_user_group_permissions (
+      group_id integer not null references cbp_user_groups(id) on delete cascade,
+      permission text not null,
+      constraint cbp_user_group_permissions_group_id_permission_pk
+        primary key (group_id, permission)
+    )
+  `;
+  await db.$client`
+    create table if not exists cbp_user_permissions (
+      user_id text not null references cbp_auth_user(id) on delete cascade,
+      permission text not null,
+      constraint cbp_user_permissions_user_id_permission_pk
+        primary key (user_id, permission)
+    )
+  `;
+  await db.$client`
+    create index if not exists cbp_user_group_members_user_idx
+      on cbp_user_group_members(user_id)
+  `;
+  await db.$client`
     create table if not exists cbp_alerts (
       id uuid primary key default gen_random_uuid(),
       severity text not null,
@@ -305,8 +340,11 @@ try {
       await tx.execute(sql`grant usage on schema public to cbp_web`);
       await tx.execute(sql`grant select, insert, update, delete on
         public.cbp_auth_user, public.cbp_auth_session, public.cbp_auth_account, public.cbp_auth_verification,
-        public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_deployments
+        public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_deployments,
+        public.cbp_user_groups, public.cbp_user_group_members, public.cbp_user_group_permissions,
+        public.cbp_user_permissions
         to cbp_web`);
+      await tx.execute(sql`grant usage, select on sequence public.cbp_user_groups_id_seq to cbp_web`);
       await tx.execute(sql`grant select, insert on public.cbp_acme_accounts to cbp_web`);
       await tx.execute(sql`grant select, insert, delete on public.cbp_acme_challenges to cbp_web`);
       await tx.execute(sql`grant select, insert, update on public.cbp_controller_status,

@@ -11,6 +11,7 @@ declare global {
         username?: string | null;
         image?: string | null;
         isAdmin: boolean;
+        permissions: string[];
       } | null;
       auditActor?: { id: string; name: string };
       auditTargetId?: string;

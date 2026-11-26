@@ -37,7 +37,7 @@
 </script>
 
 <svelte:head>
-  <title>Alert guide | Certified by Pat</title>
+  <title>Alert guide | CBP</title>
 </svelte:head>
 
 <section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="alert-guide">

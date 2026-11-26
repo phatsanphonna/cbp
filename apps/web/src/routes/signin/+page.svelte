@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-  <title>Sign in | Certified by Pat</title>
+  <title>Sign in | CBP</title>
 </svelte:head>
 
 <main class="flex min-h-svh w-full items-center justify-center px-4">

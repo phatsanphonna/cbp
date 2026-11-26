@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-  <title>Create user | Certified by Pat</title>
+  <title>Create user | CBP</title>
 </svelte:head>
 
 <section

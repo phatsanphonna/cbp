@@ -22,6 +22,7 @@ import { readDeploymentKey } from "./deployment-key.js";
 import { boundAnsibleCredential } from './ansible-credentials.js';
 import { decryptSecret } from './encrypted-secret.js';
 import { renewalKeyContext } from './lets-encrypt.js';
+import { selfSignedKeyContext } from './self-signed-certificate.js';
 import {
   discardDeploymentSecret,
   keepDeploymentSecret,
@@ -30,6 +31,7 @@ import {
   savedCredentialsAvailable,
 } from "./deployment-secrets.js";
 import { hasTrustedTransport, type Connection } from "./trusted-transport.js";
+import { hasPermission } from "./access-control.js";
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 type DeploymentSelection = {
@@ -90,6 +92,14 @@ export async function deployCertificateAction(
   const selected = fields && readDeploymentTargets(fields);
   if (!fields || !selected?.length || !idPattern.test(certificateId)) {
     return reject(400, "Select linked hosts to deploy to.");
+  }
+  if (
+    ["useSavedKey", "useSavedAnsible", "saveKey", "saveAnsible"].some(
+      (name) => fields.get(name) === "yes",
+    ) &&
+    !hasPermission(locals.user, "credentials.manage")
+  ) {
+    return reject(403, "Credential management permission is required for saved credentials.");
   }
   const ids = selected.map(({ id }) => id);
   if (
@@ -169,7 +179,10 @@ export async function deployCertificateAction(
     (fields.get('privateKeyPem') ?? '') === ''
   ) {
     const encrypted = await findRenewalKey(database, certificateId, nextChain);
-    const pem = encrypted && decryptSecret(encrypted, renewalKeyContext(certificateId));
+    const pem = encrypted && (
+      decryptSecret(encrypted, renewalKeyContext(certificateId)) ??
+      decryptSecret(encrypted, selfSignedKeyContext(certificateId))
+    );
     if (!pem) return reject(409, 'The stored renewal key is unavailable. Refresh and try again or supply a matching key.');
     fields.set('privateKeyPem', pem);
   }
@@ -361,8 +374,8 @@ export async function cancelQueuedDeploymentAction(
 ) {
   const { request, setHeaders, locals } = event;
   setHeaders({ "cache-control": "no-store" });
-  if (!locals.user?.isAdmin)
-    return fail(403, { cancelError: "An administrator account is required." });
+  if (!hasPermission(locals.user, "deployments.manage"))
+    return fail(403, { cancelError: "Deployment management permission is required." });
   const form = await request.formData().catch(() => null);
   const id = form?.get("jobId");
   if (typeof id !== "string" || !idPattern.test(id))

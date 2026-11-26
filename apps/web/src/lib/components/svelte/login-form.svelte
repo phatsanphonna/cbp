@@ -20,7 +20,7 @@
 
 <Card.Root class="mx-auto w-full max-w-sm">
   <Card.Header>
-    <p class="text-sm font-medium">Certified by Pat</p>
+    <p class="text-sm font-medium">CBP</p>
     <Card.Title
       class="text-left font-sans text-2xl"
       lang={greeting.lang}

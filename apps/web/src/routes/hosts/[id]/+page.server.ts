@@ -38,6 +38,7 @@ import {
 } from "#lib/server/deployment-actions.js";
 import { pingHost, pingLabels } from "#lib/server/ping-host.js";
 import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
+import { hasPermission } from "#lib/server/access-control.js";
 import { displayCertificateDomain } from "../../certificates/display-domain.js";
 import type { Actions, PageServerLoad } from "./$types";
 
@@ -58,8 +59,13 @@ export const load: PageServerLoad = async (event) => {
       event,
     ),
   ]);
+  const canManageCredentials = hasPermission(event.locals.user, "credentials.manage");
+  const canManageAgents = hasPermission(event.locals.user, "agents.manage");
+  const canManageDeployments = hasPermission(event.locals.user, "deployments.manage");
+  const canManageCertificates = hasPermission(event.locals.user, "certificates.manage");
+  const canManageHosts = hasPermission(event.locals.user, "hosts.manage");
   let credentials: { available: boolean; profiles: { id: string; name: string }[]; bound: string | null; error: boolean } = { available: false, profiles: [], bound: null, error: false };
-  if (event.locals.user?.isAdmin && savedCredentialsAvailable() && hasTrustedTransport(event)) {
+  if (canManageCredentials && savedCredentialsAvailable() && hasTrustedTransport(event)) {
     try {
       const [profiles, bound] = await Promise.all([listAnsibleProfiles(), readHostCredentialBinding(host.id)]);
       credentials = { available: true, profiles, bound, error: false };
@@ -68,15 +74,20 @@ export const load: PageServerLoad = async (event) => {
   return {
     agentDeployments,
     credentials,
+    canManageHosts,
+    canManageCredentials,
+    canManageDeployments,
+    canManageCertificates,
     enrollment: {
       canDownloadAgent: Boolean(
-        event.locals.user?.isAdmin && hasTrustedTransport(event),
+        canManageAgents && hasTrustedTransport(event),
       ),
+      canManageAgents,
       configured: Boolean(
         normalizeAgentControllerAddress(CBP_AGENT_CONTROLLER_ADDRESS),
       ),
       caDownloadSource:
-        event.locals.user?.isAdmin &&
+        canManageAgents &&
         CBP_AGENT_CA_FILE &&
         CBP_AGENT_CA_DOWNLOAD_FILE
           ? agentCaPaths(CBP_AGENT_CA_FILE).source
@@ -115,7 +126,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
   bindCredential: async (event) => {
-    if (!event.locals.user?.isAdmin || !hasTrustedTransport(event)) error(403, 'Administrator access and a trusted connection are required.');
+    if (!hasPermission(event.locals.user, "credentials.manage") || !hasTrustedTransport(event)) error(403, 'Credential management permission and a trusted connection are required.');
     const host = await findHost(getDatabase(), event.params.id);
     if (!host) error(404, 'Host not found');
     const id = (await event.request.formData()).get('credentialId');

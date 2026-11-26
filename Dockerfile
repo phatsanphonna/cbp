@@ -61,3 +61,7 @@ RUN for file in /app/package.json /app/packages/database/package.json \
       fi; \
     done
 CMD ["bun", "apps/web/scripts/serve-container.js"]
+
+FROM hashicorp/vault:1.20.4 AS vault
+COPY vault/server.hcl /vault/config/cbp.hcl
+COPY vault/cbp-policy.hcl /vault/policies/cbp.hcl

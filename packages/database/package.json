@@ -7,6 +7,7 @@
     "./alerts": "./src/alerts.ts",
     "./audit": "./src/audit.ts",
     "./auth-schema": "./src/auth-schema.ts",
+    "./access-control": "./src/access-control.ts",
     "./controller-status": "./src/controller-status.ts",
     "./deployment-events": "./src/deployment-events.ts",
     "./deployment-jobs": "./src/deployment-jobs.ts",

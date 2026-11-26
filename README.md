@@ -65,7 +65,42 @@ Enable the optional `ansible` profile to run the Ansible worker alongside the co
 
 ## Vault deployment secrets
 
-CBP can store temporary deployment private keys and Ansible credentials in a Vault KV v2 engine mounted at `cbp`. Set both `CBP_VAULT_ADDR` and `CBP_VAULT_TOKEN` in `.env.local` for local development or `.env` for Compose, and restart the web app. The address must use HTTPS unless Vault is on the web app's loopback interface. When neither value is set, deployment credentials remain in memory as before. If only one is set, deployments cannot be submitted.
+CBP can store temporary deployment private keys and Ansible credentials in a Vault KV v2 engine mounted at `cbp`. Compose includes an optional single-node HashiCorp Vault service. It stores data in the `cbp-vault` volume, binds its API to loopback in the web container's network namespace, and is started with the `vault` profile.
+
+Start Vault and initialize it once:
+
+```sh
+docker compose --profile vault up -d --build vault
+docker compose --profile vault exec vault vault operator init
+```
+
+Save the five unseal keys and initial root token somewhere secure and offline. Run the following command three times, entering a different unseal key each time. Vault starts sealed again after a restart, so repeat this unseal step then.
+
+```sh
+docker compose --profile vault exec vault vault operator unseal
+```
+
+Log in with the initial root token when prompted, enable KV v2, install the scoped CBP policy, and create an expiring app token:
+
+```sh
+docker compose --profile vault exec vault vault login
+docker compose --profile vault exec vault vault secrets enable -path=cbp kv-v2
+docker compose --profile vault exec vault vault policy write cbp /vault/policies/cbp.hcl
+docker compose --profile vault exec vault vault token create -orphan -policy=cbp -ttl=720h
+```
+
+Copy the generated service token into `.env` and start the full stack. Keep the token out of Git and rotate it monthly before it expires.
+
+```dotenv
+CBP_VAULT_ADDR=http://127.0.0.1:8200
+CBP_VAULT_TOKEN=<generated-service-token>
+```
+
+```sh
+docker compose --profile vault up -d --build
+```
+
+For an externally managed Vault, set its HTTPS API URL and a token with the policy below. Set both values in `.env.local` for local development or `.env` for Compose. When neither value is set, temporary deployment credentials remain in memory as before. If only one is set, deployments cannot be submitted. The Compose Vault service is a single node; protect its unseal keys, back up the `cbp-vault` volume, and unseal it after restarts.
 
 Create a dedicated Vault policy for the app token:
 
@@ -90,7 +125,9 @@ path "cbp/metadata/credentials/ansible-profile" {
 }
 ```
 
-The web app removes temporary credentials when a worker claims a job or an administrator cancels it. It also cleans up temporary entries older than one hour, including entries left by interrupted requests. Administrators can save a private key and shared Ansible credentials per certificate, or create named Ansible credentials and bind them to hosts. Bound host credentials are used for deployments unless a host-specific override is supplied. Saved credentials retain one Vault version. Saved keys are checked against the current certificate before use. Unbind host credentials before deleting them or their hosts, and delete saved certificate credentials before removing a certificate. Vault must remain available and unsealed for cleanup and deployments. Job expiration remains ten minutes, and this integration does not add approvals or staged rollouts. For Compose, the Vault address must be reachable from the web container; its loopback address refers to the container itself. Protect the token and replace it before it expires.
+The Compose image installs this policy from `vault/cbp-policy.hcl`.
+
+The web app removes temporary credentials when a worker claims a job or an administrator cancels it. It also cleans up temporary entries older than one hour, including entries left by interrupted requests. Administrators can save a private key and shared Ansible credentials per certificate, or create named Ansible credentials and bind them to hosts. Bound host credentials are used for deployments unless a host-specific override is supplied. Saved credentials retain one Vault version. Saved keys are checked against the current certificate before use. Unbind host credentials before deleting them or their hosts, and delete saved certificate credentials before removing a certificate. Vault must remain available and unsealed for cleanup and deployments. Job expiration remains ten minutes, and this integration does not add approvals or staged rollouts. The bundled Compose service shares the web container's network namespace, so `http://127.0.0.1:8200` reaches Vault from the app. Use an HTTPS API address for Vault outside Compose. Protect the token and replace it before it expires.
 
 ## Alert notifications
 
@@ -98,19 +135,25 @@ As an administrator, open **Alerts → Notification channels** to add, edit, pau
 
 CBP encrypts saved credentials using a key derived from the existing `BETTER_AUTH_SECRET`. If that secret changes, remove and recreate affected channels with their credentials.
 
+An enabled channel receives matching open alerts, including ones already open when the channel is enabled. CBP records one successful delivery per alert, severity, and channel, and retries failed deliveries up to five attempts in total, five minutes apart. Webhook receivers get a JSON payload with `event`, `alertId`, `severity`, `message`, and `target` and can use the `Idempotency-Key` header to deduplicate retries.
+
 For an existing local database, run `bun --filter @cbp/database db:setup-controller` with the database owner connection before restarting the web app. Compose applies the schema through its database setup service.
 
-An enabled channel receives matching open alerts, including ones already open when the channel is enabled. CBP records one successful delivery per alert, severity, and channel, and retries failed deliveries up to five attempts in total, five minutes apart. Webhook receivers get a JSON payload with `event`, `alertId`, `severity`, `message`, and `target` and can use the `Idempotency-Key` header to deduplicate retries.
+## Users, groups, and permissions
+
+Emails in `CBP_ADMIN_EMAILS` remain full-access administrators. The **Sudo** permission also grants full administrator access and can be assigned directly to a user or through a group. Users with permission management access can assign individual permissions under **Users**; group permissions are managed under **Permissions** and combine with direct user permissions. Existing deployments apply the access-control tables and role grants when `db:setup-controller` runs.
 
 ## Let’s Encrypt renewals
 
 Set `CBP_LETS_ENCRYPT_EMAIL` in `.env` for Compose or `.env.local` for local development. By setting it, you agree to the [Let’s Encrypt Subscriber Agreement](https://letsencrypt.org/repository/). Existing installations need the database setup command above.
 
-In **Certificates → Register certificate**, choose **Create with Let’s Encrypt** and enter one DNS hostname per line. CLM registers the new certificate and enables automatic renewal after issuance. For an existing Let’s Encrypt certificate, upload the fullchain and enable it in **Renewals**.
+In **Certificates → Register certificate**, choose **Create with Let’s Encrypt** and enter one DNS hostname per line. CBP registers the certificate and enables automatic renewal after issuance. For an existing Let’s Encrypt certificate, open its certificate page to enable renewal or renew it immediately.
+
+Choose **Create self-signed** to make a one-year certificate for internal DNS names or wildcards. Download the private key after creation, or save it to Vault if you have credential-management access. Enabling automatic renewal or saving the key to Vault also keeps an encrypted copy in the database so CBP can renew it.
 
 Each DNS name on the certificate must allow public HTTP on port 80. Configure the reverse proxy or web server for each name to forward `/.well-known/acme-challenge/*` to the CLM web app without authentication or rewriting that path. HTTP-01 supports regular DNS names. Wildcards and IP addresses are ineligible. Allow enough time for domain validation on the proxy’s certificate registration requests.
 
-CLM starts trying after two-thirds of the current certificate’s lifetime and retries failures hourly. It saves the renewed chain in the same certificate record and encrypts the matching key using `BETTER_AUTH_SECRET`. Keep that secret stable across restarts. To install the renewed certificate, open the certificate’s **Deploy** dialog and choose the target hosts. Leave the private-key fields blank to use the stored key.
+CBP starts automatic renewal after two-thirds of the current certificate’s lifetime and retries failures hourly. Renewals save the new chain in the same certificate record and rotate the private key. CBP encrypts keys using `BETTER_AUTH_SECRET` and saves renewed keys to Vault when it is configured. The previous chain and its matching key are retained encrypted for fallback. Keep that secret stable across restarts. Manual self-signed renewal offers the rotated key for download in its dialog. Renewals mark linked deployments pending; deploy the updated certificate from its certificate page.
 
 ## Develop locally
 

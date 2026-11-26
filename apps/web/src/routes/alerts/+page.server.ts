@@ -4,12 +4,14 @@ import { fail } from "@sveltejs/kit";
 import { getDatabase } from "#lib/server/database.js";
 import { dateFormatter } from "#lib/server/date-formatter.js";
 import type { Actions, PageServerLoad } from "./$types";
+import { hasPermission } from "#lib/server/access-control.js";
 
-export const load: PageServerLoad = async ({ url, cookies }) => {
+export const load: PageServerLoad = async ({ url, cookies, locals }) => {
   const format = dateFormatter(cookies.get("cbp-time-zone"));
   const openOnly = url.searchParams.get("status") === "open";
   return {
     openOnly,
+    canManageAlerts: hasPermission(locals.user, "alerts.manage"),
     alerts: (await listAlerts(getDatabase(), openOnly)).map(
       ({
         id,

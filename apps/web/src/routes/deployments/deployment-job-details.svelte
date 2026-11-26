@@ -168,7 +168,7 @@
 </script>
 
 <svelte:head>
-  <title>{title} | Certified by Pat</title>
+  <title>{title} | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="deployments-heading">
@@ -243,38 +243,22 @@
       <Table.Body>
         {#each jobs as job (job.id)}
           <Table.Row>
-            <Table.Head
-              scope="row"
-              class="max-w-72 whitespace-normal wrap-anywhere"
-            >
+            <Table.Head scope="row" class="max-w-72 whitespace-normal wrap-anywhere">
               {job.endpoint}
-              <span class="block font-normal text-muted-foreground"
-                >{job.engine} · {job.method}</span
-              >
+              <span class="block font-normal text-muted-foreground">{job.engine} · {job.method}</span>
             </Table.Head>
             <Table.Cell class="max-w-60 whitespace-normal wrap-anywhere">
               {#if job.certificateId}
-                <a
-                  href={resolve("/certificates/[id]", {
-                    id: job.certificateId,
-                  })}
-                  class="text-primary underline underline-offset-4"
-                  >{job.certificateName}</a
-                >
+                <a href={resolve("/certificates/[id]", { id: job.certificateId })} class="text-primary underline underline-offset-4">{job.certificateName}</a>
               {:else}
                 {job.certificateName}
               {/if}
             </Table.Cell>
             <Table.Cell class="max-w-48 whitespace-normal wrap-anywhere">
               {#if job.hostId}
-                <a
-                  href={resolve("/hosts/[id]", { id: job.hostId })}
-                  class="text-primary underline underline-offset-4"
-                  >{job.hostName}</a
-                >
+                <a href={resolve("/hosts/[id]", { id: job.hostId })} class="text-primary underline underline-offset-4">{job.hostName}</a>
               {:else}
-                {job.hostName}
-                <span class="text-muted-foreground">(removed)</span>
+                {job.hostName} <span class="text-muted-foreground">(removed)</span>
               {/if}
             </Table.Cell>
             <Table.Cell>
@@ -287,107 +271,57 @@
               {/if}
             </Table.Cell>
             <Table.Cell class="min-w-48 whitespace-normal">
-              <div class="flex items-center gap-1" aria-live="polite">
-                <DeploymentStatusBadge
-                  status={job.status}
-                  detail={job.detail}
-                />
+              <div class="flex w-full items-center gap-1" aria-live="polite">
+                <DeploymentStatusBadge status={job.status} detail={job.detail} />
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger>
                     {#snippet child({ props })}
-                      <Button
-                        {...props}
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={`Actions for ${job.endpoint}`}
-                      >
-                        <Ellipsis />
+                      <Button {...props} class="ml-auto" variant="ghost" size="icon-sm" aria-label={`Actions for ${job.endpoint}`}>
+                        <Ellipsis aria-hidden="true" />
                       </Button>
                     {/snippet}
                   </DropdownMenu.Trigger>
-                  <DropdownMenu.Content
-                    align="end"
-                    class="min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-                  >
+                  <DropdownMenu.Content align="end" class="min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
                     {#if canCancel && job.status === "Queued"}
-                      <form
-                        id="cancel-{job.id}"
-                        method="POST"
-                        action="?/cancel"
-                        class="hidden"
-                        use:enhance={() => {
-                          cancelPendingId = job.id;
-                          return async ({ result, update }) => {
-                            try {
-                              await update();
-                              if (result.type === "success")
-                                toast.success("Queued deployment canceled.");
-                              else
-                                toast.error(
-                                  result.data?.cancelError ??
-                                    "Could not cancel the deployment.",
-                                );
-                            } finally {
-                              cancelPendingId = null;
-                            }
-                          };
-                        }}
-                      >
+                      <form id="cancel-{job.id}" method="POST" action="?/cancel" class="hidden" use:enhance={() => {
+                        cancelPendingId = job.id;
+                        return async ({ result, update }) => {
+                          try {
+                            await update();
+                            if (result.type === "success") toast.success("Queued deployment canceled.");
+                            else toast.error(result.data?.cancelError ?? "Could not cancel the deployment.");
+                          } finally {
+                            cancelPendingId = null;
+                          }
+                        };
+                      }}>
                         <input type="hidden" name="jobId" value={job.id} />
                       </form>
-                      <DropdownMenu.Item
-                        variant="destructive"
-                        disabled={cancelPendingId === job.id}
-                        onSelect={() =>
-                          (
-                            document.getElementById(
-                              `cancel-${job.id}`,
-                            ) as HTMLFormElement | null
-                          )?.requestSubmit()}
-                        >Cancel deployment</DropdownMenu.Item
-                      >
+                      <DropdownMenu.Item variant="destructive" disabled={cancelPendingId === job.id} onSelect={() => (document.getElementById(`cancel-${job.id}`) as HTMLFormElement | null)?.requestSubmit()}>
+                        Cancel deployment
+                      </DropdownMenu.Item>
                     {/if}
                     {#if canRecover[job.method] && job.recoverable}
-                      <DropdownMenu.Item
-                        class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                        onSelect={() => {
-                          recoveryJobId = job.id;
-                          recoveryOpen = true;
-                        }}>Redeploy this version</DropdownMenu.Item
-                      >
+                      <DropdownMenu.Item onSelect={() => { recoveryJobId = job.id; recoveryOpen = true; }}>
+                        Redeploy this version
+                      </DropdownMenu.Item>
                     {:else if job.status === "Failed" && job.certificateId}
-                      <DropdownMenu.Item
-                        class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                        onSelect={() =>
-                          goto(
-                            resolve("/certificates/[id]", {
-                              id: job.certificateId!,
-                            }),
-                          )}>Deploy again</DropdownMenu.Item
-                      >
+                      <DropdownMenu.Item onSelect={() => goto(resolve("/certificates/[id]", { id: job.certificateId! }))}>
+                        Deploy again
+                      </DropdownMenu.Item>
                     {/if}
-                    <DropdownMenu.Item
-                      class="cursor-default select-none rounded-sm px-2 py-1.5 text-xs outline-none focus:bg-accent focus:text-accent-foreground"
-                      onSelect={() => {
-                        logJobId = job.id;
-                        logPinned = true;
-                        lastLogScrollTop = 0;
-                        logOpen = true;
-                      }}>Deployment log</DropdownMenu.Item
-                    >
+                    <DropdownMenu.Item onSelect={() => { logJobId = job.id; logPinned = true; lastLogScrollTop = 0; logOpen = true; }}>
+                      Deployment log
+                    </DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Root>
               </div>
             </Table.Cell>
           </Table.Row>
         {:else}
-          <Table.Row
-            ><Table.Cell
-              colspan={5}
-              class="py-8 text-center text-muted-foreground"
-              >No deployment targets are available.</Table.Cell
-            ></Table.Row
-          >
+          <Table.Row>
+            <Table.Cell colspan={5} class="py-8 text-center text-muted-foreground">No deployment targets are available.</Table.Cell>
+          </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>

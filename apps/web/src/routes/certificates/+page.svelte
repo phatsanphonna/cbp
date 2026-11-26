@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-  <title>Certificates | Certified by Pat</title>
+  <title>Certificates | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="certificates-heading">
@@ -45,7 +45,9 @@
         Track TLS expiry and deployment coverage.
       </p>
     </div>
-    <Button href={resolve("/certificates/new")}>Register certificate</Button>
+    {#if data.canManageCertificates}
+      <Button href={resolve("/certificates/new")}>Register certificate</Button>
+    {/if}
   </header>
 
   {#if data.expiryLabel}

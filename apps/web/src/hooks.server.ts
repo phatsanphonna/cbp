@@ -13,7 +13,16 @@ import { deliverAlertNotifications } from "#lib/server/alert-notifications.js";
 import { getAuth, isAdminEmail } from "#lib/server/auth.js";
 import { getDatabase } from "#lib/server/database.js";
 import { cleanupDeploymentSecrets } from "#lib/server/deployment-secrets.js";
-import { renewalAvailable, renewDueCertificate } from '#lib/server/lets-encrypt.js';
+import {
+  canWriteRouteAction,
+  hasPermission,
+} from "#lib/server/access-control.js";
+import { listUserPermissions } from "@cbp/database/access-control";
+import {
+  renewalAvailable,
+  renewDueCertificate,
+  selfSignedRenewalAvailable,
+} from '#lib/server/lets-encrypt.js';
 import { isDirectHttps } from "#lib/server/trusted-transport.js";
 
 const controllerRoutes = [
@@ -99,7 +108,7 @@ export function init() {
   cleanup.cbpAlertReconcileTimer = alertTimer;
   alertTimer.unref();
 
-  if (renewalAvailable) {
+  if (renewalAvailable || selfSignedRenewalAvailable) {
     clearInterval(cleanup.cbpRenewalTimer);
     let renewing = false;
     const renew = async () => {
@@ -152,13 +161,17 @@ export const handle: Handle = async ({ event, resolve }) => {
   });
   const user = session?.user;
   if (user) event.locals.auditActor = { id: user.id, name: user.name };
+  const isAdmin = user ? isAdminEmail(user.email) : false;
   event.locals.user = user
     ? {
         name: user.name,
         email: user.email,
         username: user.displayUsername ?? user.username,
         image: user.image,
-        isAdmin: isAdminEmail(user.email),
+        isAdmin,
+        permissions: isAdmin
+          ? []
+          : await listUserPermissions(getDatabase(), user.id),
       }
     : null;
 
@@ -168,20 +181,47 @@ export const handle: Handle = async ({ event, resolve }) => {
     redirect(303, resolvePath("/signin"));
   }
   return auditUserAction(event, () => {
-    if (
-      (id === "/users" || id.startsWith("/users/")) &&
-      !event.locals.user?.isAdmin
-    ) {
-      error(403, "An administrator account is required to access users.");
+    if (id === "/users") {
+      if (
+        !hasPermission(event.locals.user, "users.manage") &&
+        !hasPermission(event.locals.user, "groups.manage") &&
+        !hasPermission(event.locals.user, "permissions.manage")
+      )
+        error(403, "User, group, or permission management access is required.");
+    } else if (id.startsWith("/users/")) {
+      if (!hasPermission(event.locals.user, "users.manage"))
+        error(403, "User management permission is required.");
     }
-    const ownAccountAction = id === "/signout" || id === "/account/password";
     if (
-      event.locals.user &&
-      !event.locals.user.isAdmin &&
-      !ownAccountAction &&
-      !["GET", "HEAD", "OPTIONS"].includes(event.request.method)
+      id === "/groups" &&
+      !hasPermission(event.locals.user, "groups.manage") &&
+      !hasPermission(event.locals.user, "permissions.manage")
     ) {
-      error(403, "An administrator account is required to make changes.");
+      error(403, "Group or permission management access is required.");
+    }
+    if (id === "/hosts/new" && !hasPermission(event.locals.user, "hosts.manage")) {
+      error(403, "Host management permission is required.");
+    }
+    if (
+      id === "/certificates/new" &&
+      !hasPermission(event.locals.user, "certificates.manage")
+    ) {
+      error(403, "Certificate management permission is required.");
+    }
+    if (!["GET", "HEAD", "OPTIONS"].includes(event.request.method)) {
+      const action =
+        [...event.url.searchParams.keys()]
+          .find((key) => key.startsWith("/"))
+          ?.slice(1) ?? "default";
+      if (
+        !canWriteRouteAction(event.locals.user, id, action) &&
+        event.locals.user
+      ) {
+        error(403, "Your account does not have permission to make this change.");
+      }
+      if (!event.locals.user && !["/signin"].includes(id)) {
+        error(403, "Sign in to make this change.");
+      }
     }
     return resolve(event);
   });

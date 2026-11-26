@@ -140,6 +140,7 @@ export function deploymentJobStatuses(db: Database, ids: string[]) {
     .selectDistinctOn([deploymentJobs.deploymentId], {
       jobId: deploymentJobs.id,
       deploymentId: deploymentJobs.deploymentId,
+      runSlug: deploymentRuns.slug,
       startedAt: deploymentJobs.startedAt,
       finishedAt: deploymentJobs.finishedAt,
       ...jobStatus,

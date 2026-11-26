@@ -9,7 +9,7 @@
 </script>
 
 <svelte:head>
-  <title>Audit log | Certified by Pat</title>
+  <title>Audit log | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="audit-heading">

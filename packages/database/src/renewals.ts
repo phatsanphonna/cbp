@@ -7,6 +7,7 @@ import {
   gt,
   ilike,
   isNotNull,
+  isNull,
   lte,
   or,
   sql,
@@ -27,6 +28,10 @@ const renewalAt = sql`greatest(
 const source = {
   id: certificates.id,
   domain: certificates.domain,
+  issuer: certificates.issuer,
+  autoRenew: certificates.autoRenew,
+  hasRenewalKey: isNotNull(certificates.renewalKey),
+  sans: certificates.sans,
   fullchain: certificates.fullchain,
   fingerprint: certificates.fingerprint,
   validUntil: certificates.validUntil,
@@ -39,6 +44,7 @@ export async function findIssuedCertificate(db: Database, names: string[]) {
     .where(
       and(
         isNotNull(certificates.renewalKey),
+        ilike(certificates.issuer, "%Let's Encrypt%"),
         gt(certificates.validUntil, new Date()),
         arrayContains(certificates.sans, names),
         arrayContained(certificates.sans, names),
@@ -53,8 +59,11 @@ export function listRenewals(db: Database) {
     .select({
       id: certificates.id,
       domain: certificates.domain,
+      issuer: certificates.issuer,
+      hasRenewalKey: isNotNull(certificates.renewalKey),
       sans: certificates.sans,
       enabled: certificates.autoRenew,
+      fullchain: certificates.fullchain,
       hasFullchain: isNotNull(certificates.fullchain),
       validUntil: certificates.validUntil,
       nextAttempt: renewalAt,
@@ -62,7 +71,11 @@ export function listRenewals(db: Database) {
     })
     .from(certificates)
     .where(
-      or(certificates.autoRenew, ilike(certificates.issuer, "%Let's Encrypt%")),
+      or(
+        certificates.autoRenew,
+        ilike(certificates.issuer, "%Let's Encrypt%"),
+        ilike(certificates.issuer, '%CN=Self-signed certificate%'),
+      ),
     )
     .orderBy(asc(certificates.validUntil));
 }
@@ -96,12 +109,37 @@ export function setAutoRenew(
     .returning({ id: certificates.id });
 }
 
-export async function claimRenewal(db: Database) {
+export async function claimRenewal(
+  db: Database,
+  issuer: 'letsencrypt' | 'self-signed' = 'letsencrypt',
+  certificateId?: string,
+  force = false,
+) {
   const retryAt = new Date(Date.now() + 60 * 60_000);
+  const issuerPattern =
+    issuer === 'letsencrypt'
+      ? "%Let's Encrypt%"
+      : '%CN=Self-signed certificate%';
   const next = db
     .select({ id: certificates.id })
     .from(certificates)
-    .where(and(certificates.autoRenew, lte(renewalAt, new Date())))
+    .where(
+      and(
+        force ? undefined : certificates.autoRenew,
+        certificateId ? eq(certificates.id, certificateId) : undefined,
+        ilike(certificates.issuer, issuerPattern),
+        issuer === 'self-signed' && !force
+          ? isNotNull(certificates.renewalKey)
+          : undefined,
+        force
+          ? or(
+              isNull(certificates.renewalRetryAt),
+              lte(certificates.renewalRetryAt, new Date()),
+              isNotNull(certificates.renewalError),
+            )
+          : lte(renewalAt, new Date()),
+      ),
+    )
     .orderBy(asc(renewalAt), asc(certificates.id))
     .limit(1)
     .for('update', { skipLocked: true });
@@ -125,6 +163,13 @@ export function recordRenewalFailure(
     .where(
       and(eq(certificates.id, id), eq(certificates.renewalRetryAt, retryAt)),
     );
+}
+
+export function recordRenewalWarning(db: Database, id: string, message: string) {
+  return db
+    .update(certificates)
+    .set({ renewalError: message })
+    .where(eq(certificates.id, id));
 }
 
 export async function findRenewalKey(

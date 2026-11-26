@@ -25,6 +25,7 @@ import {
 import { isPublicWebhook } from "#lib/server/notification-webhook.js";
 import { displayCertificateDomain } from "../../certificates/display-domain.js";
 import type { Actions, PageServerLoad } from "./$types";
+import { hasPermission } from "#lib/server/access-control.js";
 
 const providers = [
   "Slack",
@@ -106,7 +107,7 @@ function isDuplicateDestination(error: unknown): boolean {
   );
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
   const config = notificationConfig();
   const db = getDatabase();
   const [channels, certificates] = await Promise.all([
@@ -115,6 +116,7 @@ export const load: PageServerLoad = async ({ url }) => {
   ]);
   const certificateId = url.searchParams.get("certificate");
   return {
+    canManageAlerts: hasPermission(locals.user, "alerts.manage"),
     certificateId:
       certificates.find(({ id }) => id === certificateId)?.id ?? null,
     certificates: certificates.map(({ id, domain, sans, serial }) => ({

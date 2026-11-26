@@ -59,7 +59,7 @@
 </script>
 
 <svelte:head>
-  <title>Deployments | Certified by Pat</title>
+  <title>Deployments | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="deployments-heading">

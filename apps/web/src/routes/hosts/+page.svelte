@@ -43,7 +43,7 @@
 </script>
 
 <svelte:head>
-  <title>Hosts | Certified by Pat</title>
+  <title>Hosts | CBP</title>
 </svelte:head>
 
 <section class="px-5 py-6 md:px-8" aria-labelledby="hosts-heading">
@@ -57,7 +57,9 @@
         place.
       </p>
     </div>
-    <Button href={resolve("/hosts/new")}>Add host</Button>
+    {#if data.canManageHosts}
+      <Button href={resolve("/hosts/new")}>Add host</Button>
+    {/if}
   </header>
 
   <div class="mt-6">

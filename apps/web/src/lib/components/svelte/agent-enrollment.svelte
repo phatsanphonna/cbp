@@ -14,6 +14,7 @@
     hostId,
     agentManaged,
     canEnroll,
+    canManageAgents,
     configured,
     canDownloadAgent,
     caDownloadSource,
@@ -27,6 +28,7 @@
     hostId: string;
     agentManaged: boolean;
     canEnroll: boolean;
+    canManageAgents: boolean;
     configured: boolean;
     canDownloadAgent: boolean;
     caDownloadSource: string | null;
@@ -87,7 +89,7 @@
         </p>
       {/if}
     </div>
-    {#if status === "not-enrolled"}
+    {#if canManageAgents && status === "not-enrolled"}
       <form
         method="POST"
         action="?/inviteAgent"
@@ -117,7 +119,7 @@
           Generate enrollment code
         </Button>
       </form>
-    {:else}
+    {:else if canManageAgents}
       <AlertDialog.Root>
         <AlertDialog.Trigger>
           {#snippet child({ props })}

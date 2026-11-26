@@ -6,10 +6,11 @@ import { error } from "@sveltejs/kit";
 import { readAgentCaPem } from "#lib/server/agent-ca.js";
 import { agentCaPaths } from "#lib/server/agent-enrollment-command.js";
 import { hasTrustedTransport } from "#lib/server/trusted-transport.js";
+import { hasPermission } from "#lib/server/access-control.js";
 import type { RequestHandler } from "./$types";
 
 export const GET: RequestHandler = async (event) => {
-  if (!event.locals.user?.isAdmin || !hasTrustedTransport(event))
+  if (!hasPermission(event.locals.user, "agents.manage") || !hasTrustedTransport(event))
     error(403, "Administrator access over a trusted connection is required.");
   if (!CBP_AGENT_CA_FILE || !CBP_AGENT_CA_DOWNLOAD_FILE)
     error(404, "The controller CA download is unavailable.");

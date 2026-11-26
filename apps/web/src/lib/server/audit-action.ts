@@ -11,8 +11,19 @@ const actionLabels: Record<string, Record<string, string>> = {
   "/signin": { default: "Sign in" },
   "/signout": { default: "Sign out" },
   "/account/password": { default: "Change password" },
-  "/users": { remove: "Remove user" },
+  "/users": {
+    remove: "Remove user",
+    assignGroups: "Update user groups",
+    assignPermissions: "Update user permissions",
+  },
   "/users/new": { default: "Create user" },
+  "/groups": {
+    create: "Create group",
+    rename: "Rename group",
+    members: "Update group members",
+    savePermissions: "Update group permissions",
+    remove: "Remove group",
+  },
   "/hosts/new": { default: "Add host" },
   "/hosts/[id]": {
     ...deploymentActions,
@@ -27,22 +38,22 @@ const actionLabels: Record<string, Record<string, string>> = {
   '/certificates/new': {
     default: 'Register certificate',
     letsencrypt: 'Issue Let’s Encrypt certificate',
+    selfsigned: 'Create self-signed certificate',
   },
   "/certificates/[id]": {
     ...deploymentActions,
     deploy: "Deploy certificate",
     deployAnsible: "Deploy certificate via Ansible",
     deployMixed: "Deploy certificate",
+    enableRenewal: 'Enable automatic renewal',
+    disableRenewal: 'Disable automatic renewal',
+    renewNow: 'Renew certificate now',
     deleteCredential: "Delete saved deployment credential",
     updateChain: "Update fullchain",
     restoreChain: "Restore fullchain",
     remove: "Remove certificate",
   },
   "/deployments/[id]": { cancel: "Cancel queued deployment" },
-  '/renewals': {
-    enable: 'Enable Let’s Encrypt renewal',
-    disable: 'Disable Let’s Encrypt renewal',
-  },
   "/alerts": { clear: "Clear alert" },
   "/alerts/channels": {
     add: "Add notification channel",
@@ -69,8 +80,12 @@ export async function auditUserAction(
     [...event.url.searchParams.keys()]
       .find((key) => key.startsWith("/"))
       ?.slice(1) ??
-    (route === '/certificates/new' && event.url.searchParams.get('method') === 'letsencrypt'
-      ? 'letsencrypt'
+    (route === '/certificates/new'
+      ? event.url.searchParams.get('method') === 'letsencrypt'
+        ? 'letsencrypt'
+        : event.url.searchParams.get('method') === 'selfsigned'
+          ? 'selfsigned'
+          : 'default'
       : 'default');
   const labels = actionLabels[route];
   const action =

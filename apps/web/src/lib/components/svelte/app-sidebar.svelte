@@ -9,12 +9,12 @@
     LogIn,
     LogOut,
     Network,
-    RefreshCw,
     Send,
     Server,
     ShieldCheck,
     Terminal,
-    Users,
+    UserRound,
+    UsersRound,
   } from "@lucide/svelte";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
@@ -23,6 +23,12 @@
 
   const sidebar = Sidebar.useSidebar();
   const user = $derived(page.data.user);
+  const hasPermission = (permission: string) =>
+    Boolean(
+      user?.isAdmin ||
+        user?.permissions.includes("sudo") ||
+        user?.permissions.includes(permission),
+    );
   const initials = $derived(
     user?.name
       .trim()
@@ -42,7 +48,6 @@
         { label: "Certificates", route: "/certificates", icon: FileBadge },
         { label: "Hosts", route: "/hosts", icon: Server },
         { label: "Deployments", route: "/deployments", icon: Send },
-        { label: 'Renewals', route: '/renewals', icon: RefreshCw },
       ],
     },
     {
@@ -58,8 +63,9 @@
       label: "Administration",
       adminOnly: true,
       items: [
-        { label: 'Ansible credentials', route: '/ansible-credentials', icon: KeyRound },
-        { label: "Users", route: "/users", icon: Users },
+        { label: 'Ansible credentials', route: '/ansible-credentials', icon: KeyRound, permission: "credentials.manage" },
+        { label: "Users", route: "/users", icon: UserRound, anyPermission: ["users.manage", "groups.manage", "permissions.manage"] },
+        { label: "Groups", route: "/groups", icon: UsersRound, anyPermission: ["groups.manage", "permissions.manage"] },
       ],
     },
     {
@@ -73,6 +79,12 @@
     },
   ] as const;
   type NavigationLink = (typeof navigation)[number]['items'][number];
+  function canSeeNavigationItem(item: NavigationLink) {
+    if ("permission" in item) return hasPermission(item.permission);
+    if ("anyPermission" in item)
+      return item.anyPermission.some((permission) => hasPermission(permission));
+    return true;
+  }
 </script>
 
 {#snippet navigationLink(item: NavigationLink)}
@@ -112,7 +124,7 @@
       <ShieldCheck size={18} class="shrink-0 text-sidebar-primary" aria-hidden="true" />
       <span
         class="max-w-40 overflow-hidden whitespace-nowrap opacity-100 transition-[max-width,opacity] duration-300 ease-in-out group-data-[collapsible=icon]:max-w-0 group-data-[collapsible=icon]:opacity-0"
-        >Certified by Pat</span
+        >CBP</span
       >
     </a>
   </Sidebar.Header>
@@ -120,7 +132,7 @@
   <Sidebar.Content>
     <nav aria-label="Main navigation">
       {#each navigation as group (group.id)}
-        {#if !("adminOnly" in group) || user?.isAdmin}
+        {#if !("adminOnly" in group) || group.items.some(canSeeNavigationItem)}
           <Sidebar.Group
             role="group"
             aria-labelledby={`sidebar-${group.id}-label`}
@@ -131,7 +143,9 @@
             <Sidebar.GroupContent>
               <Sidebar.Menu>
                 {#each group.items as item (item.label)}
-                  {@render navigationLink(item)}
+                  {#if canSeeNavigationItem(item)}
+                    {@render navigationLink(item)}
+                  {/if}
                 {/each}
               </Sidebar.Menu>
             </Sidebar.GroupContent>

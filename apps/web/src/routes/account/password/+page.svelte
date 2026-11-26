@@ -14,7 +14,7 @@
   let submitting = $state(false);
 </script>
 
-<svelte:head><title>Change password | Certified by Pat</title></svelte:head>
+<svelte:head><title>Change password | CBP</title></svelte:head>
 
 <section
   class="w-full flex-1 px-5 py-6 md:px-8"
