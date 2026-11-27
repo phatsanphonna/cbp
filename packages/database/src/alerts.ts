@@ -1,4 +1,5 @@
 import { and, eq, gte, isNull, like, notInArray, or, sql } from 'drizzle-orm';
+import { visibleAlert, type Viewer } from './asset-owners.js';
 import type { openDatabase } from './index.js';
 import {
   alertDeliveries,
@@ -87,11 +88,18 @@ export async function markAlertDelivered(db: Database, delivery: AlertDelivery) 
     );
 }
 
-export async function clearAlert(db: Database, id: string) {
+export async function clearAlert(db: Database, id: string, viewer?: Viewer) {
   const [cleared] = await db
     .update(alerts)
     .set({ clearedAt: sql`now()` })
-    .where(and(eq(alerts.id, id), isNull(alerts.resolvedAt), isNull(alerts.clearedAt)))
+    .where(
+      and(
+        eq(alerts.id, id),
+        isNull(alerts.resolvedAt),
+        isNull(alerts.clearedAt),
+        visibleAlert(db, viewer),
+      ),
+    )
     .returning({ id: alerts.id });
   return Boolean(cleared);
 }

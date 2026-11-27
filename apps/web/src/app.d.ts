@@ -6,6 +6,8 @@ declare global {
 
     interface Locals {
       user: {
+        id: string;
+        groupIds: number[];
         name: string;
         email: string;
         username?: string | null;

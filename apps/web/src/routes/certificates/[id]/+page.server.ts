@@ -27,7 +27,9 @@ import {
 } from '#lib/server/deployment-actions.js';
 import { displayCertificateDomain } from '../display-domain.js';
 import { expiryStatus } from '../expiry.js';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
+import { setOwnersAction } from '#lib/server/asset-owner-action.js';
+import { listAssetOwners, listOwnerOptions } from '@cbp/database/asset-owners';
 import {
   renewalAvailable,
   renewCertificateNow,
@@ -46,7 +48,8 @@ export const load = async (event: ServerLoadEvent<{ id: string }>) => {
   const { params, cookies, depends } = event;
   depends('cbp:agent-deployments');
   const database = getDatabase();
-  const certificate = await findCertificate(database, params.id);
+  const viewer = assetViewer(event.locals.user);
+  const certificate = await findCertificate(database, params.id, viewer);
   if (!certificate) error(404, 'Certificate not found');
   const selfSigned = certificate.issuer === selfSignedIssuer;
   const letsEncrypt = certificate.issuer.includes("Let's Encrypt");
@@ -69,19 +72,21 @@ export const load = async (event: ServerLoadEvent<{ id: string }>) => {
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const timestamp = (date: Date | null) =>
     date ? { iso: date.toISOString(), label: format.format(date) } : null;
-  const [hosts, agentDeployments] = await Promise.all([
-    listHostOptions(database),
-    loadAgentDeployments(
-      certificate.deployments.map(({ id }) => id),
-      event,
-    ),
-  ]);
-  let savedCredentials = { available: false, key: false, ansible: false, error: false };
-  let boundCredentials: Record<string, string> = {};
   const canManageCredentials = hasPermission(event.locals.user, 'credentials.manage');
   const canManageDeployments = hasPermission(event.locals.user, 'deployments.manage');
   const canManageHosts = hasPermission(event.locals.user, 'hosts.manage');
   const canManageCertificates = hasPermission(event.locals.user, 'certificates.manage');
+  const [hosts, agentDeployments, owners, ownerOptions] = await Promise.all([
+    listHostOptions(database, viewer),
+    loadAgentDeployments(
+      certificate.deployments.map(({ id }) => id),
+      event,
+    ),
+    listAssetOwners(database, 'certificate', params.id),
+    canManageCertificates ? listOwnerOptions(database) : null,
+  ]);
+  let savedCredentials = { available: false, key: false, ansible: false, error: false };
+  let boundCredentials: Record<string, string> = {};
   if (canManageCredentials && savedCredentialsAvailable() && hasTrustedTransport(event)) {
     try {
       const [key, ansible] = await Promise.all([
@@ -119,6 +124,8 @@ export const load = async (event: ServerLoadEvent<{ id: string }>) => {
     ...certificateDetails
   } = certificate;
   return {
+    owners,
+    ownerOptions,
     agentDeployments,
     savedCredentials,
     canManageCredentials,
@@ -312,15 +319,24 @@ export const actions: Actions = {
         kind === 'certificate' ? 'Private key removed from Vault.' : 'Saved credential deleted.',
     };
   },
+  setOwners: async ({ locals, params, request }) => {
+    if (!(await findCertificateDomain(getDatabase(), params.id)))
+      error(404, 'Certificate not found');
+    return setOwnersAction(locals, 'certificate', params.id, await request.formData());
+  },
   deploy: (event) => deployCertificateAction(event, event.params.id),
   deployAnsible: (event) => deployCertificateAction(event, event.params.id, 'Ansible'),
   deployMixed: (event) => deployCertificateAction(event, event.params.id, null),
-  linkDeployment: ({ params, request }) =>
-    linkDeploymentAction(request, { certificateId: params.id }),
-  updateEndpoint: ({ params, request }) =>
-    updateDeploymentEndpointAction(request, { certificateId: params.id }),
-  removeDeployment: ({ params, request }) =>
-    removeDeploymentAction(request, { certificateId: params.id }),
+  linkDeployment: ({ locals, params, request }) =>
+    linkDeploymentAction(request, { certificateId: params.id }, assetViewer(locals.user)),
+  updateEndpoint: ({ locals, params, request }) =>
+    updateDeploymentEndpointAction(
+      request,
+      { certificateId: params.id },
+      assetViewer(locals.user),
+    ),
+  removeDeployment: ({ locals, params, request }) =>
+    removeDeploymentAction(request, { certificateId: params.id }, assetViewer(locals.user)),
   updateChain: async ({ params, request }) => {
     const database = getDatabase();
     const domain = await findCertificateDomain(database, params.id);

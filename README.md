@@ -141,7 +141,15 @@ For an existing local database, run `bun --filter @cbp/database db:setup-control
 
 ## Users, groups, and permissions
 
-Emails in `CBP_ADMIN_EMAILS` remain full-access administrators. The **Sudo** permission also grants full administrator access and can be assigned directly to a user or through a group. Users with permission management access can assign individual permissions under **Users**; group permissions are managed under **Permissions** and combine with direct user permissions. Existing deployments apply the access-control tables and role grants when `db:setup-controller` runs.
+Emails in `CBP_ADMIN_EMAILS` remain full-access administrators. The **Sudo** permission also grants full administrator access and can be assigned directly to a user or through a group. Users with permission management access can assign individual permissions under **Users**; group permissions are managed under **Groups** and combine with direct user permissions. Existing deployments apply the access-control tables and role grants when `db:setup-controller` runs.
+
+### Asset owners
+
+Certificates, hosts, and Ansible credentials can have any mix of users and groups as owners. An asset with no owners is visible to every signed-in user. Once it has owners, only those users, members of those groups, and administrators (`CBP_ADMIN_EMAILS` or **Sudo**) can see or change it. Everyone else gets a 404 on its page, and it is left out of lists, the overview, alerts, and deployment history. Deployments, runs, and alerts follow the certificate or host they belong to.
+
+The user who registers a certificate or host, or creates an Ansible credential, becomes its first owner. Change owners in the **Owners** section of a certificate or host page, or with **Owners** on the Ansible credentials page. Select **×** on a badge to remove that owner. This needs the asset's manage permission (**Manage certificates**, **Manage hosts**, or **Manage credentials**). Without **Sudo**, you must keep yourself or one of your groups as an owner, or remove every owner. Removing every owner, or deleting the last owning user or group, makes the asset visible to everyone again.
+
+Ownership only limits access to these assets. Notification channels and the audit log keep their own permissions, and channels that receive all alerts still get alerts for owned assets.
 
 ## Let’s Encrypt renewals
 
@@ -170,6 +178,8 @@ CBP_ADMIN_EMAILS=admin@example.com
 
 If you already have a development database, point `DATABASE_URL` at it and skip the Compose command. Keep both environment files, credentials, and private keys out of Git.
 
+`db:push` creates the schema in an empty database. To apply schema changes to an existing database, run `bun --filter @cbp/database db:setup-controller` instead. It only creates missing tables, indexes, and grants.
+
 ```sh
 docker compose --env-file .cbp-dev/.env -f compose.dev.yaml up --wait
 bun install --frozen-lockfile
@@ -179,7 +189,7 @@ bun run --filter web dev --host 127.0.0.1 --strictPort
 
 Open `http://127.0.0.1:5173`. To create a local account, set `CBP_USER_NAME`, `CBP_USER_EMAIL`, `CBP_USER_USERNAME`, and `CBP_USER_PASSWORD` in your shell environment, then run `bun run --filter web auth:create-user`. Use the same email you set in `CBP_ADMIN_EMAILS`.
 
-To develop with the controller, install Go 1.27.4, follow the [controller setup](apps/controller/README.md#connect-to-the-web-app), configure its TLS files, and use `bun run dev` to start both services.
+To develop with the controller, install Go 1.27.4, follow the [controller setup](apps/controller/README.md#connect-to-the-web-app), configure its TLS files, and use `bun run dev`. It starts the web app, the controller when its TLS files exist, and on Windows the [Ansible runner](scripts/ansible/README.md#run-the-worker-directly) when its WSL files exist. Each piece is skipped cleanly when its setup is missing.
 
 To stop PostgreSQL and keep its data, run `docker compose --env-file .cbp-dev/.env -f compose.dev.yaml down`.
 
@@ -209,24 +219,27 @@ Run the [Ansible deployment worker](scripts/ansible/README.md) for Nginx hosts m
 ## Build and test
 
 ```sh
+bun run --filter web check
 bun run --filter web build
 bun test apps/web/src/lib/server
 go build ./apps/controller ./apps/agent
 go test ./apps/agent/... ./apps/controller/... ./packages/agent-rpc/...
 ```
 
-For database security integration tests, point `CBP_TEST_DATABASE_URL` at a disposable CBP database with the schema applied and run `bun test packages/database/src/deployment-security.test.ts`. Use the `cbp_web` login to verify the tests with runtime privileges.
+The database tests skip unless `CBP_TEST_DATABASE_URL` points at a disposable CBP database with the schema applied. Then run `bun test packages/database/src`. Never point it at a database you want to keep. Use the `cbp_web` login to check `deployment-security.test.ts` with runtime privileges.
 
 The Bun production server is built into `apps/web/dist/`. Start it with `bun run --filter web start` after configuring the production environment.
 
 ## Repository layout
 
-| Path                  | Purpose                                                 |
-| --------------------- | ------------------------------------------------------- |
-| `apps/web/`           | SvelteKit routes, UI, and web API                       |
-| `apps/controller/`    | Go controller that connects agents to the web app       |
-| `apps/agent/`         | Go agent for Linux check-ins and certificate deployment |
-| `packages/agent-rpc/` | Shared gRPC contract                                    |
-| `packages/database/`  | PostgreSQL schemas and queries                          |
+| Path                  | Purpose                                                    |
+| --------------------- | ---------------------------------------------------------- |
+| `apps/web/`           | SvelteKit routes, UI, and web API                          |
+| `apps/controller/`    | Go controller that connects agents to the web app          |
+| `apps/agent/`         | Go agent for Linux check-ins and certificate deployment    |
+| `packages/agent-rpc/` | Shared gRPC contract                                       |
+| `packages/database/`  | PostgreSQL schemas, queries, and the database setup script |
+| `scripts/ansible/`    | Ansible worker and playbooks for Nginx hosts over SSH      |
+| `vault/`              | Vault server configuration and the CBP policy for Compose  |
 
 See [AGENTS.md](AGENTS.md) for contributor guidelines.

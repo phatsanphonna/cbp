@@ -12,6 +12,7 @@ import {
   or,
   sql,
 } from 'drizzle-orm';
+import { visibleAsset, type Viewer } from './asset-owners.js';
 import type { openDatabase } from './index.js';
 import { acmeAccounts, acmeChallenges, certificates } from './inventory-schema.js';
 
@@ -33,7 +34,7 @@ const source = {
   validUntil: certificates.validUntil,
 };
 
-export async function findIssuedCertificate(db: Database, names: string[]) {
+export async function findIssuedCertificate(db: Database, names: string[], viewer?: Viewer) {
   const [row] = await db
     .select({ id: certificates.id })
     .from(certificates)
@@ -44,6 +45,7 @@ export async function findIssuedCertificate(db: Database, names: string[]) {
         gt(certificates.validUntil, new Date()),
         arrayContains(certificates.sans, names),
         arrayContained(certificates.sans, names),
+        visibleAsset(db, 'certificate', certificates.id, viewer),
       ),
     )
     .limit(1);

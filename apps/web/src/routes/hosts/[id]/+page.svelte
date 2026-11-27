@@ -11,6 +11,7 @@
   import { resolve } from '$app/paths';
   import { toast } from 'svelte-sonner';
   import AgentEnrollment from '#lib/components/svelte/agent-enrollment.svelte';
+  import AssetOwners from '#lib/components/svelte/asset-owners.svelte';
   import DeploymentStatusBadge from '#lib/components/svelte/deployment-status-badge.svelte';
   import EditDeploymentEndpointDialog from '#lib/components/svelte/edit-deployment-endpoint-dialog.svelte';
   import LinkDeploymentDialog from '#lib/components/svelte/link-deployment-dialog.svelte';
@@ -145,6 +146,13 @@
       {/if}
     </div>
   </header>
+
+  <section class="mt-6 border" aria-labelledby="owners-heading">
+    <h2 id="owners-heading" class="border-b bg-muted px-4 py-3 text-sm font-medium">Owners</h2>
+    <div class="p-4">
+      <AssetOwners id="host-owners" owners={data.owners} options={data.ownerOptions} />
+    </div>
+  </section>
 
   <section class="mt-6 border" aria-labelledby="facts-heading">
     <h2 id="facts-heading" class="border-b bg-muted px-4 py-3 text-sm font-medium">

@@ -12,7 +12,7 @@ import { getDatabase } from '#lib/server/database.js';
 import { displayCertificateDomain } from '../../certificates/display-domain.js';
 import { formatDeploymentTargets, jobIdPattern } from '../deployment-view.server.js';
 import type { Actions, PageServerLoad } from './$types';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
 
 export const load: PageServerLoad = async (event) => {
   const { params, cookies, depends } = event;
@@ -22,11 +22,16 @@ export const load: PageServerLoad = async (event) => {
     error(404, 'Deployment job not found');
 
   const database = getDatabase();
-  const run = await findDeploymentRun(database, jobIdPattern.test(id) ? { id } : { slug: id });
+  const viewer = assetViewer(event.locals.user);
+  const run = await findDeploymentRun(
+    database,
+    jobIdPattern.test(id) ? { id } : { slug: id },
+    viewer,
+  );
   if (!run) error(404, 'Deployment job not found');
   if (params.id !== run.slug) redirect(307, resolve('/deployments/[id]', { id: run.slug }));
 
-  const targets = await listDeploymentTargets(database, { runId: run.id });
+  const targets = await listDeploymentTargets(database, { runId: run.id }, viewer);
   const timeZone = cookies.get('cbp-time-zone');
   return {
     id: run.slug,

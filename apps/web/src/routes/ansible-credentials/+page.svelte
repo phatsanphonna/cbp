@@ -4,6 +4,7 @@
   import { KeyRound, Plus } from '@lucide/svelte';
   import { createColumnHelper, renderSnippet } from '@tanstack/svelte-table';
   import { toast } from 'svelte-sonner';
+  import AssetOwners from '#lib/components/svelte/asset-owners.svelte';
   import FormSelect from '#lib/components/svelte/form-select.svelte';
   import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
   import { Button } from '#lib/components/ui/button/index.ts';
@@ -27,12 +28,20 @@
   let bindProfile = $state<{ id: string; name: string } | null>(null);
   let hostId = $state('');
   let binding = $state(false);
+  let ownersOpen = $state(false);
+  let ownersId = $state<string | null>(null);
+  const ownersProfile = $derived(data.profiles.find((profile) => profile.id === ownersId));
   type Profile = PageProps['data']['profiles'][number];
   const column = createColumnHelper<DataTableFeatures, Profile>();
   const columns = column.columns([
     column.accessor('name', {
       header: 'Credential',
       cell: ({ row }) => renderSnippet(credentialName, row.original),
+    }),
+    column.display({
+      id: 'owners',
+      header: 'Owners',
+      cell: ({ row }) => renderSnippet(credentialOwners, row.original),
     }),
     column.accessor('createdAt', {
       header: 'Created',
@@ -115,6 +124,16 @@
 
 {#snippet credentialActions(profile: Profile)}
   <div class="flex justify-end gap-2">
+    <Button
+      variant="outline"
+      size="sm"
+      onclick={() => {
+        ownersId = profile.id;
+        ownersOpen = true;
+      }}
+    >
+      Owners
+    </Button>
     <Button
       variant="outline"
       size="sm"
@@ -218,6 +237,29 @@
     </AlertDialog.Root>
   </div>
 {/snippet}
+
+{#snippet credentialOwners(profile: Profile)}
+  <AssetOwners id={`owners-${profile.id}`} owners={profile.owners} options={null} />
+{/snippet}
+
+<Dialog.Root bind:open={ownersOpen}>
+  <Dialog.Content class="sm:max-w-lg">
+    <Dialog.Header>
+      <Dialog.Title>Owners of {ownersProfile?.name}</Dialog.Title>
+      <Dialog.Description>
+        Only owners, their group members, and administrators can see an owned credential.
+      </Dialog.Description>
+    </Dialog.Header>
+    {#if ownersProfile}
+      <AssetOwners
+        id="credential-owners"
+        owners={ownersProfile.owners}
+        options={data.ownerOptions}
+        assetId={ownersProfile.id}
+      />
+    {/if}
+  </Dialog.Content>
+</Dialog.Root>
 
 <Dialog.Root bind:open={createOpen}>
   <Dialog.Content class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">

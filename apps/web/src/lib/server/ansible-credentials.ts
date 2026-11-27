@@ -4,6 +4,8 @@ import {
   readSavedCredentialRecord,
 } from './deployment-secrets.js';
 import { readAnsibleCredentials } from './ansible-deployment-payload.js';
+import { visibleAssetIds, type Viewer } from '@cbp/database/asset-owners';
+import { getDatabase } from './database.js';
 
 export async function readAnsibleProfile(id: string) {
   const record = await readSavedCredentialRecord('ansible-profile', id);
@@ -30,8 +32,13 @@ export async function readAnsibleProfile(id: string) {
   return { name: profile.name, credentials: result.credentials, createdAt: record.createdAt };
 }
 
-export async function listAnsibleProfiles() {
-  const ids = await listAnsibleCredentialIds();
+export async function listAnsibleProfiles(viewer?: Viewer) {
+  const ids = await visibleAssetIds(
+    getDatabase(),
+    'credential',
+    await listAnsibleCredentialIds(),
+    viewer,
+  );
   const profiles = await Promise.all(
     ids.map(async (id) => {
       const profile = await readAnsibleProfile(id);

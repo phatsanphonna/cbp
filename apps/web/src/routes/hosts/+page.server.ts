@@ -5,12 +5,12 @@ import { dateFormatter } from '#lib/server/date-formatter.js';
 import { hostIpAddress } from '#lib/server/host-address.js';
 import { pingLabels } from '#lib/server/ping-host.js';
 import type { PageServerLoad } from './$types';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
 
 export const load: PageServerLoad = async ({ cookies, depends, locals }) => {
   depends('cbp:host-ping');
   const format = dateFormatter(cookies.get('cbp-time-zone'));
-  const hosts = await listHosts(getDatabase());
+  const hosts = await listHosts(getDatabase(), assetViewer(locals.user));
   return {
     canManageHosts: hasPermission(locals.user, 'hosts.manage'),
     hosts: hosts.map((host) => ({

@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, asc, desc, eq, gt, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
 import { withAgentHost } from './host-agents.js';
+import { visibleAsset, type Viewer } from './asset-owners.js';
 import type { openDatabase } from './index.js';
 import { type HostReport, saveHostReport } from './inventory.js';
 import {
@@ -102,7 +103,12 @@ const runFields = {
   fingerprint: deploymentRuns.certificateFingerprint,
 };
 
-export function listDeploymentRuns(db: Database, offset: number, limit: number) {
+export function listDeploymentRuns(
+  db: Database,
+  offset: number,
+  limit: number,
+  viewer?: Viewer,
+) {
   return db
     .selectDistinct({
       ...runFields,
@@ -119,20 +125,28 @@ export function listDeploymentRuns(db: Database, offset: number, limit: number) 
     })
     .from(deploymentRuns)
     .leftJoin(deploymentJobs, eq(deploymentJobs.runId, deploymentRuns.id))
+    .where(visibleAsset(db, 'certificate', deploymentRuns.certificateId, viewer))
     .groupBy(deploymentRuns.id)
     .orderBy(runOrder, desc(deploymentRuns.id))
     .offset(offset)
     .limit(limit);
 }
 
-export async function findDeploymentRun(db: Database, identity: { id: string } | { slug: string }) {
+export async function findDeploymentRun(
+  db: Database,
+  identity: { id: string } | { slug: string },
+  viewer?: Viewer,
+) {
   const [run] = await db
     .select(runFields)
     .from(deploymentRuns)
     .where(
-      'id' in identity
-        ? eq(deploymentRuns.id, identity.id)
-        : eq(deploymentRuns.slug, identity.slug),
+      and(
+        'id' in identity
+          ? eq(deploymentRuns.id, identity.id)
+          : eq(deploymentRuns.slug, identity.slug),
+        visibleAsset(db, 'certificate', deploymentRuns.certificateId, viewer),
+      ),
     );
   return run ?? null;
 }
@@ -140,6 +154,7 @@ export async function findDeploymentRun(db: Database, identity: { id: string } |
 export function listDeploymentTargets(
   db: Database,
   filter: { runId: string } | { jobIds: string[] },
+  viewer?: Viewer,
 ) {
   return db
     .select({
@@ -165,9 +180,13 @@ export function listDeploymentTargets(
     .leftJoin(deployments, eq(deployments.id, deploymentJobs.deploymentId))
     .leftJoin(hosts, eq(hosts.id, deploymentJobs.hostId))
     .where(
-      'runId' in filter
-        ? eq(deploymentJobs.runId, filter.runId)
-        : inArray(deploymentJobs.id, filter.jobIds),
+      and(
+        'runId' in filter
+          ? eq(deploymentJobs.runId, filter.runId)
+          : inArray(deploymentJobs.id, filter.jobIds),
+        visibleAsset(db, 'certificate', deploymentRuns.certificateId, viewer),
+        visibleAsset(db, 'host', deploymentJobs.hostId, viewer),
+      ),
     )
     .orderBy(deploymentJobs.hostName, deploymentJobs.endpoint, deploymentJobs.id);
 }
@@ -347,7 +366,7 @@ export async function queueDeployments(
   });
 }
 
-export async function findRecoverableDeployment(db: Database, jobId: string) {
+export async function findRecoverableDeployment(db: Database, jobId: string, viewer?: Viewer) {
   if (!inventoryId.test(jobId)) return null;
   const [job] = await db
     .select({
@@ -366,6 +385,13 @@ export async function findRecoverableDeployment(db: Database, jobId: string) {
         inArray(deploymentJobs.status, ['Deployed', 'Failed']),
         isNotNull(deploymentJobs.deploymentId),
         isNotNull(deploymentJobs.hostId),
+        visibleAsset(db, 'host', deploymentJobs.hostId, viewer),
+        visibleAsset(
+          db,
+          'certificate',
+          sql`(select ${deployments.certificateId} from ${deployments} where ${deployments.id} = ${deploymentJobs.deploymentId})`,
+          viewer,
+        ),
       ),
     );
   return job ?? null;

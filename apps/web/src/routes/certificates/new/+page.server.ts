@@ -6,7 +6,8 @@ import { findIssuedCertificate } from '@cbp/database/renewals';
 import { getDatabase } from '#lib/server/database.js';
 import { readCertificateChain } from '#lib/server/certificate-chain.js';
 import { encryptSecret } from '#lib/server/encrypted-secret.js';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
+import { addAssetOwner } from '@cbp/database/asset-owners';
 import { saveCredential, savedCredentialsAvailable } from '#lib/server/deployment-secrets.js';
 import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
 import {
@@ -64,7 +65,7 @@ async function issueCertificate({ locals, platform, request }: RequestEvent, fie
   const id = randomUUID();
   issuing = true;
   try {
-    const existing = await findIssuedCertificate(db, names);
+    const existing = await findIssuedCertificate(db, names, assetViewer(locals.user));
     if (existing) {
       locals.auditTargetId = existing.id;
       redirect(303, resolve('/certificates/[id]', { id: existing.id }));
@@ -86,6 +87,7 @@ async function issueCertificate({ locals, platform, request }: RequestEvent, fie
       renewalKey: encryptSecret(issued.privateKey, renewalKeyContext(id)),
     });
     if (!saved) return reject(409, 'This certificate is already registered.');
+    await addAssetOwner(db, 'certificate', id, locals.user!.id);
   } finally {
     issuing = false;
   }
@@ -150,6 +152,7 @@ async function createSelfSignedCertificate(event: RequestEvent, fields: FormData
         : null,
   });
   if (!saved) return reject(409, 'This certificate is already registered.');
+  await addAssetOwner(getDatabase(), 'certificate', id, locals.user!.id);
 
   let storeError: string | null = null;
   if (storePrivateKey) {
@@ -188,6 +191,7 @@ export const actions: Actions = {
       domain: chain.domain,
     });
     if (!saved) return fail(409, { message: 'This certificate is already registered.' });
+    await addAssetOwner(getDatabase(), 'certificate', saved.id, locals.user!.id);
     locals.auditTargetId = saved.id;
     redirect(303, resolve('/certificates/[id]', { id: saved.id }));
   },

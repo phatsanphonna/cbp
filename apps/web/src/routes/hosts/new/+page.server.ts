@@ -5,6 +5,7 @@ import { hostApplianceTypes } from '#lib/host-appliance-types.js';
 import { getDatabase } from '#lib/server/database.js';
 import { normalizeHostAddress } from '#lib/server/host-address.js';
 import type { Actions } from './$types';
+import { addAssetOwner } from '@cbp/database/asset-owners';
 
 export const actions: Actions = {
   default: async ({ request, locals }) => {
@@ -29,6 +30,7 @@ export const actions: Actions = {
       ansibleManaged: true,
     });
     if (!saved) return fail(409, { message: 'This host is already registered.', values });
+    await addAssetOwner(getDatabase(), 'host', saved.id, locals.user!.id);
     locals.auditTargetId = saved.id;
     redirect(303, resolve('/hosts'));
   },
