@@ -1,0 +1,8 @@
+{
+  "name": "controller",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --env-file=../../.env.local dev.ts"
+  }
+}

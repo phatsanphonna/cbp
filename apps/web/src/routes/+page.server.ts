@@ -5,20 +5,20 @@ import { pingLabels } from '#lib/server/ping-host.js';
 import { displayCertificateDomain } from './certificates/display-domain.js';
 import { dayInMilliseconds, expiryFilters } from './certificates/expiry.js';
 import type { PageServerLoad } from './$types';
+import { assetViewer } from '#lib/server/access-control.js';
 
-export const load: PageServerLoad = async ({ cookies, depends }) => {
+export const load: PageServerLoad = async ({ cookies, depends, locals }) => {
   depends('cbp:host-ping');
   const now = Date.now();
   const nextWeek = new Date(now + expiryFilters['7d'].days * dayInMilliseconds);
   const nextMonth = new Date(now + expiryFilters['30d'].days * dayInMilliseconds);
   const recentPingCutoff = new Date(now - dayInMilliseconds);
   const format = dateFormatter(cookies.get('cbp-time-zone'));
-  const overview = await loadOverview(getDatabase(), {
-    now: new Date(now),
-    nextWeek,
-    nextMonth,
-    recentPingCutoff,
-  });
+  const overview = await loadOverview(
+    getDatabase(),
+    { now: new Date(now), nextWeek, nextMonth, recentPingCutoff },
+    assetViewer(locals.user),
+  );
 
   return {
     counts: overview.counts,

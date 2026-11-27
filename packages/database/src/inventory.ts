@@ -19,6 +19,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import type { openDatabase } from './index.js';
+import { removeAssetOwners, visibleAlert, visibleAsset, type Viewer } from './asset-owners.js';
 import {
   alerts,
   certificates,
@@ -46,7 +47,7 @@ const {
 } = getTableColumns(certificates);
 const keptVersions = 3;
 
-export function listHosts(db: Database) {
+export function listHosts(db: Database, viewer?: Viewer) {
   return db
     .select({
       ...getTableColumns(hosts),
@@ -54,14 +55,16 @@ export function listHosts(db: Database) {
     })
     .from(hosts)
     .leftJoin(deployments, eq(hosts.id, deployments.hostId))
+    .where(visibleAsset(db, 'host', hosts.id, viewer))
     .groupBy(hosts.id)
     .orderBy(asc(hosts.name));
 }
 
-export function listHostOptions(db: Database) {
+export function listHostOptions(db: Database, viewer?: Viewer) {
   return db
     .select({ id: hosts.id, name: hosts.name, hostname: hosts.hostname })
     .from(hosts)
+    .where(visibleAsset(db, 'host', hosts.id, viewer))
     .orderBy(asc(hosts.name));
 }
 
@@ -74,7 +77,7 @@ export function listProbeHosts(db: Database, after: string | null) {
     .limit(200);
 }
 
-export function listCertificateOptions(db: Database, ids?: string[]) {
+export function listCertificateOptions(db: Database, ids?: string[], viewer?: Viewer) {
   return db
     .select({
       id: certificates.id,
@@ -83,7 +86,12 @@ export function listCertificateOptions(db: Database, ids?: string[]) {
       serial: certificates.serial,
     })
     .from(certificates)
-    .where(ids ? inArray(certificates.id, ids) : undefined)
+    .where(
+      and(
+        ids ? inArray(certificates.id, ids) : undefined,
+        visibleAsset(db, 'certificate', certificates.id, viewer),
+      ),
+    )
     .orderBy(asc(certificates.domain), asc(certificates.validUntil), asc(certificates.id));
 }
 
@@ -136,6 +144,13 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
 
 type DeploymentOwner = { hostId: string } | { certificateId: string };
 
+// The page owns one side of a deployment; the viewer must also be able to see the other side.
+function otherSideVisible(db: Database, owner: DeploymentOwner, viewer?: Viewer) {
+  return 'hostId' in owner
+    ? visibleAsset(db, 'certificate', deployments.certificateId, viewer)
+    : visibleAsset(db, 'host', deployments.hostId, viewer);
+}
+
 export async function updateDeploymentEndpoint(
   db: Database,
   owner: DeploymentOwner,
@@ -143,6 +158,7 @@ export async function updateDeploymentEndpoint(
   endpoint: string,
   engine?: string | null,
   method?: typeof deployments.$inferSelect.method,
+  viewer?: Viewer,
 ) {
   const ownerId = 'hostId' in owner ? owner.hostId : owner.certificateId;
   if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return 'missing';
@@ -168,7 +184,13 @@ export async function updateDeploymentEndpoint(
         servedCertificateExpiresAt: sql`case when ${targetChanged} then null else ${deployments.servedCertificateExpiresAt} end`,
         servedCertificateObservedAt: sql`case when ${targetChanged} then null else ${deployments.servedCertificateObservedAt} end`,
       })
-      .where(and(eq(deployments.id, id), eq(ownerColumn, ownerId)))
+      .where(
+        and(
+          eq(deployments.id, id),
+          eq(ownerColumn, ownerId),
+          otherSideVisible(db, owner, viewer),
+        ),
+      )
       .returning({ id: deployments.id });
     return updated ? 'updated' : 'missing';
   } catch (error) {
@@ -178,11 +200,20 @@ export async function updateDeploymentEndpoint(
   }
 }
 
-export async function removeDeployment(db: Database, owner: DeploymentOwner, id: string) {
+export async function removeDeployment(
+  db: Database,
+  owner: DeploymentOwner,
+  id: string,
+  viewer?: Viewer,
+) {
   const ownerId = 'hostId' in owner ? owner.hostId : owner.certificateId;
   if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return 'missing';
   const ownerColumn = 'hostId' in owner ? deployments.hostId : deployments.certificateId;
-  const scope = and(eq(deployments.id, id), eq(ownerColumn, ownerId));
+  const scope = and(
+    eq(deployments.id, id),
+    eq(ownerColumn, ownerId),
+    otherSideVisible(db, owner, viewer),
+  );
 
   return db.transaction(async (tx) => {
     const [deployment] = await tx
@@ -321,6 +352,7 @@ export async function removeHost(db: Database, id: string) {
         );
     }
     await tx.delete(hosts).where(eq(hosts.id, id));
+    await removeAssetOwners(tx, 'host', id);
     return 'removed' as const;
   });
 }
@@ -331,7 +363,7 @@ export async function findHostAddress(db: Database, id: string) {
   return host?.name ?? null;
 }
 
-export async function findHost(db: Database, id: string) {
+export async function findHost(db: Database, id: string, viewer?: Viewer) {
   if (!inventoryId.test(id)) return null;
   const [host] = await db.select().from(hosts).where(eq(hosts.id, id));
   if (!host) return null;
@@ -356,7 +388,12 @@ export async function findHost(db: Database, id: string) {
     })
     .from(deployments)
     .innerJoin(certificates, eq(deployments.certificateId, certificates.id))
-    .where(eq(deployments.hostId, id))
+    .where(
+      and(
+        eq(deployments.hostId, id),
+        visibleAsset(db, 'certificate', certificates.id, viewer),
+      ),
+    )
     .orderBy(asc(deployments.endpoint), asc(certificates.domain), asc(deployments.id));
   return {
     ...host,
@@ -374,7 +411,11 @@ export async function findHost(db: Database, id: string) {
   };
 }
 
-export function listCertificates(db: Database, expiry?: { before: Date; after?: Date }) {
+export function listCertificates(
+  db: Database,
+  expiry?: { before: Date; after?: Date },
+  viewer?: Viewer,
+) {
   return db
     .select({
       ...certificateMetadata,
@@ -386,18 +427,17 @@ export function listCertificates(db: Database, expiry?: { before: Date; after?: 
     .from(certificates)
     .leftJoin(deployments, eq(certificates.id, deployments.certificateId))
     .where(
-      expiry
-        ? and(
-            lte(certificates.validUntil, expiry.before),
-            expiry.after ? gt(certificates.validUntil, expiry.after) : undefined,
-          )
-        : undefined,
+      and(
+        expiry ? lte(certificates.validUntil, expiry.before) : undefined,
+        expiry?.after ? gt(certificates.validUntil, expiry.after) : undefined,
+        visibleAsset(db, 'certificate', certificates.id, viewer),
+      ),
     )
     .groupBy(certificates.id)
     .orderBy(asc(certificates.validUntil), asc(certificates.domain));
 }
 
-export async function findCertificate(db: Database, id: string) {
+export async function findCertificate(db: Database, id: string, viewer?: Viewer) {
   if (!inventoryId.test(id)) return null;
   const [certificate] = await db
     .select({
@@ -422,7 +462,12 @@ export async function findCertificate(db: Database, id: string) {
     .from(deployments)
     .leftJoin(hosts, eq(deployments.hostId, hosts.id))
     .leftJoin(hostAgents, eq(deployments.hostId, hostAgents.hostId))
-    .where(eq(deployments.certificateId, id))
+    .where(
+      and(
+        eq(deployments.certificateId, id),
+        visibleAsset(db, 'host', deployments.hostId, viewer),
+      ),
+    )
     .orderBy(asc(deployments.endpoint));
   return {
     ...certificate,
@@ -644,23 +689,30 @@ export async function removeCertificate(db: Database, id: string) {
     }
     await tx.delete(deploymentRuns).where(eq(deploymentRuns.certificateId, id));
     await tx.delete(certificates).where(eq(certificates.id, id));
+    await removeAssetOwners(tx, 'certificate', id);
     return true;
   });
 }
 
-export async function countOpenAlerts(db: Database) {
+export async function countOpenAlerts(db: Database, viewer?: Viewer) {
   const [row] = await db
     .select({ total: count() })
     .from(alerts)
-    .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)));
+    .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt), visibleAlert(db, viewer)));
   return row?.total ?? 0;
 }
 
-export function listAlerts(db: Database, openOnly = false) {
+export function listAlerts(db: Database, openOnly = false, viewer?: Viewer) {
   return db
     .select()
     .from(alerts)
-    .where(openOnly ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)) : undefined)
+    .where(
+      and(
+        openOnly ? isNull(alerts.resolvedAt) : undefined,
+        openOnly ? isNull(alerts.clearedAt) : undefined,
+        visibleAlert(db, viewer),
+      ),
+    )
     .orderBy(desc(alerts.detectedAt));
 }
 

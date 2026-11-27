@@ -39,7 +39,9 @@ import {
 } from '#lib/server/deployment-actions.js';
 import { pingHost, pingLabels } from '#lib/server/ping-host.js';
 import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
+import { setOwnersAction } from '#lib/server/asset-owner-action.js';
+import { canAccessAsset, listAssetOwners, listOwnerOptions } from '@cbp/database/asset-owners';
 import { displayCertificateDomain } from '../../certificates/display-domain.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -47,24 +49,27 @@ export const load: PageServerLoad = async (event) => {
   const { params, cookies, depends } = event;
   depends('cbp:agent-deployments', 'cbp:host-ping');
   const database = getDatabase();
-  const host = await findHost(database, params.id);
+  const viewer = assetViewer(event.locals.user);
+  const host = await findHost(database, params.id, viewer);
   if (!host) error(404, 'Host not found');
 
   const format = dateFormatter(cookies.get('cbp-time-zone'));
   const timestamp = (date: Date | null) =>
     date ? { iso: date.toISOString(), label: format.format(date) } : null;
-  const [enrollment, agentDeployments] = await Promise.all([
-    hostAgentEnrollment(database, host.id),
-    loadAgentDeployments(
-      host.deployments.map(({ id }) => id),
-      event,
-    ),
-  ]);
   const canManageCredentials = hasPermission(event.locals.user, 'credentials.manage');
   const canManageAgents = hasPermission(event.locals.user, 'agents.manage');
   const canManageDeployments = hasPermission(event.locals.user, 'deployments.manage');
   const canManageCertificates = hasPermission(event.locals.user, 'certificates.manage');
   const canManageHosts = hasPermission(event.locals.user, 'hosts.manage');
+  const [enrollment, agentDeployments, owners, ownerOptions] = await Promise.all([
+    hostAgentEnrollment(database, host.id),
+    loadAgentDeployments(
+      host.deployments.map(({ id }) => id),
+      event,
+    ),
+    listAssetOwners(database, 'host', host.id),
+    canManageHosts ? listOwnerOptions(database) : null,
+  ]);
   let credentials: {
     available: boolean;
     profiles: { id: string; name: string }[];
@@ -74,7 +79,7 @@ export const load: PageServerLoad = async (event) => {
   if (canManageCredentials && savedCredentialsAvailable() && hasTrustedTransport(event)) {
     try {
       const [profiles, bound] = await Promise.all([
-        listAnsibleProfiles(),
+        listAnsibleProfiles(viewer),
         readHostCredentialBinding(host.id),
       ]);
       credentials = { available: true, profiles, bound, error: false };
@@ -83,6 +88,8 @@ export const load: PageServerLoad = async (event) => {
     }
   }
   return {
+    owners,
+    ownerOptions,
     agentDeployments,
     credentials,
     canManageHosts,
@@ -100,7 +107,7 @@ export const load: PageServerLoad = async (event) => {
       status: enrollment.status,
       expiresAt: timestamp(enrollment.expiresAt),
     },
-    certificateOptions: (await listCertificateOptions(database)).map(
+    certificateOptions: (await listCertificateOptions(database, undefined, viewer)).map(
       ({ id, domain, sans, serial }) => ({
         id,
         label: `${displayCertificateDomain(domain, sans)} (serial ${serial})`,
@@ -142,6 +149,10 @@ export const actions: Actions = {
         if (await readHostCredentialBinding(host.id))
           await deleteSavedCredential('host-binding', host.id);
       } else {
+        if (
+          !(await canAccessAsset(getDatabase(), 'credential', id, assetViewer(event.locals.user)))
+        )
+          return fail(404, { credentialError: 'That credential no longer exists.' });
         await readAnsibleProfile(id);
         await saveCredential('host-binding', host.id, id);
       }
@@ -186,10 +197,16 @@ export const actions: Actions = {
       error(404, 'Host not found');
     return { enrollmentMessage: 'Agent enrollment reset.' };
   },
-  linkDeployment: ({ params, request }) => linkDeploymentAction(request, { hostId: params.id }),
-  updateEndpoint: ({ params, request }) =>
-    updateDeploymentEndpointAction(request, { hostId: params.id }),
-  removeDeployment: ({ params, request }) => removeDeploymentAction(request, { hostId: params.id }),
+  linkDeployment: ({ locals, params, request }) =>
+    linkDeploymentAction(request, { hostId: params.id }, assetViewer(locals.user)),
+  setOwners: async ({ locals, params, request }) => {
+    if (!(await findHostAddress(getDatabase(), params.id))) error(404, 'Host not found');
+    return setOwnersAction(locals, 'host', params.id, await request.formData());
+  },
+  updateEndpoint: ({ locals, params, request }) =>
+    updateDeploymentEndpointAction(request, { hostId: params.id }, assetViewer(locals.user)),
+  removeDeployment: ({ locals, params, request }) =>
+    removeDeploymentAction(request, { hostId: params.id }, assetViewer(locals.user)),
   importReport: async ({ params, request }) => {
     const report = parseHostReport((await request.formData()).get('report'));
     if (!report)

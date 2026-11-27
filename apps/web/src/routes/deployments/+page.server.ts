@@ -6,17 +6,19 @@ import { getDatabase } from '#lib/server/database.js';
 import { displayCertificateDomain } from '../certificates/display-domain.js';
 import { jobIdPattern } from './deployment-view.server.js';
 import type { PageServerLoad } from './$types';
+import { assetViewer } from '#lib/server/access-control.js';
 
 const pageSize = 50;
 
-export const load: PageServerLoad = async ({ url, cookies, depends }) => {
+export const load: PageServerLoad = async ({ url, cookies, depends, locals }) => {
+  const viewer = assetViewer(locals.user);
   depends('cbp:agent-deployments');
   const jobIds = [...new Set(url.searchParams.getAll('job').map((id) => id.toLowerCase()))];
   if (jobIds.some((id) => !jobIdPattern.test(id))) error(400, 'Invalid deployment job ID');
   const database = getDatabase();
   const timezone = cookies.get('cbp-time-zone');
   if (jobIds.length) {
-    const rows = await listDeploymentTargets(database, { jobIds });
+    const rows = await listDeploymentTargets(database, { jobIds }, viewer);
     const runSlugs = new Set(rows.map(({ runSlug }) => runSlug));
     if (runSlugs.size === 1) redirect(307, resolve('/deployments/[id]', { id: rows[0].runSlug }));
     redirect(307, resolve('/deployments'));
@@ -26,7 +28,7 @@ export const load: PageServerLoad = async ({ url, cookies, depends }) => {
   const offset = (requested - 1) * pageSize;
   const page =
     Number.isSafeInteger(offset) && offset >= 0 && Number.isInteger(requested) ? requested : 1;
-  const rows = await listDeploymentRuns(database, (page - 1) * pageSize, pageSize + 1);
+  const rows = await listDeploymentRuns(database, (page - 1) * pageSize, pageSize + 1, viewer);
   const format = dateFormatter(timezone);
 
   return {

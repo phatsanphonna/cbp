@@ -1,4 +1,5 @@
 import { and, asc, count, desc, gt, gte, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
+import { visibleAlert, visibleAsset, type Viewer } from './asset-owners.js';
 import type { openDatabase } from './index.js';
 import { alerts, certificates, deployments, hosts } from './inventory-schema.js';
 
@@ -13,7 +14,10 @@ type OverviewWindow = {
 export async function loadOverview(
   db: Database,
   { now, nextWeek, nextMonth, recentPingCutoff }: OverviewWindow,
+  viewer?: Viewer,
 ) {
+  const certificateVisible = visibleAsset(db, 'certificate', certificates.id, viewer);
+  const hostVisible = visibleAsset(db, 'host', hosts.id, viewer);
   const failedDeployments = sql<number>`(
     select count(*) from ${deployments}
     where ${deployments.certificateId} = ${certificates.id} and ${deployments.status} = 'Failed'
@@ -34,7 +38,8 @@ export async function loadOverview(
             Number,
           ),
       })
-      .from(certificates),
+      .from(certificates)
+      .where(certificateVisible),
     db
       .select({
         id: certificates.id,
@@ -44,7 +49,12 @@ export async function loadOverview(
         failedDeployments,
       })
       .from(certificates)
-      .where(or(lte(certificates.validUntil, nextMonth), sql`${failedDeployments} > 0`))
+      .where(
+        and(
+          or(lte(certificates.validUntil, nextMonth), sql`${failedDeployments} > 0`),
+          certificateVisible,
+        ),
+      )
       .orderBy(
         sql`case when ${lte(certificates.validUntil, now)} then 0
         when ${failedDeployments} > 0 then 1 when ${lte(certificates.validUntil, nextWeek)} then 2 else 3 end`,
@@ -76,7 +86,8 @@ export async function loadOverview(
             Number,
           ),
       })
-      .from(hosts),
+      .from(hosts)
+      .where(hostVisible),
     db
       .select({
         id: hosts.id,
@@ -86,7 +97,7 @@ export async function loadOverview(
         status: hosts.lastPingStatus,
       })
       .from(hosts)
-      .where(isNotNull(hosts.lastPingAt))
+      .where(and(isNotNull(hosts.lastPingAt), hostVisible))
       .orderBy(desc(hosts.lastPingAt), asc(hosts.id))
       .limit(4),
     db
@@ -98,7 +109,7 @@ export async function loadOverview(
         detectedAt: alerts.detectedAt,
       })
       .from(alerts)
-      .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)))
+      .where(and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt), visibleAlert(db, viewer)))
       .orderBy(
         sql`case ${alerts.severity} when 'Critical' then 0 when 'High' then 1 when 'Warning' then 2 else 3 end`,
         desc(alerts.detectedAt),

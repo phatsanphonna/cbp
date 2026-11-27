@@ -175,6 +175,21 @@ try {
       on cbp_user_group_members(user_id)
   `;
   await db.$client`
+    create table if not exists cbp_asset_owners (
+      asset_kind text not null,
+      asset_id uuid not null,
+      user_id text references cbp_auth_user(id) on delete cascade,
+      group_id integer references cbp_user_groups(id) on delete cascade,
+      constraint cbp_asset_owners_unique
+        unique nulls not distinct (asset_kind, asset_id, user_id, group_id),
+      constraint cbp_asset_owners_one_principal check (num_nonnulls(user_id, group_id) = 1)
+    )
+  `;
+  await db.$client`
+    create index if not exists cbp_asset_owners_asset_idx
+      on cbp_asset_owners(asset_kind, asset_id)
+  `;
+  await db.$client`
     create table if not exists cbp_alerts (
       id uuid primary key default gen_random_uuid(),
       severity text not null,
@@ -353,7 +368,7 @@ try {
         public.cbp_auth_user, public.cbp_auth_session, public.cbp_auth_account, public.cbp_auth_verification,
         public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_certificate_versions, public.cbp_deployments,
         public.cbp_user_groups, public.cbp_user_group_members, public.cbp_user_group_permissions,
-        public.cbp_user_permissions
+        public.cbp_user_permissions, public.cbp_asset_owners
         to cbp_web`);
       await tx.execute(
         sql`grant usage, select on sequence public.cbp_user_groups_id_seq to cbp_web`,

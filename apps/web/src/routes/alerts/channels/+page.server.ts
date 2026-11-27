@@ -25,7 +25,8 @@ import {
 import { isPublicWebhook } from '#lib/server/notification-webhook.js';
 import { displayCertificateDomain } from '../../certificates/display-domain.js';
 import type { Actions, PageServerLoad } from './$types';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
+import { canAccessAsset, type Viewer } from '@cbp/database/asset-owners';
 
 const providers = [
   'Slack',
@@ -46,6 +47,7 @@ function textField(fields: FormData, name: string) {
 async function readCertificateScope(
   db: ReturnType<typeof getDatabase>,
   fields: FormData,
+  viewer: Viewer,
   current: string[] | null = null,
 ) {
   if (!fields.has('certificateIds')) return current;
@@ -59,7 +61,7 @@ async function readCertificateScope(
     return undefined;
   const ids = [...new Set(submitted.map((id) => id.toLowerCase()))];
   const added = ids.filter((id) => !current?.includes(id));
-  if (added.length && (await listCertificateOptions(db, added)).length !== added.length) {
+  if (added.length && (await listCertificateOptions(db, added, viewer)).length !== added.length) {
     return undefined;
   }
   return ids.length ? ids : null;
@@ -95,7 +97,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const db = getDatabase();
   const [channels, certificates] = await Promise.all([
     listChannels(db),
-    listCertificateOptions(db),
+    listCertificateOptions(db, undefined, assetViewer(locals.user)),
   ]);
   const certificateId = url.searchParams.get('certificate');
   return {
@@ -134,7 +136,7 @@ export const actions: Actions = {
     }
 
     const db = getDatabase();
-    const certificateIds = await readCertificateScope(db, fields);
+    const certificateIds = await readCertificateScope(db, fields, assetViewer(locals.user));
     if (certificateIds === undefined)
       return fail(400, { message: 'Choose certificates from the inventory.' });
     const settings = {
@@ -177,7 +179,12 @@ export const actions: Actions = {
         message: 'Enter a valid destination and minimum severity.',
       });
     }
-    const certificateIds = await readCertificateScope(db, fields, channel.certificateIds);
+    const certificateIds = await readCertificateScope(
+      db,
+      fields,
+      assetViewer(locals.user),
+      channel.certificateIds,
+    );
     if (certificateIds === undefined)
       return fail(400, { message: 'Choose certificates from the inventory.' });
     const secret = textField(fields, 'secret');
@@ -225,7 +232,15 @@ export const actions: Actions = {
       return fail(400, { message: 'Choose a channel and certificate.' });
     }
     locals.auditTargetId = String(id);
-    if (!(await bindChannelToCertificate(getDatabase(), id, certificateId))) {
+    if (
+      !(await canAccessAsset(
+        getDatabase(),
+        'certificate',
+        certificateId,
+        assetViewer(locals.user),
+      )) ||
+      !(await bindChannelToCertificate(getDatabase(), id, certificateId))
+    ) {
       return fail(404, {
         message: 'The channel or certificate no longer exists.',
       });

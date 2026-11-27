@@ -25,6 +25,14 @@ export async function listUserPermissions(db: Database, userId: string) {
   return [...new Set([...groupGrants, ...directGrants].map(({ permission }) => permission))];
 }
 
+export async function listUserGroupIds(db: Database, userId: string) {
+  const rows = await db
+    .select({ groupId: userGroupMembers.groupId })
+    .from(userGroupMembers)
+    .where(eq(userGroupMembers.userId, userId));
+  return rows.map(({ groupId }) => groupId);
+}
+
 export async function listAccessGroups(db: Database) {
   const [groups, members, grants] = await Promise.all([
     db.select().from(userGroups).orderBy(asc(userGroups.name)),

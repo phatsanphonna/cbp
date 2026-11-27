@@ -4,6 +4,7 @@ import {
   removeDeployment,
   updateDeploymentEndpoint,
 } from '@cbp/database/inventory';
+import { canAccessAsset, type Viewer } from '@cbp/database/asset-owners';
 import { fail } from '@sveltejs/kit';
 import { deploymentMethods, deploymentServices } from '#lib/deployment-services.js';
 import { getDatabase } from './database.js';
@@ -11,7 +12,11 @@ import { normalizeHostAddress } from './host-address.js';
 
 type DeploymentOwner = { hostId: string } | { certificateId: string };
 
-export async function linkDeploymentAction(request: Request, current: DeploymentOwner) {
+export async function linkDeploymentAction(
+  request: Request,
+  current: DeploymentOwner,
+  viewer: Viewer,
+) {
   const fields = await request.formData();
   const hostId = 'hostId' in current ? current.hostId : fields.get('hostId');
   const certificateId =
@@ -37,8 +42,12 @@ export async function linkDeploymentAction(request: Request, current: Deployment
     });
   }
   const database = getDatabase();
-  const hostAddress = await findHostAddress(database, hostId);
+  const hostAddress = (await canAccessAsset(database, 'host', hostId, viewer))
+    ? await findHostAddress(database, hostId)
+    : null;
   if (!hostAddress) return fail(404, { linkError: 'The selected host no longer exists.' });
+  if (!(await canAccessAsset(database, 'certificate', certificateId, viewer)))
+    return fail(404, { linkError: 'The selected certificate no longer exists.' });
 
   const parsed = parseEndpoint(fields, hostAddress);
   if ('message' in parsed) return fail(400, { linkError: parsed.message });
@@ -61,7 +70,11 @@ export async function linkDeploymentAction(request: Request, current: Deployment
   return { linkMessage: `Deployment linked at ${endpoint}.` };
 }
 
-export async function updateDeploymentEndpointAction(request: Request, owner: DeploymentOwner) {
+export async function updateDeploymentEndpointAction(
+  request: Request,
+  owner: DeploymentOwner,
+  viewer: Viewer,
+) {
   const fields = await request.formData();
   const deploymentId = fields.get('deploymentId');
   if (typeof deploymentId !== 'string' || !deploymentId) {
@@ -94,6 +107,7 @@ export async function updateDeploymentEndpointAction(request: Request, owner: De
     parsed.endpoint,
     engine,
     method,
+    viewer,
   );
   if (result === 'missing')
     return fail(404, {
@@ -108,14 +122,18 @@ export async function updateDeploymentEndpointAction(request: Request, owner: De
   return { endpointMessage: `Deployment saved at ${parsed.endpoint}.` };
 }
 
-export async function removeDeploymentAction(request: Request, owner: DeploymentOwner) {
+export async function removeDeploymentAction(
+  request: Request,
+  owner: DeploymentOwner,
+  viewer: Viewer,
+) {
   const deploymentId = (await request.formData()).get('deploymentId');
   if (typeof deploymentId !== 'string' || !deploymentId) {
     return fail(400, {
       removeDeploymentError: 'Choose an endpoint to delete.',
     });
   }
-  const result = await removeDeployment(getDatabase(), owner, deploymentId);
+  const result = await removeDeployment(getDatabase(), owner, deploymentId, viewer);
   if (result === 'missing')
     return fail(404, {
       deploymentId,

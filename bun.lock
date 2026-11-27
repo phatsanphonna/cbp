@@ -8,6 +8,9 @@
         "turbo": "^2.11.13",
       },
     },
+    "apps/controller": {
+      "name": "controller",
+    },
     "apps/web": {
       "name": "web",
       "dependencies": {
@@ -53,6 +56,9 @@
         "drizzle-kit": "^0.31.0",
         "postgres": "^3.4.0",
       },
+    },
+    "scripts/ansible": {
+      "name": "ansible",
     },
   },
   "overrides": {

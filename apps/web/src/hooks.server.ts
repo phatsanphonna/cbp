@@ -9,8 +9,9 @@ import { deliverAlertNotifications } from '#lib/server/alert-notifications.js';
 import { getAuth, isAdminEmail } from '#lib/server/auth.js';
 import { getDatabase } from '#lib/server/database.js';
 import { cleanupDeploymentSecrets } from '#lib/server/deployment-secrets.js';
-import { canWriteRouteAction, hasPermission } from '#lib/server/access-control.js';
-import { listUserPermissions } from '@cbp/database/access-control';
+import { assetViewer, canWriteRouteAction, hasPermission } from '#lib/server/access-control.js';
+import { listUserGroupIds, listUserPermissions } from '@cbp/database/access-control';
+import { canAccessAsset } from '@cbp/database/asset-owners';
 import {
   renewalAvailable,
   renewDueCertificate,
@@ -126,14 +127,23 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   const user = session?.user;
   if (user) event.locals.auditActor = { id: user.id, name: user.name };
   const isAdmin = user ? isAdminEmail(user.email) : false;
+  const [permissions, groupIds] =
+    user && !isAdmin
+      ? await Promise.all([
+          listUserPermissions(getDatabase(), user.id),
+          listUserGroupIds(getDatabase(), user.id),
+        ])
+      : [[], []];
   event.locals.user = user
     ? {
+        id: user.id,
+        groupIds,
         name: user.name,
         email: user.email,
         username: user.displayUsername ?? user.username,
         image: user.image,
         isAdmin,
-        permissions: isAdmin ? [] : await listUserPermissions(getDatabase(), user.id),
+        permissions,
       }
     : null;
 
@@ -142,7 +152,7 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   } else if (!user) {
     redirect(303, resolvePath('/signin'));
   }
-  return auditUserAction(event, () => {
+  return auditUserAction(event, async () => {
     if (id === '/users') {
       if (
         !hasPermission(event.locals.user, 'users.manage') &&
@@ -177,6 +187,22 @@ const handleRequest: Handle = async ({ event, resolve }) => {
       if (!event.locals.user && !['/signin'].includes(id)) {
         error(403, 'Sign in to make this change.');
       }
+    }
+    const ownedKind = id.startsWith('/certificates/[id]')
+      ? 'certificate'
+      : id.startsWith('/hosts/[id]')
+        ? 'host'
+        : null;
+    if (
+      ownedKind &&
+      !(await canAccessAsset(
+        getDatabase(),
+        ownedKind,
+        event.params.id ?? '',
+        assetViewer(event.locals.user),
+      ))
+    ) {
+      error(404, 'Not found');
     }
     return resolve(event);
   });

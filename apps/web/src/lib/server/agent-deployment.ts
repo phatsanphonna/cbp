@@ -6,6 +6,7 @@ import {
   deploymentJobStatuses,
   deploymentSources,
   findRecoverableDeployment,
+  listDeploymentTargets,
   queueDeploymentRecovery,
   queueDeployments,
 } from '@cbp/database/deployment-jobs';
@@ -28,7 +29,8 @@ import {
   savedCredentialsAvailable,
 } from './deployment-secrets.js';
 import { type Connection, hasTrustedTransport } from './trusted-transport.js';
-import { hasPermission } from './access-control.js';
+import { assetViewer, hasPermission } from './access-control.js';
+import { visibleAssetIds } from '@cbp/database/asset-owners';
 
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 type DeploymentSelection = {
@@ -128,6 +130,11 @@ export async function deployCertificateAction(
       method: source.method,
     });
   }
+  if (
+    (await visibleAssetIds(database, 'host', [...hostIds], assetViewer(locals.user))).length !==
+    hostIds.size
+  )
+    return reject(404, 'A selected deployment has no linked host.');
   if (targets.some(({ method }) => method === 'Agent') && !getControllerToken())
     return reject(503, 'Agent deployment is unavailable.');
   if (targets.some(({ method }) => method === 'Ansible') && !getAnsibleToken())
@@ -297,7 +304,7 @@ export async function recoverDeploymentAction(
   let source: Awaited<ReturnType<typeof findRecoverableDeployment>>;
   try {
     database = getDatabase();
-    source = await findRecoverableDeployment(database, sourceId);
+    source = await findRecoverableDeployment(database, sourceId, assetViewer(locals.user));
   } catch (error) {
     console.error('Could not load certificate deployment for recovery', error);
     const reason = error instanceof Error ? error.message : 'Unknown database error';
@@ -350,7 +357,10 @@ export async function cancelQueuedDeploymentAction(
   const id = form?.get('jobId');
   if (typeof id !== 'string' || !idPattern.test(id))
     return fail(400, { cancelError: 'Choose a queued deployment to cancel.' });
-  const result = await cancelQueuedDeployment(getDatabase(), id, event.params.id ?? '');
+  const database = getDatabase();
+  if (!(await listDeploymentTargets(database, { jobIds: [id] }, assetViewer(locals.user))).length)
+    return fail(404, { cancelError: 'This deployment could not be found.' });
+  const result = await cancelQueuedDeployment(database, id, event.params.id ?? '');
   if (result === 'missing')
     return fail(404, { cancelError: 'This deployment could not be found.' });
   if (result === 'not-queued')

@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -57,6 +58,23 @@ export const userPermissions = pgTable(
     permission: text().notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.permission] })],
+);
+
+export const assetOwners = pgTable(
+  'cbp_asset_owners',
+  {
+    assetKind: text('asset_kind', { enum: ['certificate', 'host', 'credential'] }).notNull(),
+    assetId: uuid('asset_id').notNull(),
+    userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+    groupId: integer('group_id').references(() => userGroups.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    unique('cbp_asset_owners_unique')
+      .on(table.assetKind, table.assetId, table.userId, table.groupId)
+      .nullsNotDistinct(),
+    index('cbp_asset_owners_asset_idx').on(table.assetKind, table.assetId),
+    check('cbp_asset_owners_one_principal', sql`num_nonnulls(${table.userId}, ${table.groupId}) = 1`),
+  ],
 );
 
 export const hosts = pgTable('cbp_hosts', {

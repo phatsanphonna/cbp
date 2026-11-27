@@ -61,6 +61,29 @@ export function hasPermission(user: AccessUser | undefined, permission: AccessPe
   );
 }
 
+// Admins and sudo see every asset (null); everyone else is limited to unowned or owned assets.
+export function assetViewer(
+  user: (NonNullable<AccessUser> & { id: string; groupIds: number[] }) | null | undefined,
+) {
+  if (!user) return { userId: '', groupIds: [] };
+  if (hasPermission(user, 'sudo')) return null;
+  return { userId: user.id, groupIds: user.groupIds };
+}
+
+// Without a bypass, an owner list must stay empty or keep the actor in it, so they cannot lock themselves out.
+export function keepsOwnerAccess(
+  viewer: ReturnType<typeof assetViewer>,
+  userIds: string[],
+  groupIds: number[],
+) {
+  return (
+    !viewer ||
+    (!userIds.length && !groupIds.length) ||
+    userIds.includes(viewer.userId) ||
+    groupIds.some((groupId) => viewer.groupIds.includes(groupId))
+  );
+}
+
 // Without sudo, an actor may only add or remove members of groups whose permissions they already hold.
 export function canChangeGroupMembership(
   actor: AccessUser | undefined,

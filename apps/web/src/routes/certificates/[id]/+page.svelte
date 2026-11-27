@@ -6,6 +6,7 @@
   import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from '$app/paths';
   import { ChevronDown } from '@lucide/svelte';
+  import AssetOwners from '#lib/components/svelte/asset-owners.svelte';
   import CertificateChainFields from '#lib/components/svelte/certificate-chain-fields.svelte';
   import EditDeploymentEndpointDialog from '#lib/components/svelte/edit-deployment-endpoint-dialog.svelte';
   import DeploymentStatusBadge from '#lib/components/svelte/deployment-status-badge.svelte';
@@ -726,6 +727,13 @@
       </Dialog.Content>
     </Dialog.Root>
   {/if}
+
+  <section class="mt-6 border" aria-labelledby="owners-heading">
+    <h2 id="owners-heading" class="border-b bg-muted px-4 py-3 text-sm font-medium">Owners</h2>
+    <div class="p-4">
+      <AssetOwners id="certificate-owners" owners={data.owners} options={data.ownerOptions} />
+    </div>
+  </section>
 
   <section class="mt-6 border" aria-labelledby="metadata-heading">
     <h2 id="metadata-heading" class="border-b bg-muted px-4 py-3 text-sm font-medium">

@@ -4,7 +4,7 @@ import { fail } from '@sveltejs/kit';
 import { getDatabase } from '#lib/server/database.js';
 import { dateFormatter } from '#lib/server/date-formatter.js';
 import type { Actions, PageServerLoad } from './$types';
-import { hasPermission } from '#lib/server/access-control.js';
+import { assetViewer, hasPermission } from '#lib/server/access-control.js';
 
 export const load: PageServerLoad = async ({ url, cookies, locals }) => {
   const format = dateFormatter(cookies.get('cbp-time-zone'));
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ url, cookies, locals }) => {
   return {
     openOnly,
     canManageAlerts: hasPermission(locals.user, 'alerts.manage'),
-    alerts: (await listAlerts(getDatabase(), openOnly)).map(
+    alerts: (await listAlerts(getDatabase(), openOnly, assetViewer(locals.user))).map(
       ({ id, severity, message, target, detectedAt, resolvedAt, clearedAt }) => ({
         id,
         severity,
@@ -32,7 +32,7 @@ export const actions: Actions = {
       return fail(400, { message: 'Choose an alert to clear.' });
     }
     locals.auditTargetId = id;
-    if (!(await clearAlert(getDatabase(), id)))
+    if (!(await clearAlert(getDatabase(), id, assetViewer(locals.user))))
       return fail(409, { message: 'This alert is no longer open.' });
     return { success: 'Alert cleared.' };
   },
