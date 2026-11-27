@@ -100,11 +100,14 @@ export function channelSettings(
 }
 
 const severityStyle = {
-  Info: { emoji: '🔵', color: 'accent' },
-  Warning: { emoji: '🟡', color: 'warning' },
-  High: { emoji: '🟠', color: 'warning' },
-  Critical: { emoji: '🔴', color: 'attention' },
-} as const satisfies Record<AlertDelivery['severity'], { emoji: string; color: string }>;
+  Info: { emoji: '🔵', color: 'accent', rgb: 0x3b82f6 },
+  Warning: { emoji: '🟡', color: 'warning', rgb: 0xeab308 },
+  High: { emoji: '🟠', color: 'warning', rgb: 0xf97316 },
+  Critical: { emoji: '🔴', color: 'attention', rgb: 0xef4444 },
+} as const satisfies Record<
+  AlertDelivery['severity'],
+  { emoji: string; color: string; rgb: number }
+>;
 
 async function sendAlert(
   settings: NotificationSettings,
@@ -114,7 +117,9 @@ async function sendAlert(
 ) {
   const { provider, destination } = channel;
   const { alertId, severity, message, target } = alert;
-  const { emoji, color } = test ? { emoji: '🧪', color: 'accent' } : severityStyle[severity];
+  const { emoji, color, rgb } = test
+    ? { emoji: '🧪', color: 'accent', rgb: 0x3b82f6 }
+    : severityStyle[severity];
   const title = test ? `${emoji} CBP test notification` : `${emoji} CBP alert · ${severity}`;
   const text = `${title}\n${message}`;
   const deliveryId = `${alertId}:${channel.id}:${severity}`;
@@ -163,7 +168,22 @@ async function sendAlert(
       if (!webhook) return false;
       webhook.searchParams.set('wait', 'true');
       url = webhook;
-      payload = { content: text, allowed_mentions: { parse: [] } };
+      payload = {
+        embeds: [
+          {
+            title,
+            description: message,
+            color: rgb,
+            fields: [
+              { name: 'Severity', value: severity, inline: true },
+              { name: 'Target', value: target || '—', inline: true },
+            ],
+            footer: { text: 'CBP' },
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        allowed_mentions: { parse: [] },
+      };
       break;
     }
     case 'Webhook': {
@@ -228,29 +248,48 @@ async function sendAlert(
     redirect: 'error',
     signal: AbortSignal.timeout(10_000),
   });
-  if (response.ok && provider === 'Slack') {
-    const body = (await response.json()) as { ok?: boolean };
-    return body?.ok === true;
-  }
-  await response.body?.cancel().catch(() => {});
-  return response.ok;
+  // Providers put the reason in different fields: Slack `error`, Telegram `description`,
+  // LINE/Resend/Discord `message`.
+  const body = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    error?: unknown;
+    description?: unknown;
+    message?: unknown;
+  } | null;
+  if (response.ok && (provider !== 'Slack' || body?.ok === true)) return true;
+  const reason = [body?.error, body?.description, body?.message].find(
+    (value) => typeof value === 'string',
+  );
+  throw new Error(`${provider} returned HTTP ${response.status}${reason ? `: ${reason}` : '.'}`);
+}
+
+/** Error text that is safe to show: Telegram puts the bot token in its URL. */
+function failureReason(error: unknown, secret: string) {
+  const reason = error instanceof Error ? error.message : String(error);
+  return reason.replaceAll(secret, '***').slice(0, 300);
 }
 
 export async function testAlertNotification(channel: Channel) {
   const settings = channelSettings(notificationConfig(), channel);
   if (!settings) return 'setup-required';
-  const sent = await sendAlert(
-    settings,
-    channel,
-    {
-      alertId: crypto.randomUUID(),
-      severity: channel.severity,
-      message: 'This is a test from CBP. No alert requires your attention.',
-      target: 'CBP',
-    },
-    true,
-  ).catch(() => false);
-  return sent ? 'sent' : 'failed';
+  try {
+    const sent = await sendAlert(
+      settings,
+      channel,
+      {
+        alertId: crypto.randomUUID(),
+        severity: channel.severity,
+        message: 'This is a test from CBP. No alert requires your attention.',
+        target: 'CBP',
+      },
+      true,
+    );
+    return sent ? 'sent' : { error: 'The saved webhook URL is invalid.' };
+  } catch (error) {
+    const reason = failureReason(error, settings.secret);
+    console.warn('Test notification failed', { channelId: channel.id, reason });
+    return { error: reason };
+  }
 }
 
 export async function deliverAlertNotifications(db: ReturnType<typeof getDatabase>) {
@@ -267,8 +306,10 @@ export async function deliverAlertNotifications(db: ReturnType<typeof getDatabas
       const entry = channels.get(delivery.channelId);
       if (!entry) return;
       const { channel, settings } = entry;
-      const sent = await sendAlert(settings, channel, delivery).catch(() => false);
-      if (sent) {
+      const sent = await sendAlert(settings, channel, delivery).catch((error: unknown) =>
+        failureReason(error, settings.secret),
+      );
+      if (sent === true) {
         await markAlertDelivered(db, delivery);
       } else {
         console.warn('Alert notification failed', {
@@ -276,6 +317,7 @@ export async function deliverAlertNotifications(db: ReturnType<typeof getDatabas
           provider: channel.provider,
           alertId: delivery.alertId,
           attempt: delivery.attempts,
+          reason: sent || 'invalid webhook URL',
         });
       }
     }),

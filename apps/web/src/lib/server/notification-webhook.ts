@@ -87,7 +87,7 @@ export async function postPublicWebhook(
     const destination = new URL(url);
     if (!useTeamsProxy || !isTeamsWorkflowHost(url)) {
       const address = await publicWebhookAddress(url);
-      if (!address) return false;
+      if (!address) throw new Error('Webhook host does not resolve to a public IPv4 address.');
       destination.hostname = address;
     }
     const response = await fetch(destination, {
@@ -106,11 +106,12 @@ export async function postPublicWebhook(
       signal: AbortSignal.timeout(10_000),
     });
     await response.body?.cancel().catch(() => {});
-    return response.ok;
+    if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}.`);
+    return true;
   }
 
   const address = await publicWebhookAddress(url);
-  if (!address) return false;
+  if (!address) throw new Error('Webhook host does not resolve to a public IPv4 address.');
 
   // Connect to the checked address and validate TLS for the original hostname.
   return new Promise<boolean>((resolve, reject) => {
@@ -132,7 +133,8 @@ export async function postPublicWebhook(
       },
       (response) => {
         const status = response.statusCode ?? 0;
-        resolve(status >= 200 && status < 300);
+        if (status >= 200 && status < 300) resolve(true);
+        else reject(new Error(`Webhook returned HTTP ${status}.`));
         response.destroy();
       },
     );

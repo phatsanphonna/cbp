@@ -294,9 +294,9 @@ export const actions: Actions = {
         message: 'Configure this channel before sending a test.',
       });
     }
-    if (result === 'failed') {
+    if (typeof result === 'object') {
       return fail(502, {
-        message: `Could not send a test to ${channel.destination}. Check the destination, credentials, and network settings.`,
+        message: `Could not send a test to ${channel.destination}. ${result.error}`,
       });
     }
     return {

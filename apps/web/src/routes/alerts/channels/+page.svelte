@@ -363,10 +363,12 @@
                     hidden
                     use:enhance={() => {
                       testingChannel = channel.id;
+                      const sending = toast.loading(`Sending test to ${channel.destination}…`);
                       return async ({ update }) => {
                         try {
                           await update({ reset: false, invalidateAll: false });
                         } finally {
+                          toast.dismiss(sending);
                           testingChannel = null;
                         }
                       };
