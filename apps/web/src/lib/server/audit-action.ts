@@ -1,72 +1,83 @@
-import { recordAuditEvent } from "@cbp/database/audit";
-import { isHttpError, isRedirect, type RequestEvent } from "@sveltejs/kit";
-import { getDatabase } from "./database.js";
+import { recordAuditEvent } from '@cbp/database/audit';
+import { isHttpError, isRedirect, type RequestEvent } from '@sveltejs/kit';
+import { getDatabase } from './database.js';
 
 const deploymentActions = {
-  linkDeployment: "Link deployment",
-  updateEndpoint: "Edit deployment",
-  removeDeployment: "Delete endpoint",
+  linkDeployment: 'Link deployment',
+  updateEndpoint: 'Edit deployment',
+  removeDeployment: 'Delete endpoint',
 };
 const actionLabels: Record<string, Record<string, string>> = {
-  "/signin": { default: "Sign in" },
-  "/signout": { default: "Sign out" },
-  "/account/password": { default: "Change password" },
-  "/users": {
-    remove: "Remove user",
-    assignGroups: "Update user groups",
-    assignPermissions: "Update user permissions",
+  '/signin': { default: 'Sign in' },
+  '/signout': { default: 'Sign out' },
+  '/account/password': { default: 'Change password' },
+  '/users': {
+    remove: 'Remove user',
+    assignGroups: 'Update user groups',
+    assignPermissions: 'Update user permissions',
   },
-  "/users/new": { default: "Create user" },
-  "/groups": {
-    create: "Create group",
-    rename: "Rename group",
-    members: "Update group members",
-    savePermissions: "Update group permissions",
-    remove: "Remove group",
+  '/users/new': { default: 'Create user' },
+  '/groups': {
+    create: 'Create group',
+    rename: 'Rename group',
+    members: 'Update group members',
+    savePermissions: 'Update group permissions',
+    remove: 'Remove group',
   },
-  "/hosts/new": { default: "Add host" },
-  "/hosts/[id]": {
+  '/hosts/new': { default: 'Add host' },
+  '/hosts/[id]': {
     ...deploymentActions,
-    inviteAgent: "Generate enrollment code",
-    resetAgent: "Reset enrollment",
-    importReport: "Import host report",
-    ping: "Ping host",
-    remove: "Remove host",
+    inviteAgent: 'Generate enrollment code',
+    resetAgent: 'Reset enrollment',
+    importReport: 'Import host report',
+    ping: 'Ping host',
+    remove: 'Remove host',
     bindCredential: 'Bind Ansible credential',
   },
-  '/ansible-credentials': { create: 'Create Ansible credential', remove: 'Delete Ansible credential', bind: 'Bind Ansible credential', unbind: 'Unbind Ansible credential' },
+  '/ansible-credentials': {
+    create: 'Create Ansible credential',
+    remove: 'Delete Ansible credential',
+    bind: 'Bind Ansible credential',
+    unbind: 'Unbind Ansible credential',
+  },
   '/certificates/new': {
     default: 'Register certificate',
     letsencrypt: 'Issue Let’s Encrypt certificate',
     selfsigned: 'Create self-signed certificate',
   },
-  "/certificates/[id]": {
+  '/certificates/[id]': {
     ...deploymentActions,
-    deploy: "Deploy certificate",
-    deployAnsible: "Deploy certificate via Ansible",
-    deployMixed: "Deploy certificate",
+    deploy: 'Deploy certificate',
+    deployAnsible: 'Deploy certificate via Ansible',
+    deployMixed: 'Deploy certificate',
     enableRenewal: 'Enable automatic renewal',
     disableRenewal: 'Disable automatic renewal',
+    enableAutoDeploy: 'Enable deploy after renewal',
+    disableAutoDeploy: 'Disable deploy after renewal',
     renewNow: 'Renew certificate now',
-    deleteCredential: "Delete saved deployment credential",
-    updateChain: "Update fullchain",
-    restoreChain: "Restore certificate version",
-    remove: "Remove certificate",
+    deleteCredential: 'Delete saved deployment credential',
+    updateChain: 'Update fullchain',
+    restoreChain: 'Restore certificate version',
+    remove: 'Remove certificate',
   },
-  "/certificates/[id]/private-key": {
-    default: "Download certificate private key",
+  '/certificates/[id]/private-key': {
+    default: 'Download certificate private key',
   },
-  "/deployments/[id]": { cancel: "Cancel queued deployment" },
-  "/alerts": { clear: "Clear alert" },
-  "/alerts/channels": {
-    add: "Add notification channel",
-    edit: "Edit notification channel",
-    bindCertificate: "Bind notification channel to certificate",
-    setEnabled: "Change notification channel status",
-    remove: "Remove notification channel",
-    test: "Send test notification",
+  '/deployments/[id]': { cancel: 'Cancel queued deployment' },
+  '/alerts': { clear: 'Clear alert' },
+  '/alerts/channels': {
+    add: 'Add notification channel',
+    edit: 'Edit notification channel',
+    bindCertificate: 'Bind notification channel to certificate',
+    setEnabled: 'Change notification channel status',
+    remove: 'Remove notification channel',
+    test: 'Send test notification',
   },
 };
+
+export const auditActionLabels = [
+  ...new Set(Object.values(actionLabels).flatMap((labels) => Object.values(labels))),
+].sort();
 
 export async function auditUserAction(
   event: RequestEvent,
@@ -74,19 +85,15 @@ export async function auditUserAction(
 ) {
   const route = event.route.id;
   const privateKeyDownload =
-    event.request.method === "GET" &&
-    route === "/certificates/[id]/private-key";
+    event.request.method === 'GET' && route === '/certificates/[id]/private-key';
   if (
     !route ||
-    (!privateKeyDownload &&
-      !["POST", "PUT", "PATCH", "DELETE"].includes(event.request.method))
+    (!privateKeyDownload && !['POST', 'PUT', 'PATCH', 'DELETE'].includes(event.request.method))
   )
     return resolve();
 
   const key =
-    [...event.url.searchParams.keys()]
-      .find((key) => key.startsWith("/"))
-      ?.slice(1) ??
+    [...event.url.searchParams.keys()].find((key) => key.startsWith('/'))?.slice(1) ??
     (route === '/certificates/new'
       ? event.url.searchParams.get('method') === 'letsencrypt'
         ? 'letsencrypt'
@@ -95,14 +102,19 @@ export async function auditUserAction(
           : 'default'
       : 'default');
   const labels = actionLabels[route];
+  // Name unmapped actions so the gap is visible; the key is client-supplied, so bound it.
   const action =
-    labels && Object.hasOwn(labels, key) ? labels[key] : "Submit form";
+    labels && Object.hasOwn(labels, key)
+      ? labels[key]
+      : key !== 'default' && /^[A-Za-z]{1,40}$/.test(key)
+        ? `Submit form (${key})`
+        : 'Submit form';
   const record = async (status: number) => {
-    if (route === "/signin" && [403, 413, 429].includes(status)) return;
+    if (route === '/signin' && [403, 413, 429].includes(status)) return;
     const actor = event.locals.auditActor;
     const id = event.locals.auditTargetId ?? event.params.id;
     const targetPattern =
-      route === "/users"
+      route === '/users'
         ? /^[A-Za-z0-9_-]{1,128}$/
         : /^(?:[0-9]+|[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/i;
     const targetId = id && targetPattern.test(id) ? id : null;
@@ -116,7 +128,7 @@ export async function auditUserAction(
         status,
       });
     } catch {
-      console.error("Could not store web audit event", { action, route });
+      console.error('Could not store web audit event', { action, route });
     }
   };
 

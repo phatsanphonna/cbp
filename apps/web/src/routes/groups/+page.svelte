@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { enhance, type SubmitFunction } from "$app/forms";
-  import { Ellipsis } from "@lucide/svelte";
-  import { toast } from "svelte-sonner";
-  import { notifyFormResult } from "#lib/components/svelte/form-feedback.js";
-  import { Badge } from "#lib/components/ui/badge/index.ts";
-  import { Button } from "#lib/components/ui/button/index.ts";
-  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
-  import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
-  import * as Dialog from "#lib/components/ui/dialog/index.ts";
-  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
-  import * as Field from "#lib/components/ui/field/index.ts";
-  import { Input } from "#lib/components/ui/input/index.ts";
-  import * as Table from "#lib/components/ui/table/index.ts";
-  import type { PageProps } from "./$types";
+  import { enhance, type SubmitFunction } from '$app/forms';
+  import { Ellipsis } from '@lucide/svelte';
+  import { toast } from 'svelte-sonner';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
+  import { Checkbox } from '#lib/components/ui/checkbox/index.ts';
+  import * as Dialog from '#lib/components/ui/dialog/index.ts';
+  import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.ts';
+  import * as Field from '#lib/components/ui/field/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import * as Table from '#lib/components/ui/table/index.ts';
+  import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
   let createOpen = $state(false);
@@ -27,9 +27,7 @@
   let savingPermissions = $state(false);
   let removing = $state(false);
 
-  const editingGroup = $derived(
-    data.groups.find((group) => group.id === editingGroupId) ?? null,
-  );
+  const editingGroup = $derived(data.groups.find((group) => group.id === editingGroupId) ?? null);
 
   function enhanceMessage(
     message: string,
@@ -41,7 +39,7 @@
       return async ({ result, update }) => {
         try {
           await update();
-          if (result.type === "success") {
+          if (result.type === 'success') {
             toast.success(message);
             onSuccess?.();
           } else {
@@ -67,9 +65,9 @@
 
   function changePermission(key: string, checked: boolean) {
     permissionChecks[key] = checked;
-    if (key === "sudo" && checked) {
+    if (key === 'sudo' && checked) {
       for (const permission of data.permissions) {
-        if (permission.key !== "sudo") permissionChecks[permission.key] = false;
+        if (permission.key !== 'sudo') permissionChecks[permission.key] = false;
       }
     }
   }
@@ -77,7 +75,7 @@
   function permissionLabels(keys: string[]) {
     return keys
       .map((key) => data.permissions.find((permission) => permission.key === key)?.label)
-      .filter((label): label is string => Boolean(label));
+      .filter((label) => label !== undefined);
   }
 </script>
 
@@ -89,9 +87,7 @@
   <header class="flex flex-wrap items-end justify-between gap-4">
     <div class="grid gap-1">
       <h1 id="groups-heading" class="font-heading text-xl font-semibold">Groups</h1>
-      <p class="text-xs text-muted-foreground">
-        Organize users and assign shared permissions.
-      </p>
+      <p class="text-xs text-muted-foreground">Organize users and assign shared permissions.</p>
     </div>
     {#if data.canManageGroups}
       <Button onclick={() => (createOpen = true)}>Create group</Button>
@@ -117,10 +113,16 @@
               {group.name}
             </Table.Head>
             <Table.Cell class="min-w-36 whitespace-normal">
-              <span>{group.members.length} {group.members.length === 1 ? "member" : "members"}</span>
+              <span>
+                {group.members.length}
+                {group.members.length === 1 ? 'member' : 'members'}
+              </span>
               {#if group.members.length}
                 <span class="block text-xs text-muted-foreground">
-                  {group.members.slice(0, 2).map((member) => member.name).join(", ")}{group.members.length > 2 ? ` +${group.members.length - 2}` : ""}
+                  {group.members
+                    .slice(0, 2)
+                    .map((member) => member.name)
+                    .join(', ')}{group.members.length > 2 ? ` +${group.members.length - 2}` : ''}
                 </span>
               {/if}
             </Table.Cell>
@@ -167,7 +169,9 @@
                               groupToRemove = group;
                               removeOpen = true;
                             }}
-                          >Remove</DropdownMenu.Item>
+                          >
+                            Remove
+                          </DropdownMenu.Item>
                         {/if}
                       </DropdownMenu.Group>
                     </DropdownMenu.Content>
@@ -199,7 +203,11 @@
     <form
       method="POST"
       action="?/create"
-      use:enhance={enhanceMessage("Group created.", (value) => (creating = value), () => (createOpen = false))}
+      use:enhance={enhanceMessage(
+        'Group created.',
+        (value) => (creating = value),
+        () => (createOpen = false),
+      )}
     >
       <Field.FieldGroup>
         <Field.Field>
@@ -214,7 +222,7 @@
           {/snippet}
         </Dialog.Close>
         <Button type="submit" disabled={creating}>
-          {creating ? "Creating…" : "Create group"}
+          {creating ? 'Creating…' : 'Create group'}
         </Button>
       </Dialog.Footer>
     </form>
@@ -236,7 +244,7 @@
             method="POST"
             action="?/rename"
             class="grid gap-3 border p-4 sm:grid-cols-[1fr_auto] sm:items-end"
-            use:enhance={enhanceMessage("Group renamed.", (value) => (savingName = value))}
+            use:enhance={enhanceMessage('Group renamed.', (value) => (savingName = value))}
           >
             <input type="hidden" name="id" value={editingGroup.id} />
             <Field.Field>
@@ -250,7 +258,7 @@
               />
             </Field.Field>
             <Button type="submit" variant="outline" size="sm" disabled={savingName}>
-              {savingName ? "Saving…" : "Save name"}
+              {savingName ? 'Saving…' : 'Save name'}
             </Button>
           </form>
 
@@ -258,7 +266,10 @@
             method="POST"
             action="?/members"
             class="border p-4"
-            use:enhance={enhanceMessage("Group members updated.", (value) => (savingMembers = value))}
+            use:enhance={enhanceMessage(
+              'Group members updated.',
+              (value) => (savingMembers = value),
+            )}
           >
             <input type="hidden" name="id" value={editingGroup.id} />
             <Field.FieldSet>
@@ -291,7 +302,7 @@
             </Field.FieldSet>
             <div class="mt-4 flex justify-end">
               <Button type="submit" variant="outline" size="sm" disabled={savingMembers}>
-                {savingMembers ? "Saving…" : "Save members"}
+                {savingMembers ? 'Saving…' : 'Save members'}
               </Button>
             </div>
           </form>
@@ -302,7 +313,10 @@
             method="POST"
             action="?/savePermissions"
             class="border p-4"
-            use:enhance={enhanceMessage("Group permissions updated.", (value) => (savingPermissions = value))}
+            use:enhance={enhanceMessage(
+              'Group permissions updated.',
+              (value) => (savingPermissions = value),
+            )}
           >
             <input type="hidden" name="groupId" value={editingGroup.id} />
             <Field.FieldSet>
@@ -315,8 +329,9 @@
                       name="permission"
                       value={permission.key}
                       checked={permissionChecks[permission.key]}
-                      onCheckedChange={(checked) => changePermission(permission.key, checked === true)}
-                      disabled={permission.key !== "sudo" && permissionChecks.sudo}
+                      onCheckedChange={(checked) =>
+                        changePermission(permission.key, checked === true)}
+                      disabled={permission.key !== 'sudo' && permissionChecks.sudo}
                     />
                     <Field.FieldLabel
                       for={`group-${editingGroup.id}-${permission.key}`}
@@ -331,7 +346,7 @@
             </Field.FieldSet>
             <div class="mt-4 flex justify-end">
               <Button type="submit" variant="outline" size="sm" disabled={savingPermissions}>
-                {savingPermissions ? "Saving…" : "Save permissions"}
+                {savingPermissions ? 'Saving…' : 'Save permissions'}
               </Button>
             </div>
           </form>
@@ -339,9 +354,7 @@
       </div>
     {/if}
     <Dialog.Footer>
-      <Button type="button" variant="outline" onclick={() => (editOpen = false)}>
-        Close
-      </Button>
+      <Button type="button" variant="outline" onclick={() => (editOpen = false)}>Close</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
@@ -360,13 +373,17 @@
       <form
         method="POST"
         action="?/remove"
-        use:enhance={enhanceMessage("Group removed.", (value) => (removing = value), () => (removeOpen = false))}
+        use:enhance={enhanceMessage(
+          'Group removed.',
+          (value) => (removing = value),
+          () => (removeOpen = false),
+        )}
       >
         <input type="hidden" name="id" value={groupToRemove.id} />
         <AlertDialog.Footer>
           <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
           <AlertDialog.Action type="submit" variant="destructive" disabled={removing}>
-            {removing ? "Removing…" : "Remove group"}
+            {removing ? 'Removing…' : 'Remove group'}
           </AlertDialog.Action>
         </AlertDialog.Footer>
       </form>

@@ -136,6 +136,7 @@ ExecStart=:` + strings.Join(args, " ") + `
 UnsetEnvironment=CBP_AGENT_ENROLLMENT_CODE
 Restart=on-failure
 RestartSec=5s
+RestartPreventExitStatus=` + strconv.Itoa(unauthenticatedExitCode) + `
 
 [Install]
 WantedBy=multi-user.target

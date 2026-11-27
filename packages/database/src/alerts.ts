@@ -1,17 +1,11 @@
-import { and, eq, gte, isNull, like, notInArray, or, sql } from "drizzle-orm";
-import type { openDatabase } from "./index.js";
-import {
-  alertDeliveries,
-  alerts,
-  certificates,
-  channels,
-  hosts,
-} from "./inventory-schema.js";
+import { and, eq, gte, isNull, like, notInArray, or, sql } from 'drizzle-orm';
+import type { openDatabase } from './index.js';
+import { alertDeliveries, alerts, certificates, channels, hosts } from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 const day = 24 * 60 * 60 * 1000;
-const certificateRule = "certificate-expiry:%";
-const hostRule = "host-no-reply:%";
+const certificateRule = 'certificate-expiry:%';
+const hostRule = 'host-no-reply:%';
 
 export type AlertDelivery = {
   alertId: string;
@@ -25,9 +19,13 @@ export type AlertDelivery = {
 const severityOrder = sql`array['Info', 'Warning', 'High', 'Critical']`;
 const maxAttempts = 5;
 
-export async function claimAlertDeliveries(db: Database, channelIds: number[]) {
+export async function claimAlertDeliveries(
+  db: Database,
+  channelIds: number[],
+): Promise<AlertDelivery[]> {
   if (!channelIds.length) return [];
-  return db.execute<AlertDelivery>(sql`
+  // Raw SQL rows are untyped; the final select list matches AlertDelivery.
+  const rows = await db.execute(sql`
     with candidates as (
       select a.id as alert_id, c.id as channel_id, a.severity, a.message, a.target
       from ${alerts} a
@@ -64,12 +62,10 @@ export async function claimAlertDeliveries(db: Database, channelIds: number[]) {
     select alert_id as "alertId", channel_id as "channelId", severity, attempts, message, target
     from claimed join candidates using (alert_id, channel_id, severity)
   `);
+  return rows as unknown as AlertDelivery[];
 }
 
-export async function markAlertDelivered(
-  db: Database,
-  delivery: AlertDelivery,
-) {
+export async function markAlertDelivered(db: Database, delivery: AlertDelivery) {
   await db
     .update(alertDeliveries)
     .set({ deliveredAt: sql`now()` })
@@ -87,13 +83,7 @@ export async function clearAlert(db: Database, id: string) {
   const [cleared] = await db
     .update(alerts)
     .set({ clearedAt: sql`now()` })
-    .where(
-      and(
-        eq(alerts.id, id),
-        isNull(alerts.resolvedAt),
-        isNull(alerts.clearedAt),
-      ),
-    )
+    .where(and(eq(alerts.id, id), isNull(alerts.resolvedAt), isNull(alerts.clearedAt)))
     .returning({ id: alerts.id });
   return Boolean(cleared);
 }
@@ -106,7 +96,7 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
     const desired: Array<{
       ruleKey: string;
       targetId: string;
-      severity: "Warning" | "High" | "Critical";
+      severity: 'Warning' | 'High' | 'Critical';
       message: string;
       target: string;
     }> = [];
@@ -121,20 +111,20 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
       const remaining = certificate.validUntil.getTime() - now.getTime();
       const severity =
         remaining <= 0
-          ? "Critical"
+          ? 'Critical'
           : remaining <= 7 * day
-            ? "High"
+            ? 'High'
             : remaining <= 30 * day
-              ? "Warning"
+              ? 'Warning'
               : null;
       if (!severity) continue;
 
       const condition =
-        severity === "Critical"
-          ? "has expired"
-          : severity === "High"
-            ? "expires within 7 days"
-            : "expires within 30 days";
+        severity === 'Critical'
+          ? 'has expired'
+          : severity === 'High'
+            ? 'expires within 7 days'
+            : 'expires within 30 days';
       desired.push({
         ruleKey: `certificate-expiry:${certificate.id}`,
         targetId: certificate.id,
@@ -150,16 +140,11 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
         name: hosts.name,
       })
       .from(hosts)
-      .where(
-        and(
-          eq(hosts.lastPingStatus, "no-reply"),
-          gte(hosts.consecutivePingFailures, 3),
-        ),
-      )) {
+      .where(and(eq(hosts.lastPingStatus, 'no-reply'), gte(hosts.consecutivePingFailures, 3)))) {
       desired.push({
         ruleKey: `host-no-reply:${host.id}`,
         targetId: host.id,
-        severity: "High",
+        severity: 'High',
         message: `${host.name} has not replied to 3 consecutive probes.`,
         target: host.name,
       });
@@ -172,13 +157,8 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
       .where(
         and(
           isNull(alerts.resolvedAt),
-          or(
-            like(alerts.ruleKey, certificateRule),
-            like(alerts.ruleKey, hostRule),
-          ),
-          activeKeys.length
-            ? notInArray(alerts.ruleKey, activeKeys)
-            : undefined,
+          or(like(alerts.ruleKey, certificateRule), like(alerts.ruleKey, hostRule)),
+          activeKeys.length ? notInArray(alerts.ruleKey, activeKeys) : undefined,
         ),
       );
 

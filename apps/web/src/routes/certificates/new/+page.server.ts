@@ -7,10 +7,7 @@ import { getDatabase } from '#lib/server/database.js';
 import { readCertificateChain } from '#lib/server/certificate-chain.js';
 import { encryptSecret } from '#lib/server/encrypted-secret.js';
 import { hasPermission } from '#lib/server/access-control.js';
-import {
-  saveCredential,
-  savedCredentialsAvailable,
-} from '#lib/server/deployment-secrets.js';
+import { saveCredential, savedCredentialsAvailable } from '#lib/server/deployment-secrets.js';
 import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
 import {
   generateSelfSignedCertificate,
@@ -41,21 +38,14 @@ export const load: PageServerLoad = (event) => ({
 
 let issuing = false;
 
-async function issueCertificate(
-  { locals, platform, request }: RequestEvent,
-  fields: FormData,
-) {
+async function issueCertificate({ locals, platform, request }: RequestEvent, fields: FormData) {
   const hostnames = fields.get('hostnames');
   const reject = (status: number, message: string) =>
     fail(status, {
       message,
-      hostnames:
-        typeof hostnames === 'string' && hostnames.length <= 25_400
-          ? hostnames
-          : '',
+      hostnames: typeof hostnames === 'string' && hostnames.length <= 25_400 ? hostnames : '',
     });
-  if (!renewalAvailable)
-    return reject(503, 'Configure Let’s Encrypt on the server first.');
+  if (!renewalAvailable) return reject(503, 'Configure Let’s Encrypt on the server first.');
   const parsed = readIssuanceNames(hostnames);
   if (!parsed) {
     return reject(
@@ -103,10 +93,7 @@ async function issueCertificate(
   redirect(303, resolve('/certificates/[id]', { id }));
 }
 
-async function createSelfSignedCertificate(
-  event: RequestEvent,
-  fields: FormData,
-) {
+async function createSelfSignedCertificate(event: RequestEvent, fields: FormData) {
   const { locals, setHeaders } = event;
   setHeaders({ 'cache-control': 'no-store' });
   const hostnames = fields.get('hostnames');
@@ -115,22 +102,15 @@ async function createSelfSignedCertificate(
   const reject = (status: number, message: string) =>
     fail(status, {
       message,
-      hostnames:
-        typeof hostnames === 'string' && hostnames.length <= 25_400
-          ? hostnames
-          : '',
+      hostnames: typeof hostnames === 'string' && hostnames.length <= 25_400 ? hostnames : '',
       autoRenew,
       storePrivateKey,
     });
   if (!hasTrustedTransport(event))
-    return reject(
-      400,
-      'Use a trusted HTTPS connection to generate and download private keys.',
-    );
+    return reject(400, 'Use a trusted HTTPS connection to generate and download private keys.');
   if (
     storePrivateKey &&
-    (!savedCredentialsAvailable() ||
-      !hasPermission(locals.user, 'credentials.manage'))
+    (!savedCredentialsAvailable() || !hasPermission(locals.user, 'credentials.manage'))
   ) {
     return reject(
       403,
@@ -164,12 +144,12 @@ async function createSelfSignedCertificate(
     ...generated.metadata,
     domain: parsed.domain,
     autoRenew,
-    renewalKey: autoRenew || storePrivateKey
-      ? encryptSecret(generated.privateKey, selfSignedKeyContext(id))
-      : null,
+    renewalKey:
+      autoRenew || storePrivateKey
+        ? encryptSecret(generated.privateKey, selfSignedKeyContext(id))
+        : null,
   });
-  if (!saved)
-    return reject(409, 'This certificate is already registered.');
+  if (!saved) return reject(409, 'This certificate is already registered.');
 
   let storeError: string | null = null;
   if (storePrivateKey) {
@@ -197,8 +177,7 @@ export const actions: Actions = {
   default: async (event) => {
     const { request, locals, url } = event;
     const fields = await request.formData();
-    if (url.searchParams.get('method') === 'letsencrypt')
-      return issueCertificate(event, fields);
+    if (url.searchParams.get('method') === 'letsencrypt') return issueCertificate(event, fields);
     if (url.searchParams.get('method') === 'selfsigned')
       return createSelfSignedCertificate(event, fields);
     const chain = await readCertificateChain(fields);
@@ -208,8 +187,7 @@ export const actions: Actions = {
       ...chain.metadata,
       domain: chain.domain,
     });
-    if (!saved)
-      return fail(409, { message: 'This certificate is already registered.' });
+    if (!saved) return fail(409, { message: 'This certificate is already registered.' });
     locals.auditTargetId = saved.id;
     redirect(303, resolve('/certificates/[id]', { id: saved.id }));
   },

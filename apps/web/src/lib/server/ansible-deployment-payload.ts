@@ -1,85 +1,85 @@
 type AnsibleCredentials = {
   sshUsername: string;
   sshPassword: string;
-  becomeMethod: "sudo" | "su";
+  becomeMethod: 'sudo' | 'su';
   suPassword?: string;
 };
 
 function isPassword(value: unknown): value is string {
   return (
-    typeof value === "string" &&
+    typeof value === 'string' &&
     value.length > 0 &&
     Buffer.byteLength(value) <= 1024 &&
     !/[\0\r\n]/.test(value)
   );
 }
 
-export function readAnsibleCredentials(fields: FormData, hostId?: string): { message: string; credentials?: never } | { credentials: AnsibleCredentials; message?: never } {
-  const name = (field: string) => hostId ? `${field}:${hostId}` : field;
-  const sshUsername = fields.get(name("sshUsername"));
-  const sshPassword = fields.get(name("sshPassword"));
-  const becomeMethod = fields.get(name("becomeMethod"));
-  const suPassword = fields.get(name("suPassword"));
+export function readAnsibleCredentials(
+  fields: FormData,
+  hostId?: string,
+): { message: string; credentials?: never } | { credentials: AnsibleCredentials; message?: never } {
+  const name = (field: string) => (hostId ? `${field}:${hostId}` : field);
+  const sshUsername = fields.get(name('sshUsername'));
+  const sshPassword = fields.get(name('sshPassword'));
+  const becomeMethod = fields.get(name('becomeMethod'));
+  const suPassword = fields.get(name('suPassword'));
   if (
-    typeof sshUsername !== "string" ||
+    typeof sshUsername !== 'string' ||
     !sshUsername.trim() ||
     Buffer.byteLength(sshUsername) > 256 ||
     /[\0\r\n]/.test(sshUsername)
   )
-    return { message: "Provide a valid SSH username." };
-  if (!isPassword(sshPassword)) return { message: "Provide the SSH password." };
-  if (becomeMethod !== "sudo" && becomeMethod !== "su")
-    return { message: "Choose sudo or su as the become method." };
-  if (becomeMethod === "su" && !isPassword(suPassword))
+    return { message: 'Provide a valid SSH username.' };
+  if (!isPassword(sshPassword)) return { message: 'Provide the SSH password.' };
+  if (becomeMethod !== 'sudo' && becomeMethod !== 'su')
+    return { message: 'Choose sudo or su as the become method.' };
+  if (becomeMethod === 'su' && !isPassword(suPassword))
     return {
-      message: "Provide the root su password when the become method is su.",
+      message: 'Provide the root su password when the become method is su.',
     };
-  if (becomeMethod === "sudo" && suPassword !== null && suPassword !== "")
+  if (becomeMethod === 'sudo' && suPassword !== null && suPassword !== '')
     return {
-      message: "A root su password is only used with the su become method.",
+      message: 'A root su password is only used with the su become method.',
     };
   return {
     credentials: {
       sshUsername: sshUsername.trim(),
       sshPassword,
       becomeMethod,
-      ...(becomeMethod === "su" ? { suPassword: suPassword as string } : {}),
+      ...(becomeMethod === 'su' ? { suPassword: suPassword as string } : {}),
     },
   };
 }
 
-export function packAnsibleDeployment(
-  privateKey: string,
-  credentials?: AnsibleCredentials,
-) {
+export function packAnsibleDeployment(privateKey: string, credentials?: AnsibleCredentials) {
   return credentials ? JSON.stringify({ privateKey, credentials }) : privateKey;
 }
 
 export function unpackAnsibleDeployment(value: string) {
-  if (value.startsWith("-----BEGIN ")) return { privateKey: value };
+  if (value.startsWith('-----BEGIN ')) return { privateKey: value };
   const { privateKey, credentials } = JSON.parse(value);
   const sshUsername: unknown = credentials?.sshUsername;
   const sshPassword: unknown = credentials?.sshPassword;
   const becomeMethod: unknown = credentials?.becomeMethod;
   const suPassword: unknown = credentials?.suPassword;
   if (
-    typeof privateKey !== "string" ||
-    typeof sshUsername !== "string" ||
+    typeof privateKey !== 'string' ||
+    typeof sshUsername !== 'string' ||
     !sshUsername.trim() ||
     Buffer.byteLength(sshUsername) > 256 ||
     !isPassword(sshPassword) ||
-    (becomeMethod !== "sudo" && becomeMethod !== "su") ||
-    (becomeMethod === "su" && !isPassword(suPassword)) ||
-    (becomeMethod === "sudo" && suPassword !== undefined)
+    (becomeMethod !== 'sudo' && becomeMethod !== 'su') ||
+    (becomeMethod === 'su' && !isPassword(suPassword)) ||
+    (becomeMethod === 'sudo' && suPassword !== undefined)
   )
-    throw new Error("Invalid Ansible deployment payload");
+    throw new Error('Invalid Ansible deployment payload');
   return {
     privateKey,
     credentials: {
       sshUsername,
       sshPassword,
       becomeMethod,
-      ...(becomeMethod === "su" ? { suPassword: suPassword as string } : {}),
+      ...(becomeMethod === 'su' ? { suPassword: suPassword as string } : {}),
     },
   };
 }

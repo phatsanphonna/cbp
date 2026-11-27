@@ -1,4 +1,4 @@
-x-database-url: &database-url "postgresql://cbp:${POSTGRES_PASSWORD:?Set a URL-safe POSTGRES_PASSWORD in .env}@db:5432/cbp"
+x-database-url: &database-url 'postgresql://cbp:${POSTGRES_PASSWORD:?Set a URL-safe POSTGRES_PASSWORD in .env}@db:5432/cbp'
 x-web-build: &web-build
   context: .
   target: web
@@ -13,7 +13,7 @@ services:
     volumes:
       - cbp-db:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U cbp -d cbp"]
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U cbp -d cbp']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -28,13 +28,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ["bun", "--filter", "@cbp/database", "db:setup-controller"]
+    command: ['bun', '--filter', '@cbp/database', 'db:setup-controller']
 
   web:
     image: cbp-web:local
     build: *web-build
     environment:
-      DATABASE_URL: "postgresql://cbp_web:${CBP_DATABASE_WEB_PASSWORD:?Set a URL-safe CBP_DATABASE_WEB_PASSWORD in .env}@db:5432/cbp"
+      DATABASE_URL: 'postgresql://cbp_web:${CBP_DATABASE_WEB_PASSWORD:?Set a URL-safe CBP_DATABASE_WEB_PASSWORD in .env}@db:5432/cbp'
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://127.0.0.1:3000}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
       CBP_ADMIN_EMAILS: ${CBP_ADMIN_EMAILS:-}
@@ -66,9 +66,9 @@ services:
       db-setup:
         condition: service_completed_successfully
     ports:
-      - "${CBP_WEB_BIND:-127.0.0.1}:${CBP_WEB_PORT:-3000}:3000"
+      - '${CBP_WEB_BIND:-127.0.0.1}:${CBP_WEB_PORT:-3000}:3000'
       - target: 50051
-        published: "${CBP_CONTROLLER_PORT:-50051}"
+        published: '${CBP_CONTROLLER_PORT:-50051}'
         host_ip: ${CBP_CONTROLLER_BIND:-127.0.0.1}
         protocol: tcp
     restart: unless-stopped
@@ -78,7 +78,7 @@ services:
     build:
       context: .
       target: vault
-    command: ["server", "-config=/vault/config/cbp.hcl"]
+    command: ['server', '-config=/vault/config/cbp.hcl']
     environment:
       VAULT_ADDR: http://127.0.0.1:8200
     network_mode: service:web

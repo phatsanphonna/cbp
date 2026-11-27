@@ -1,6 +1,6 @@
-import { eq, sql } from "drizzle-orm";
-import type { openDatabase } from "./index.js";
-import { controllerStatus } from "./inventory-schema.js";
+import { eq, sql } from 'drizzle-orm';
+import type { openDatabase } from './index.js';
+import { controllerStatus } from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 const controllerId = 1;
@@ -13,9 +13,7 @@ export function saveControllerHeartbeat(db: Database) {
       .insert(controllerStatus)
       .values({ id: controllerId, lastSeenAt })
       .onConflictDoUpdate({ target: controllerStatus.id, set: { lastSeenAt } });
-    await tx.execute(
-      sql`select pg_notify('cbp_deployment_updates', 'controller')`,
-    );
+    await tx.execute(sql`select pg_notify('cbp_deployment_updates', 'controller')`);
   });
 }
 

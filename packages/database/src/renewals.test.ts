@@ -41,17 +41,14 @@ test.skipIf(!databaseURL)(
         domain: 'renewal.example.com',
         ...original,
       });
-      const status = async () =>
-        (await listRenewals(db)).find((row) => row.id === id);
+      const status = async () => (await listRenewals(db)).find((row) => row.id === id);
       const initial = await status();
       expect(initial?.enabled).toBe(false);
       expect(initial?.nextAttempt.getTime()).toBe(now - day / 3);
       expect(await findIssuedCertificate(db, original.sans)).toBeUndefined();
 
       await setAutoRenew(db, id, true, original.fingerprint);
-      const claims = (
-        await Promise.all([claimRenewal(db), claimRenewal(db)])
-      ).filter(Boolean);
+      const claims = (await Promise.all([claimRenewal(db), claimRenewal(db)])).filter(Boolean);
       expect(claims).toHaveLength(1);
       const attempt = claims[0]!;
       expect(attempt.id).toBe(id);
@@ -78,9 +75,7 @@ test.skipIf(!databaseURL)(
       expect(
         await findIssuedCertificate(db, [...renewed.sans, 'extra.example.com']),
       ).toBeUndefined();
-      expect(await findRenewalKey(db, id, renewed.fullchain)).toBe(
-        'encrypted key',
-      );
+      expect(await findRenewalKey(db, id, renewed.fullchain)).toBe('encrypted key');
       expect(await updateCertificateChain(db, id, original)).toBe(true);
       expect(await findRenewalKey(db, id, original.fullchain)).toBeNull();
       const [renewedVersion, originalVersion] = await listCertificateVersions(db, id);
@@ -88,19 +83,11 @@ test.skipIf(!databaseURL)(
       expect(originalVersion).toMatchObject({ fullchain: original.fullchain });
 
       // A version id from the wrong chain or an unknown id is rejected.
-      expect(
-        await updateCertificateChain(db, id, renewed, originalVersion.id),
-      ).toBe('changed');
-      expect(
-        await updateCertificateChain(db, id, renewed, randomUUID()),
-      ).toBe('changed');
+      expect(await updateCertificateChain(db, id, renewed, originalVersion.id)).toBe('changed');
+      expect(await updateCertificateChain(db, id, renewed, randomUUID())).toBe('changed');
 
-      expect(
-        await updateCertificateChain(db, id, renewed, renewedVersion.id),
-      ).toBe(true);
-      expect(await findRenewalKey(db, id, renewed.fullchain)).toBe(
-        'encrypted key',
-      );
+      expect(await updateCertificateChain(db, id, renewed, renewedVersion.id)).toBe(true);
+      expect(await findRenewalKey(db, id, renewed.fullchain)).toBe('encrypted key');
       const afterRestore = await listCertificateVersions(db, id);
       expect(afterRestore.map((version) => version.fullchain)).toEqual([
         original.fullchain,
@@ -108,15 +95,17 @@ test.skipIf(!databaseURL)(
       ]);
       expect(afterRestore.some((version) => version.id === renewedVersion.id)).toBe(false);
 
-      for (const n of [1, 2, 3, 4])
+      for (const versionNumber of [1, 2, 3, 4])
         await updateCertificateChain(db, id, {
           ...original,
           fingerprint: randomUUID(),
-          fullchain: `chain ${n}`,
+          fullchain: `chain ${versionNumber}`,
         });
-      expect(
-        (await listCertificateVersions(db, id)).map((version) => version.fullchain),
-      ).toEqual(['chain 3', 'chain 2', 'chain 1']);
+      expect((await listCertificateVersions(db, id)).map((version) => version.fullchain)).toEqual([
+        'chain 3',
+        'chain 2',
+        'chain 1',
+      ]);
     } finally {
       await removeCertificate(db, id);
       await db.$client.close();

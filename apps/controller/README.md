@@ -44,7 +44,7 @@ CBP_AGENT_CONTROLLER_ADDRESS=cbp-controller.internal:50051
 
 Generate independent random secrets with `openssl rand -hex 32`. Protect the file with `chmod 600 .env`.
 
-Put the controller certificate and key in `controller-fullchain.pem` and `controller.key` at the repository root, or set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` to their host paths. If the agent-facing port differs from 50051, set `CBP_CONTROLLER_PORT` to the port in `CBP_AGENT_CONTROLLER_ADDRESS`. For a private CA, set `CBP_AGENT_CA_FILE` to the CA path on the agent hosts. Set `CBP_AGENT_CA_DOWNLOAD_FILE` to the public CA PEM on the Docker host and make it readable by the web container user to enable the download.
+Put the controller certificate and key in `controller-fullchain.pem` and `controller.key` at the repository root, or set `CBP_CONTROLLER_TLS_CERT` and `CBP_CONTROLLER_TLS_KEY` to their host paths. If the agent-facing port differs from 50051, set `CBP_CONTROLLER_PORT` to the port in `CBP_AGENT_CONTROLLER_ADDRESS`. For a private CA, set `CBP_AGENT_CA_FILE` to the CA path on the agent hosts. Set `CBP_AGENT_CA_DOWNLOAD_FILE` to the public CA PEM on the Docker host and make it readable by the web container user to enable the download. Keep `controller.key` readable by UID or GID 1000, because the controller container runs as that user. For example, use a root-owned key with group 1000 and mode `0440`.
 
 ### 2. Build and start the services
 
@@ -234,7 +234,7 @@ Replace `cbp-controller.internal` with the controller's DNS name. Omit `--ca` if
 
 For an existing enrollment on a Linux host running systemd, use `cbp-agent --install-service` as root with the existing settings in the agent YAML or supplied as flags. The service starts after a successful check-in and starts again at boot. Existing systemd units with single-dash flags continue to work.
 
-On Linux, the root agent appends Logrus output to `/var/log/cbp/agent.log`. Other runs default to `agent.log` next to the credential. Set `--log-file` or `logFile` in the agent YAML to change the path. Follow a root agent with `sudo tail -f /var/log/cbp/agent.log` or `journalctl -u cbp-agent -f`.
+On Linux, the root agent appends its log to `/var/log/cbp/agent.log`. Other runs default to `agent.log` next to the credential. Set `--log-file` or `logFile` in the agent YAML to change the path. Follow a root agent with `sudo tail -f /var/log/cbp/agent.log` or `journalctl -u cbp-agent -f`.
 
 Use `cbp-agent register --config /etc/cbp/cbp.yaml` with a fresh `CBP_AGENT_ENROLLMENT_CODE` to enroll and check in once. Add `--install-service` to start the systemd service. If the YAML does not contain the connection settings, pass `--host`, `--controller`, `--credential-file`, and `--ca` as in the enrollment command.
 

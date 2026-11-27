@@ -4,11 +4,7 @@ import { isIP } from 'node:net';
 const dnsLabel = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 export function http01Names(domain: string, sans: string[]) {
-  const names = [
-    ...new Set(
-      (sans.length ? sans : [domain]).map((name) => name.toLowerCase()),
-    ),
-  ];
+  const names = [...new Set((sans.length ? sans : [domain]).map((name) => name.toLowerCase()))];
   return names.includes(domain.toLowerCase()) &&
     names.every(
       (name) =>

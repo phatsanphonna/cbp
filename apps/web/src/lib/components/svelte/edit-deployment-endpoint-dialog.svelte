@@ -1,21 +1,14 @@
 <script lang="ts">
-  import { enhance } from "$app/forms";
-  import { toast } from "svelte-sonner";
-  import DeploymentEndpointFields from "#lib/components/svelte/deployment-endpoint-fields.svelte";
-  import FormSelect from "#lib/components/svelte/form-select.svelte";
-  import RemoveDeploymentDialog from "#lib/components/svelte/remove-deployment-dialog.svelte";
-  import { Button } from "#lib/components/ui/button/index.ts";
-  import * as Dialog from "#lib/components/ui/dialog/index.ts";
-  import {
-    Field,
-    FieldGroup,
-    FieldLabel,
-  } from "#lib/components/ui/field/index.ts";
-  import { Spinner } from "#lib/components/ui/spinner/index.ts";
-  import {
-    deploymentMethods,
-    deploymentServices,
-  } from "#lib/deployment-services.js";
+  import { enhance } from '$app/forms';
+  import { toast } from 'svelte-sonner';
+  import DeploymentEndpointFields from '#lib/components/svelte/deployment-endpoint-fields.svelte';
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import RemoveDeploymentDialog from '#lib/components/svelte/remove-deployment-dialog.svelte';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import * as Dialog from '#lib/components/ui/dialog/index.ts';
+  import { Field, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import { Spinner } from '#lib/components/ui/spinner/index.ts';
+  import { deploymentMethods, deploymentServices } from '#lib/deployment-services.js';
 
   let {
     deploymentId,
@@ -37,8 +30,8 @@
     engine && !deploymentServices.some((service) => service === engine),
   );
   const serviceOptions = $derived([
-    ...(legacyService && engine ? [{ value: "keep", label: engine }] : []),
-    { value: "", label: "Not specified" },
+    ...(legacyService && engine ? [{ value: 'keep', label: engine }] : []),
+    { value: '', label: 'Not specified' },
     ...deploymentServices.map((value) => ({ value, label: value })),
   ]);
   const methodOptions = deploymentMethods.map((value) => ({
@@ -55,21 +48,17 @@
 <Dialog.Root bind:open>
   <Dialog.Trigger>
     {#snippet child({ props })}
-      <Button
-        {...props}
-        variant="ghost"
-        size="sm"
-        aria-label={`Edit deployment at ${endpoint}`}>Edit deployment</Button
-      >
+      <Button {...props} variant="ghost" size="sm" aria-label={`Edit deployment at ${endpoint}`}>
+        Edit deployment
+      </Button>
     {/snippet}
   </Dialog.Trigger>
   <Dialog.Content class="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
     <Dialog.Header>
       <Dialog.Title>Edit deployment</Dialog.Title>
-      <Dialog.Description
-        >Changing the address or port marks this deployment as pending
-        verification.</Dialog.Description
-      >
+      <Dialog.Description>
+        Changing the address or port marks this deployment as pending verification.
+      </Dialog.Description>
     </Dialog.Header>
     <form
       id="{id}-edit"
@@ -80,12 +69,15 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === "success") {
+            if (result.type === 'success') {
               open = false;
-              if (typeof result.data?.endpointMessage === "string") {
+              if (typeof result.data?.endpointMessage === 'string') {
                 toast.success(result.data.endpointMessage);
               }
-            } else if (result.type === 'failure' && typeof result.data?.endpointError === 'string') {
+            } else if (
+              result.type === 'failure' &&
+              typeof result.data?.endpointError === 'string'
+            ) {
               toast.error(result.data.endpointError);
             }
           } finally {
@@ -103,7 +95,7 @@
             {id}
             name="engine"
             items={serviceOptions}
-            value={legacyService ? "keep" : (engine ?? "")}
+            value={legacyService ? 'keep' : (engine ?? '')}
             placeholder="Not specified"
           />
         </Field>
@@ -132,16 +124,8 @@
             <Button {...props} type="button" variant="outline">Cancel</Button>
           {/snippet}
         </Dialog.Close>
-        <Button
-          type="submit"
-          form="{id}-edit"
-          disabled={pending}
-          aria-busy={pending}
-        >
-          {#if pending}<Spinner
-              data-icon="inline-start"
-              aria-hidden="true"
-            />{/if}
+        <Button type="submit" form="{id}-edit" disabled={pending} aria-busy={pending}>
+          {#if pending}<Spinner data-icon="inline-start" aria-hidden="true" />{/if}
           Save deployment
         </Button>
       </div>

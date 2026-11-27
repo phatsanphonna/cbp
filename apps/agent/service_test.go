@@ -32,6 +32,7 @@ func TestAgentServiceUnit(t *testing.T) {
 		!strings.Contains(command, strings.ReplaceAll(credential, "\\", "\\\\")) ||
 		!strings.Contains(command, `--log-file `+strconv.Quote(logPath)) ||
 		!strings.Contains(unit, "WantedBy=multi-user.target") ||
+		!strings.Contains(unit, "RestartPreventExitStatus=3\n") ||
 		strings.Contains(command, " --once") || strings.Contains(command, " --install-service") || strings.Contains(command, " --help") {
 		t.Fatalf("unexpected unit:\n%s", unit)
 	}

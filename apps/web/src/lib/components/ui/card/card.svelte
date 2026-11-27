@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { cn, type WithElementRef } from "#lib/utils.js";
-  import type { HTMLAttributes } from "svelte/elements";
+  import { cn, type WithElementRef } from '#lib/utils.js';
+  import type { HTMLAttributes } from 'svelte/elements';
 
   let {
     ref = $bindable(null),
     class: className,
     children,
-    size = "default",
+    size = 'default',
     ...restProps
   }: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
-    size?: "default" | "sm";
+    size?: 'default' | 'sm';
   } = $props();
 </script>
 
@@ -18,7 +18,7 @@
   data-slot="card"
   data-size={size}
   class={cn(
-    "ring-foreground/10 bg-card text-card-foreground gap-(--card-spacing) overflow-hidden rounded-none py-(--card-spacing) text-xs/relaxed ring-1 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-none *:[img:last-child]:rounded-none group/card flex flex-col",
+    'ring-foreground/10 bg-card text-card-foreground gap-(--card-spacing) overflow-hidden rounded-none py-(--card-spacing) text-xs/relaxed ring-1 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-none *:[img:last-child]:rounded-none group/card flex flex-col',
     className,
   )}
   {...restProps}

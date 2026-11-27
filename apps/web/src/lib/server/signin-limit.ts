@@ -23,11 +23,7 @@ export function reserveCredentialCheck() {
   };
 }
 
-export function allowAccountSignIn(
-  accountId: string | undefined,
-  login: string,
-  now = Date.now(),
-) {
+export function allowAccountSignIn(accountId: string | undefined, login: string, now = Date.now()) {
   if (now >= accountSweepAt) {
     for (const attempts of [accounts, unknownLogins]) {
       for (const [key, bucket] of attempts) {

@@ -44,9 +44,15 @@ func main() {
 	defer stop()
 	if err := run(ctx, os.Args[1:]); err != nil {
 		slog.Error("agent stopped", "error", err)
+		if status.Code(err) == codes.Unauthenticated {
+			// The credential was revoked or never enrolled; restarting cannot fix it.
+			os.Exit(unauthenticatedExitCode)
+		}
 		os.Exit(1)
 	}
 }
+
+const unauthenticatedExitCode = 3
 
 func runAgent(ctx context.Context, flags *pflag.FlagSet, options *agentOptions) error {
 	config, err := loadAgentConfig(flags, options)

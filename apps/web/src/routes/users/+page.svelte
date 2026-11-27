@@ -31,8 +31,7 @@
   const column = createColumnHelper<DataTableFeatures, User>();
   const columns = column.columns([
     column.accessor(
-      ({ name, email, username, groups }) =>
-        [name, email, username ?? '', ...groups].join(' '),
+      ({ name, email, username, groups }) => [name, email, username ?? '', ...groups].join(' '),
       {
         id: 'search',
         header: 'Name',
@@ -45,7 +44,7 @@
       id: 'username',
       header: 'Username',
     }),
-    column.accessor(({ groups }) => groups.length ? groups.join(', ') : '—', {
+    column.accessor(({ groups }) => (groups.length ? groups.join(', ') : '—'), {
       id: 'groups',
       header: 'Groups',
     }),
@@ -78,9 +77,7 @@
     permissionChecks = Object.fromEntries(
       data.permissions.map((permission) => [
         permission.key,
-        user.isAdmin
-          ? permission.key === 'sudo'
-          : directPermissions.includes(permission.key),
+        user.isAdmin ? permission.key === 'sudo' : directPermissions.includes(permission.key),
       ]),
     );
     permissionsOpen = true;
@@ -110,7 +107,7 @@
       return async ({ result, update }) => {
         try {
           await update();
-          if (result.type === "success") {
+          if (result.type === 'success') {
             close();
             toast.success(message);
           } else {
@@ -132,7 +129,7 @@
   <header class="flex flex-wrap items-center justify-between gap-4">
     <h1 id="users-heading" class="font-heading text-xl font-semibold">Users</h1>
     {#if data.canManageUsers}
-      <Button href={resolve("/users/new")}>Create user</Button>
+      <Button href={resolve('/users/new')}>Create user</Button>
     {/if}
   </header>
 
@@ -144,9 +141,7 @@
       rowKey={(user) => user.id}
       rowHeader="search"
       filter={{ column: 'search', label: 'Search users' }}
-      emptyMessage={data.users.length
-        ? 'No users match your search.'
-        : 'No user accounts yet.'}
+      emptyMessage={data.users.length ? 'No users match your search.' : 'No user accounts yet.'}
       tableClass="min-w-[52rem]"
     />
   </div>
@@ -162,7 +157,15 @@
         </AlertDialog.Description>
       </AlertDialog.Header>
       {#if userToRemove}
-        <form method="POST" action="?/remove" use:enhance={() => async ({ result, update }) => { await update(); notifyFormResult(result, {}); }}>
+        <form
+          method="POST"
+          action="?/remove"
+          use:enhance={() =>
+            async ({ result, update }) => {
+              await update();
+              notifyFormResult(result, {});
+            }}
+        >
           <input type="hidden" name="userId" value={userToRemove.id} />
           <AlertDialog.Footer>
             <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
@@ -187,7 +190,11 @@
         <form
           method="POST"
           action="?/assignGroups"
-          use:enhance={saveAssignment("User groups updated.", (value) => (savingGroups = value), () => (groupsOpen = false))}
+          use:enhance={saveAssignment(
+            'User groups updated.',
+            (value) => (savingGroups = value),
+            () => (groupsOpen = false),
+          )}
         >
           <input type="hidden" name="userId" value={selectedUser.id} />
           <Field.FieldSet>
@@ -202,7 +209,10 @@
                       value={String(group.id)}
                       checked={selectedUser.groupIds.includes(group.id)}
                     />
-                    <Field.FieldLabel for={`user-${selectedUser.id}-group-${group.id}`} class="font-normal">
+                    <Field.FieldLabel
+                      for={`user-${selectedUser.id}-group-${group.id}`}
+                      class="font-normal"
+                    >
                       {group.name}
                     </Field.FieldLabel>
                   </Field.Field>
@@ -210,15 +220,24 @@
               </div>
             {:else}
               <Field.FieldDescription>
-                No groups exist yet. <a class="underline underline-offset-4" href={resolve("/groups")}>Create a group</a> first.
+                No groups exist yet. <a
+                  class="underline underline-offset-4"
+                  href={resolve('/groups')}
+                >
+                  Create a group
+                </a> first.
               </Field.FieldDescription>
             {/if}
           </Field.FieldSet>
           <Dialog.Footer class="mt-5">
             <Dialog.Close>
-              {#snippet child({ props })}<Button {...props} type="button" variant="outline">Cancel</Button>{/snippet}
+              {#snippet child({ props })}<Button {...props} type="button" variant="outline">
+                  Cancel
+                </Button>{/snippet}
             </Dialog.Close>
-            <Button type="submit" disabled={savingGroups}>{savingGroups ? "Saving…" : "Save groups"}</Button>
+            <Button type="submit" disabled={savingGroups}>
+              {savingGroups ? 'Saving…' : 'Save groups'}
+            </Button>
           </Dialog.Footer>
         </form>
       {/if}
@@ -234,7 +253,8 @@
             {#if selectedUser.isAdmin}
               Sudo is managed by CBP_ADMIN_EMAILS and cannot be changed here.
             {:else}
-              Direct permissions for {selectedUser.name} combine with permissions inherited from groups. Sudo grants full administrator access.
+              Direct permissions for {selectedUser.name} combine with permissions inherited from groups.
+              Sudo grants full administrator access.
             {/if}
           {/if}
         </Dialog.Description>
@@ -243,7 +263,11 @@
         <form
           method="POST"
           action="?/assignPermissions"
-          use:enhance={saveAssignment("User permissions updated.", (value) => (savingPermissions = value), () => (permissionsOpen = false))}
+          use:enhance={saveAssignment(
+            'User permissions updated.',
+            (value) => (savingPermissions = value),
+            () => (permissionsOpen = false),
+          )}
         >
           <input type="hidden" name="userId" value={selectedUser.id} />
           <Field.FieldSet>
@@ -256,10 +280,15 @@
                     name="permission"
                     value={permission.key}
                     checked={permissionChecks[permission.key]}
-                    onCheckedChange={(checked) => changePermission(permission.key, checked === true)}
-                    disabled={selectedUser.isAdmin || (permission.key !== 'sudo' && permissionChecks.sudo)}
+                    onCheckedChange={(checked) =>
+                      changePermission(permission.key, checked === true)}
+                    disabled={selectedUser.isAdmin ||
+                      (permission.key !== 'sudo' && permissionChecks.sudo)}
                   />
-                  <Field.FieldLabel for={`user-${selectedUser.id}-${permission.key}`} class="grid gap-1 font-normal">
+                  <Field.FieldLabel
+                    for={`user-${selectedUser.id}-${permission.key}`}
+                    class="grid gap-1 font-normal"
+                  >
                     <span class="font-medium">{permission.label}</span>
                     <span class="text-xs text-muted-foreground">
                       {permission.description}
@@ -274,9 +303,13 @@
           </Field.FieldSet>
           <Dialog.Footer class="mt-5">
             <Dialog.Close>
-              {#snippet child({ props })}<Button {...props} type="button" variant="outline">Cancel</Button>{/snippet}
+              {#snippet child({ props })}<Button {...props} type="button" variant="outline">
+                  Cancel
+                </Button>{/snippet}
             </Dialog.Close>
-            <Button type="submit" disabled={savingPermissions || selectedUser.isAdmin}>{savingPermissions ? "Saving…" : "Save permissions"}</Button>
+            <Button type="submit" disabled={savingPermissions || selectedUser.isAdmin}>
+              {savingPermissions ? 'Saving…' : 'Save permissions'}
+            </Button>
           </Dialog.Footer>
         </form>
       {/if}
@@ -329,10 +362,9 @@
           {#if data.canManageUsers && !user.isCurrentUser}
             <DropdownMenu.Separator />
             <DropdownMenu.Group>
-              <DropdownMenu.Item
-                variant="destructive"
-                onSelect={() => confirmRemove(user)}
-              >Remove</DropdownMenu.Item>
+              <DropdownMenu.Item variant="destructive" onSelect={() => confirmRemove(user)}>
+                Remove
+              </DropdownMenu.Item>
             </DropdownMenu.Group>
           {/if}
         </DropdownMenu.Content>

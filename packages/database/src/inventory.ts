@@ -16,8 +16,9 @@ import {
   notInArray,
   or,
   sql,
-} from "drizzle-orm";
-import type { openDatabase } from "./index.js";
+  type SQL,
+} from 'drizzle-orm';
+import type { openDatabase } from './index.js';
 import {
   alerts,
   certificates,
@@ -28,9 +29,10 @@ import {
   deployments,
   hostAgents,
   hosts,
-} from "./inventory-schema.js";
+} from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 const inventoryId = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const {
   fullchain: _fullchain,
@@ -82,38 +84,30 @@ export function listCertificateOptions(db: Database, ids?: string[]) {
     })
     .from(certificates)
     .where(ids ? inArray(certificates.id, ids) : undefined)
-    .orderBy(
-      asc(certificates.domain),
-      asc(certificates.validUntil),
-      asc(certificates.id),
-    );
+    .orderBy(asc(certificates.domain), asc(certificates.validUntil), asc(certificates.id));
 }
 
 type DeploymentLink = Pick<
   typeof deployments.$inferSelect,
-  "certificateId" | "endpoint" | "method" | "engine"
+  'certificateId' | 'endpoint' | 'method' | 'engine'
 > & { hostId: string };
 
 export async function linkDeployment(db: Database, values: DeploymentLink) {
-  if (
-    !inventoryId.test(values.hostId) ||
-    !inventoryId.test(values.certificateId)
-  )
-    return "missing";
+  if (!inventoryId.test(values.hostId) || !inventoryId.test(values.certificateId)) return 'missing';
 
   return db.transaction(async (tx) => {
     const [host] = await tx
       .select({ id: hosts.id })
       .from(hosts)
       .where(eq(hosts.id, values.hostId))
-      .for("key share");
-    if (!host) return "missing";
+      .for('key share');
+    if (!host) return 'missing';
     const [certificate] = await tx
       .select({ id: certificates.id, fingerprint: certificates.fingerprint })
       .from(certificates)
       .where(eq(certificates.id, values.certificateId))
-      .for("key share");
-    if (!certificate) return "missing";
+      .for('key share');
+    if (!certificate) return 'missing';
 
     const [linked] = await tx
       .insert(deployments)
@@ -123,7 +117,7 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
         set: {
           hostId: values.hostId,
           method: values.method,
-          status: "Pending",
+          status: 'Pending',
           engine: values.engine,
           listenerStatus: null,
           listenerAddress: null,
@@ -136,7 +130,7 @@ export async function linkDeployment(db: Database, values: DeploymentLink) {
         setWhere: isNull(deployments.hostId),
       })
       .returning({ id: deployments.id });
-    return linked ? "linked" : "duplicate";
+    return linked ? 'linked' : 'duplicate';
   });
 }
 
@@ -150,16 +144,13 @@ export async function updateDeploymentEndpoint(
   engine?: string | null,
   method?: typeof deployments.$inferSelect.method,
 ) {
-  const ownerId = "hostId" in owner ? owner.hostId : owner.certificateId;
-  if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return "missing";
+  const ownerId = 'hostId' in owner ? owner.hostId : owner.certificateId;
+  if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return 'missing';
 
-  const ownerColumn =
-    "hostId" in owner ? deployments.hostId : deployments.certificateId;
+  const ownerColumn = 'hostId' in owner ? deployments.hostId : deployments.certificateId;
   const targetChanged = or(
     sql`${deployments.endpoint} <> ${endpoint}`,
-    engine === undefined
-      ? undefined
-      : sql`${deployments.engine} is distinct from ${engine}`,
+    engine === undefined ? undefined : sql`${deployments.engine} is distinct from ${engine}`,
     method === undefined ? undefined : sql`${deployments.method} <> ${method}`,
   );
   try {
@@ -179,28 +170,18 @@ export async function updateDeploymentEndpoint(
       })
       .where(and(eq(deployments.id, id), eq(ownerColumn, ownerId)))
       .returning({ id: deployments.id });
-    return updated ? "updated" : "missing";
+    return updated ? 'updated' : 'missing';
   } catch (error) {
-    if (
-      violatesConstraint(
-        error,
-        "cbp_deployments_certificate_id_endpoint_unique",
-      )
-    )
-      return "duplicate";
+    if (violatesConstraint(error, 'cbp_deployments_certificate_id_endpoint_unique'))
+      return 'duplicate';
     throw error;
   }
 }
 
-export async function removeDeployment(
-  db: Database,
-  owner: DeploymentOwner,
-  id: string,
-) {
-  const ownerId = "hostId" in owner ? owner.hostId : owner.certificateId;
-  if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return "missing";
-  const ownerColumn =
-    "hostId" in owner ? deployments.hostId : deployments.certificateId;
+export async function removeDeployment(db: Database, owner: DeploymentOwner, id: string) {
+  const ownerId = 'hostId' in owner ? owner.hostId : owner.certificateId;
+  if (!inventoryId.test(id) || !inventoryId.test(ownerId)) return 'missing';
+  const ownerColumn = 'hostId' in owner ? deployments.hostId : deployments.certificateId;
   const scope = and(eq(deployments.id, id), eq(ownerColumn, ownerId));
 
   return db.transaction(async (tx) => {
@@ -208,14 +189,14 @@ export async function removeDeployment(
       .select({ hostId: deployments.hostId })
       .from(deployments)
       .where(scope);
-    if (!deployment) return "missing";
+    if (!deployment) return 'missing';
     if (deployment.hostId) {
       // Claims and results take this lock before changing a job.
       await tx
         .select({ id: hosts.id })
         .from(hosts)
         .where(eq(hosts.id, deployment.hostId))
-        .for("update");
+        .for('update');
     }
     const sameHost = deployment.hostId
       ? eq(deployments.hostId, deployment.hostId)
@@ -224,40 +205,25 @@ export async function removeDeployment(
       .select({ id: deployments.id })
       .from(deployments)
       .where(and(scope, sameHost))
-      .for("update");
-    if (!current) return "changed";
+      .for('update');
+    if (!current) return 'changed';
 
-    const [schema] = await tx.execute<{ has_jobs: boolean }>(
-      sql`select to_regclass('cbp_deployment_jobs') is not null as has_jobs`,
-    );
-    if (schema.has_jobs) {
-      const [running] = await tx
-        .select({ id: deploymentJobs.id })
-        .from(deploymentJobs)
-        .where(
-          and(
-            eq(deploymentJobs.deploymentId, id),
-            eq(deploymentJobs.status, "Running"),
-            gt(deploymentJobs.expiresAt, sql`now()`),
-          ),
-        );
-      if (running) return "busy";
-      await tx
-        .update(deploymentJobs)
-        .set({
-          status: "Failed",
-          detail: "The linked deployment was removed.",
-          finishedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(deploymentJobs.deploymentId, id),
-            inArray(deploymentJobs.status, ["Queued", "Running"]),
-          ),
-        );
-    }
+    if (await hasRunningJob(tx, eq(deploymentJobs.deploymentId, id))) return 'busy';
+    await tx
+      .update(deploymentJobs)
+      .set({
+        status: 'Failed',
+        detail: 'The linked deployment was removed.',
+        finishedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(deploymentJobs.deploymentId, id),
+          inArray(deploymentJobs.status, ['Queued', 'Running']),
+        ),
+      );
     await tx.delete(deployments).where(scope);
-    return "removed";
+    return 'removed';
   });
 }
 
@@ -265,7 +231,7 @@ export function registerHost(
   db: Database,
   values: Pick<
     typeof hosts.$inferInsert,
-    "name" | "agentManaged" | "ansibleManaged" | "applianceType"
+    'name' | 'agentManaged' | 'ansibleManaged' | 'applianceType'
   >,
 ) {
   return db
@@ -277,14 +243,10 @@ export function registerHost(
 
 export type HostReport = Pick<
   typeof hosts.$inferSelect,
-  "hostname" | "fqdn" | "operatingSystem" | "architecture"
+  'hostname' | 'fqdn' | 'operatingSystem' | 'architecture'
 > & { lastProbedAt: Date; httpsListeners?: string | null };
 
-export async function saveHostReport(
-  db: Pick<Database, "update">,
-  id: string,
-  report: HostReport,
-) {
+export async function saveHostReport(db: Pick<Database, 'update'>, id: string, report: HostReport) {
   if (!inventoryId.test(id)) return false;
   const [updated] = await db
     .update(hosts)
@@ -292,17 +254,14 @@ export async function saveHostReport(
     .where(
       and(
         eq(hosts.id, id),
-        or(
-          isNull(hosts.lastProbedAt),
-          lte(hosts.lastProbedAt, report.lastProbedAt),
-        ),
+        or(isNull(hosts.lastProbedAt), lte(hosts.lastProbedAt, report.lastProbedAt)),
       ),
     )
     .returning({ id: hosts.id });
   return Boolean(updated);
 }
 
-type HostPing = Pick<typeof hosts.$inferSelect, "lastPingAddress"> & {
+type HostPing = Pick<typeof hosts.$inferSelect, 'lastPingAddress'> & {
   lastPingAt: Date;
   lastPingStatus: NonNullable<typeof hosts.$inferSelect.lastPingStatus>;
 };
@@ -313,27 +272,34 @@ export function saveHostPing(db: Database, id: string, ping: HostPing) {
     .set({
       ...ping,
       consecutivePingFailures:
-        ping.lastPingStatus === "no-reply"
-          ? sql`${hosts.consecutivePingFailures} + 1`
-          : 0,
+        ping.lastPingStatus === 'no-reply' ? sql`${hosts.consecutivePingFailures} + 1` : 0,
     })
     .where(
-      and(
-        eq(hosts.id, id),
-        or(isNull(hosts.lastPingAt), lt(hosts.lastPingAt, ping.lastPingAt)),
-      ),
+      and(eq(hosts.id, id), or(isNull(hosts.lastPingAt), lt(hosts.lastPingAt, ping.lastPingAt))),
     );
 }
 
+// A worker that already claimed a job holds the private key, so wait for it to report.
+async function hasRunningJob(tx: Transaction, scope: SQL | undefined) {
+  const [running] = await tx
+    .select({ id: deploymentJobs.id })
+    .from(deploymentJobs)
+    .where(
+      and(scope, eq(deploymentJobs.status, 'Running'), gt(deploymentJobs.expiresAt, sql`now()`)),
+    );
+  return Boolean(running);
+}
+
 export async function removeHost(db: Database, id: string) {
-  if (!inventoryId.test(id)) return false;
+  if (!inventoryId.test(id)) return 'missing' as const;
   return db.transaction(async (tx) => {
     const [host] = await tx
       .select({ id: hosts.id })
       .from(hosts)
       .where(eq(hosts.id, id))
-      .for("update");
-    if (!host) return false;
+      .for('update');
+    if (!host) return 'missing' as const;
+    if (await hasRunningJob(tx, eq(deploymentJobs.hostId, id))) return 'busy' as const;
     const runIds = await tx
       .selectDistinct({ runId: deploymentJobs.runId })
       .from(deploymentJobs)
@@ -355,16 +321,13 @@ export async function removeHost(db: Database, id: string) {
         );
     }
     await tx.delete(hosts).where(eq(hosts.id, id));
-    return true;
+    return 'removed' as const;
   });
 }
 
 export async function findHostAddress(db: Database, id: string) {
   if (!inventoryId.test(id)) return null;
-  const [host] = await db
-    .select({ name: hosts.name })
-    .from(hosts)
-    .where(eq(hosts.id, id));
+  const [host] = await db.select({ name: hosts.name }).from(hosts).where(eq(hosts.id, id));
   return host?.name ?? null;
 }
 
@@ -394,15 +357,11 @@ export async function findHost(db: Database, id: string) {
     .from(deployments)
     .innerJoin(certificates, eq(deployments.certificateId, certificates.id))
     .where(eq(deployments.hostId, id))
-    .orderBy(
-      asc(deployments.endpoint),
-      asc(certificates.domain),
-      asc(deployments.id),
-    );
+    .orderBy(asc(deployments.endpoint), asc(certificates.domain), asc(deployments.id));
   return {
     ...host,
     deployments: endpoints.map((deployment) =>
-      deployment.method === "Ansible"
+      deployment.method === 'Ansible'
         ? {
             ...deployment,
             listenerStatus: null,
@@ -415,18 +374,14 @@ export async function findHost(db: Database, id: string) {
   };
 }
 
-export function listCertificates(
-  db: Database,
-  expiry?: { before: Date; after?: Date },
-) {
+export function listCertificates(db: Database, expiry?: { before: Date; after?: Date }) {
   return db
     .select({
       ...certificateMetadata,
       total: sql<number>`count(${deployments.id})`.mapWith(Number),
-      verified:
-        sql<number>`count(*) filter (where ${deployments.status} = 'Verified')`.mapWith(
-          Number,
-        ),
+      verified: sql<number>`count(*) filter (where ${deployments.status} = 'Verified')`.mapWith(
+        Number,
+      ),
     })
     .from(certificates)
     .leftJoin(deployments, eq(certificates.id, deployments.certificateId))
@@ -434,9 +389,7 @@ export function listCertificates(
       expiry
         ? and(
             lte(certificates.validUntil, expiry.before),
-            expiry.after
-              ? gt(certificates.validUntil, expiry.after)
-              : undefined,
+            expiry.after ? gt(certificates.validUntil, expiry.after) : undefined,
           )
         : undefined,
     )
@@ -451,6 +404,7 @@ export async function findCertificate(db: Database, id: string) {
       ...certificateMetadata,
       fullchain: certificates.fullchain,
       autoRenew: certificates.autoRenew,
+      autoDeploy: certificates.autoDeploy,
       renewalRetryAt: certificates.renewalRetryAt,
       renewalError: certificates.renewalError,
       hasRenewalKey: sql<boolean>`${certificates.renewalKey} is not null`,
@@ -499,11 +453,7 @@ export async function findCertificateDomain(db: Database, id: string) {
   return certificate?.domain ?? null;
 }
 
-export async function findCertificateVersion(
-  db: Database,
-  id: string,
-  versionId: string,
-) {
+export async function findCertificateVersion(db: Database, id: string, versionId: string) {
   if (!inventoryId.test(id) || !inventoryId.test(versionId)) return null;
   const [version] = await db
     .select({
@@ -517,10 +467,7 @@ export async function findCertificateVersion(
   return version ?? null;
 }
 
-export function registerCertificate(
-  db: Database,
-  values: typeof certificates.$inferInsert,
-) {
+export function registerCertificate(db: Database, values: typeof certificates.$inferInsert) {
   return db
     .insert(certificates)
     .values(values)
@@ -530,7 +477,7 @@ export function registerCertificate(
 
 type CertificateReplacement = Pick<
   typeof certificates.$inferSelect,
-  "issuer" | "serial" | "validFrom" | "validUntil" | "sans"
+  'issuer' | 'serial' | 'validFrom' | 'validUntil' | 'sans'
 > & { fingerprint: string; fullchain: string };
 
 export async function updateCertificateChain(
@@ -547,7 +494,7 @@ export async function updateCertificateChain(
 ) {
   if (!inventoryId.test(id)) return false;
   if (restoreVersionId !== undefined && !inventoryId.test(restoreVersionId))
-    return "changed" as const;
+    return 'changed' as const;
 
   try {
     return await db.transaction(async (tx) => {
@@ -560,7 +507,7 @@ export async function updateCertificateChain(
         })
         .from(certificates)
         .where(eq(certificates.id, id))
-        .for("update");
+        .for('update');
       if (!current) return false;
       if (
         renewal &&
@@ -582,12 +529,9 @@ export async function updateCertificateChain(
               eq(certificateVersions.certificateId, id),
             ),
           )
-          .for("update");
-        if (!version || version.fullchain !== replacement.fullchain)
-          return "changed" as const;
-        await tx
-          .delete(certificateVersions)
-          .where(eq(certificateVersions.id, restoreVersionId));
+          .for('update');
+        if (!version || version.fullchain !== replacement.fullchain) return 'changed' as const;
+        await tx.delete(certificateVersions).where(eq(certificateVersions.id, restoreVersionId));
         restored = version;
       }
 
@@ -617,29 +561,28 @@ export async function updateCertificateChain(
           fullchain: current.fullchain,
           renewalKey: renewal?.previousEncryptedKey ?? current.renewalKey,
         });
-        await tx.delete(certificateVersions).where(
-          and(
-            eq(certificateVersions.certificateId, id),
-            notInArray(
-              certificateVersions.id,
-              tx
-                .select({ id: certificateVersions.id })
-                .from(certificateVersions)
-                .where(eq(certificateVersions.certificateId, id))
-                .orderBy(
-                  desc(certificateVersions.replacedAt),
-                  desc(certificateVersions.id),
-                )
-                .limit(keptVersions),
+        await tx
+          .delete(certificateVersions)
+          .where(
+            and(
+              eq(certificateVersions.certificateId, id),
+              notInArray(
+                certificateVersions.id,
+                tx
+                  .select({ id: certificateVersions.id })
+                  .from(certificateVersions)
+                  .where(eq(certificateVersions.certificateId, id))
+                  .orderBy(desc(certificateVersions.replacedAt), desc(certificateVersions.id))
+                  .limit(keptVersions),
+              ),
             ),
-          ),
-        );
+          );
       }
       if (chainChanged || current.fingerprint !== replacement.fingerprint) {
         await tx
           .update(deployments)
           .set({
-            status: "Pending",
+            status: 'Pending',
             listenerStatus: null,
             listenerAddress: null,
             listenerCheckedAt: null,
@@ -651,8 +594,8 @@ export async function updateCertificateChain(
       return true;
     });
   } catch (error) {
-    if (violatesConstraint(error, "cbp_certificates_fingerprint_unique")) {
-      return "duplicate" as const;
+    if (violatesConstraint(error, 'cbp_certificates_fingerprint_unique')) {
+      return 'duplicate' as const;
     }
     throw error;
   }
@@ -661,9 +604,9 @@ export async function updateCertificateChain(
 function violatesConstraint(error: unknown, name: string) {
   const cause = error instanceof Error ? (error.cause ?? error) : error;
   return (
-    typeof cause === "object" &&
+    typeof cause === 'object' &&
     cause !== null &&
-    "constraint" in cause &&
+    'constraint' in cause &&
     cause.constraint === name
   );
 }
@@ -675,7 +618,7 @@ export async function removeCertificate(db: Database, id: string) {
       .select({ id: certificates.id })
       .from(certificates)
       .where(eq(certificates.id, id))
-      .for("update");
+      .for('update');
     if (!certificate) return false;
     const linked = await tx
       .select({ id: deployments.id })
@@ -685,8 +628,8 @@ export async function removeCertificate(db: Database, id: string) {
       await tx
         .update(deploymentJobs)
         .set({
-          status: "Failed",
-          detail: "The certificate was removed.",
+          status: 'Failed',
+          detail: 'The certificate was removed.',
           finishedAt: sql`now()`,
         })
         .where(
@@ -695,7 +638,7 @@ export async function removeCertificate(db: Database, id: string) {
               deploymentJobs.deploymentId,
               linked.map(({ id: deploymentId }) => deploymentId),
             ),
-            inArray(deploymentJobs.status, ["Queued", "Running"]),
+            inArray(deploymentJobs.status, ['Queued', 'Running']),
           ),
         );
     }
@@ -717,11 +660,7 @@ export function listAlerts(db: Database, openOnly = false) {
   return db
     .select()
     .from(alerts)
-    .where(
-      openOnly
-        ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt))
-        : undefined,
-    )
+    .where(openOnly ? and(isNull(alerts.resolvedAt), isNull(alerts.clearedAt)) : undefined)
     .orderBy(desc(alerts.detectedAt));
 }
 
@@ -738,18 +677,10 @@ export function addChannel(
   db: Database,
   values: Pick<
     typeof channels.$inferInsert,
-    | "provider"
-    | "destination"
-    | "severity"
-    | "encryptedSettings"
-    | "certificateIds"
+    'provider' | 'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'
   >,
 ) {
-  return db
-    .insert(channels)
-    .values(values)
-    .onConflictDoNothing()
-    .returning({ id: channels.id });
+  return db.insert(channels).values(values).onConflictDoNothing().returning({ id: channels.id });
 }
 
 export function setChannelEnabled(db: Database, id: number, enabled: boolean) {
@@ -765,21 +696,13 @@ export function updateChannel(
   id: number,
   values: Pick<
     typeof channels.$inferInsert,
-    "destination" | "severity" | "encryptedSettings" | "certificateIds"
+    'destination' | 'severity' | 'encryptedSettings' | 'certificateIds'
   >,
 ) {
-  return db
-    .update(channels)
-    .set(values)
-    .where(eq(channels.id, id))
-    .returning({ id: channels.id });
+  return db.update(channels).set(values).where(eq(channels.id, id)).returning({ id: channels.id });
 }
 
-export async function bindChannelToCertificate(
-  db: Database,
-  id: number,
-  certificateId: string,
-) {
+export async function bindChannelToCertificate(db: Database, id: number, certificateId: string) {
   if (!inventoryId.test(certificateId)) return false;
   const selected = sql`${certificateId}::uuid`;
   const [updated] = await db
@@ -806,8 +729,5 @@ export async function bindChannelToCertificate(
 }
 
 export function removeChannel(db: Database, id: number) {
-  return db
-    .delete(channels)
-    .where(eq(channels.id, id))
-    .returning({ id: channels.id });
+  return db.delete(channels).where(eq(channels.id, id)).returning({ id: channels.id });
 }

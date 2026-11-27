@@ -10,6 +10,8 @@ FROM debian:bookworm-slim AS controller
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=controller-build /out/cbp-controller /usr/local/bin/cbp-controller
+# Same UID as the web container, so one key-permission rule covers both.
+USER 1000:1000
 EXPOSE 50051
 ENTRYPOINT ["cbp-controller"]
 CMD ["serve", "-listen", "0.0.0.0:50051", "-tls-cert", "/run/cbp/controller-fullchain.pem", "-tls-key", "/run/cbp/controller.key"]

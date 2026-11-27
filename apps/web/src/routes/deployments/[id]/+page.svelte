@@ -1,6 +1,6 @@
 <script lang="ts">
-  import DeploymentJobDetails from "../deployment-job-details.svelte";
-  import type { PageProps } from "./$types";
+  import DeploymentJobDetails from '../deployment-job-details.svelte';
+  import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
 </script>

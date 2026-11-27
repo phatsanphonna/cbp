@@ -1,7 +1,9 @@
 const maxCredentialFormBytes = 8192;
 
-export async function readCredentialForm(request: Request) {
-  if (Number(request.headers.get("content-length")) > maxCredentialFormBytes)
+export async function readCredentialForm(
+  request: Request,
+): Promise<{ status: 400 | 413 } | { fields: FormData }> {
+  if (Number(request.headers.get('content-length')) > maxCredentialFormBytes)
     return { status: 413 } as const;
   if (!request.body) return { status: 400 } as const;
 
@@ -11,14 +13,14 @@ export async function readCredentialForm(request: Request) {
       transform(chunk, controller) {
         bytes += chunk.byteLength;
         if (bytes > maxCredentialFormBytes)
-          controller.error(new Error("Credential form too large"));
+          controller.error(new Error('Credential form too large'));
         else controller.enqueue(chunk);
       },
     }),
   );
   try {
     const headers = {
-      "content-type": request.headers.get("content-type") ?? "",
+      'content-type': request.headers.get('content-type') ?? '',
     };
     return {
       fields: await new Response(limited, { headers }).formData(),

@@ -1,42 +1,40 @@
 <script lang="ts">
-  import { Info } from "@lucide/svelte";
-  import { resolve } from "$app/paths";
-  import { Badge } from "#lib/components/ui/badge/index.ts";
-  import { Button } from "#lib/components/ui/button/index.ts";
-  import * as Tooltip from "#lib/components/ui/tooltip/index.ts";
-  import type { PageProps } from "./$types";
-  import DataTable from "#lib/components/svelte/data-table.svelte";
-  import { createColumnHelper, renderSnippet } from "@tanstack/svelte-table";
-  import type { DataTableFeatures } from "#lib/components/svelte/data-table-features.js";
-  import { refreshHostPing } from "#lib/hooks/refresh-host-ping.js";
+  import { Info } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import * as Tooltip from '#lib/components/ui/tooltip/index.ts';
+  import type { PageProps } from './$types';
+  import DataTable from '#lib/components/svelte/data-table.svelte';
+  import { createColumnHelper, renderSnippet } from '@tanstack/svelte-table';
+  import type { DataTableFeatures } from '#lib/components/svelte/data-table-features.js';
+  import { refreshHostPing } from '#lib/hooks/refresh-host-ping.js';
 
   let { data }: PageProps = $props();
   refreshHostPing();
-  type Host = PageProps["data"]["hosts"][number];
+  type Host = PageProps['data']['hosts'][number];
   const column = createColumnHelper<DataTableFeatures, Host>();
   const columns = column.columns([
     column.accessor(
       ({ name, hostname, ipAddress, applianceType, method }) =>
-        [name, hostname, ipAddress, applianceType, method]
-          .filter(Boolean)
-          .join(" "),
+        [name, hostname, ipAddress, applianceType, method].filter(Boolean).join(' '),
       {
-        id: "host",
-        header: "Host",
-        filterFn: "includesString",
+        id: 'host',
+        header: 'Host',
+        filterFn: 'includesString',
         cell: ({ row }) => renderSnippet(hostIdentity, row.original),
       },
     ),
-    column.accessor("ping", {
+    column.accessor('ping', {
       header: () => renderSnippet(reachabilityHeader),
       cell: ({ row }) => renderSnippet(networkStatus, row.original),
     }),
-    column.accessor("method", {
+    column.accessor('method', {
       header: () => renderSnippet(managementHeader),
       cell: ({ row }) => renderSnippet(managementStatus, row.original),
     }),
-    column.accessor("certificates", {
-      header: () => renderSnippet(rightAligned, "Certificates"),
+    column.accessor('certificates', {
+      header: () => renderSnippet(rightAligned, 'Certificates'),
       cell: ({ row }) => renderSnippet(certificateCount, row.original),
     }),
   ]);
@@ -49,16 +47,13 @@
 <section class="px-5 py-6 md:px-8" aria-labelledby="hosts-heading">
   <header class="flex flex-wrap items-end justify-between gap-4">
     <div class="grid gap-1">
-      <h1 id="hosts-heading" class="font-heading text-xl font-semibold">
-        Hosts
-      </h1>
+      <h1 id="hosts-heading" class="font-heading text-xl font-semibold">Hosts</h1>
       <p class="text-xs text-muted-foreground">
-        Reachability, management activity, and certificate coverage in one
-        place.
+        Reachability, management activity, and certificate coverage in one place.
       </p>
     </div>
     {#if data.canManageHosts}
-      <Button href={resolve("/hosts/new")}>Add host</Button>
+      <Button href={resolve('/hosts/new')}>Add host</Button>
     {/if}
   </header>
 
@@ -69,10 +64,10 @@
       data={data.hosts}
       rowKey={(host) => host.id}
       rowHeader="host"
-      filter={{ column: "host", label: "Search hosts" }}
+      filter={{ column: 'host', label: 'Search hosts' }}
       emptyMessage={data.hosts.length
-        ? "No hosts match your search."
-        : "No hosts yet. Add a host to start tracking it."}
+        ? 'No hosts match your search.'
+        : 'No hosts yet. Add a host to start tracking it.'}
       tableClass="min-w-[36rem]"
     />
   </div>
@@ -81,14 +76,15 @@
 {#snippet hostIdentity(host: Host)}
   <div class="flex flex-wrap items-center gap-x-2 gap-y-1 whitespace-normal">
     <a
-      href={resolve("/hosts/[id]", { id: host.id })}
+      href={resolve('/hosts/[id]', { id: host.id })}
       class="font-medium text-primary underline underline-offset-4 wrap-anywhere"
-      >{host.hostname ?? host.name}</a
     >
+      {host.hostname ?? host.name}
+    </a>
     {#if host.ipAddress && host.ipAddress !== (host.hostname ?? host.name)}
       <span class="text-muted-foreground">({host.ipAddress})</span>
     {/if}
-    <Badge variant="outline">{host.applianceType ?? "Not specified"}</Badge>
+    <Badge variant="outline">{host.applianceType ?? 'Not specified'}</Badge>
   </div>
 {/snippet}
 
@@ -100,11 +96,11 @@
         aria-label={`${host.ping}. Show reachability details`}
       >
         <Badge
-          variant={host.pingStatus === "no-reply"
-            ? "destructive"
-            : host.pingStatus === "reachable"
-              ? "secondary"
-              : "outline"}
+          variant={host.pingStatus === 'no-reply'
+            ? 'destructive'
+            : host.pingStatus === 'reachable'
+              ? 'secondary'
+              : 'outline'}
         >
           {host.ping}
           <Info data-icon="inline-end" aria-hidden="true" />
@@ -127,7 +123,7 @@
 
 {#snippet managementStatus(host: Host)}
   <div class="flex flex-wrap gap-2">
-    {#if host.method === "Unmanaged"}
+    {#if host.method === 'Unmanaged'}
       <Tooltip.Root>
         <Tooltip.Trigger
           class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
@@ -148,11 +144,7 @@
             class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
             aria-label="Agent. Show last check-in"
           >
-            <Badge
-              variant={host.agent === "Never checked in"
-                ? "outline"
-                : "secondary"}
-            >
+            <Badge variant={host.agent === 'Never checked in' ? 'outline' : 'secondary'}>
               Agent <Info data-icon="inline-end" aria-hidden="true" />
             </Badge>
           </Tooltip.Trigger>
@@ -165,18 +157,18 @@
         <Tooltip.Root>
           <Tooltip.Trigger
             class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
-            aria-label={host.ansible.startsWith("Failed")
-              ? "Ansible failed. Show last run"
-              : "Ansible. Show last run"}
+            aria-label={host.ansible.startsWith('Failed')
+              ? 'Ansible failed. Show last run'
+              : 'Ansible. Show last run'}
           >
             <Badge
-              variant={host.ansible.startsWith("Failed")
-                ? "destructive"
-                : host.ansible === "Never run"
-                  ? "outline"
-                  : "secondary"}
+              variant={host.ansible.startsWith('Failed')
+                ? 'destructive'
+                : host.ansible === 'Never run'
+                  ? 'outline'
+                  : 'secondary'}
             >
-              Ansible{host.ansible.startsWith("Failed") ? " failed" : ""}
+              Ansible{host.ansible.startsWith('Failed') ? ' failed' : ''}
               <Info data-icon="inline-end" aria-hidden="true" />
             </Badge>
           </Tooltip.Trigger>
@@ -195,11 +187,12 @@
 
 {#snippet certificateCount(host: Host)}
   <a
-    href={`${resolve("/hosts/[id]", { id: host.id })}#host-deployments-heading`}
+    href={`${resolve('/hosts/[id]', { id: host.id })}#host-deployments-heading`}
     aria-label={`View ${host.certificates} certificate deployments for ${host.name}`}
     class="block text-right tabular-nums text-primary underline underline-offset-4"
-    >{host.certificates}</a
   >
+    {host.certificates}
+  </a>
 {/snippet}
 
 {#snippet rightAligned(value: string)}

@@ -1,20 +1,21 @@
-import { env } from "node:process";
-import { openDatabase } from "@cbp/database";
-import * as schema from "@cbp/database/auth-schema";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { username } from "better-auth/plugins";
+import { env } from 'node:process';
+import { openDatabase } from '@cbp/database';
+import * as schema from '@cbp/database/auth-schema';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { username } from 'better-auth/plugins';
 
 export function authOptions(
   disableSignUp = true,
-  settings: { BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string } = env,
+  settings: { BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string } = {
+    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+  },
   database?: ReturnType<typeof openDatabase>,
 ) {
   const secret = settings.BETTER_AUTH_SECRET;
   const baseURL = settings.BETTER_AUTH_URL;
   if (!secret || secret.length < 32 || !baseURL) {
-    throw new Error(
-      "Set BETTER_AUTH_URL and a BETTER_AUTH_SECRET of at least 32 characters",
-    );
+    throw new Error('Set BETTER_AUTH_URL and a BETTER_AUTH_SECRET of at least 32 characters');
   }
 
   database ??= openDatabase();
@@ -24,12 +25,14 @@ export function authOptions(
       secret,
       baseURL,
       database: drizzleAdapter(database, {
-        provider: "pg",
+        provider: 'pg',
         schema,
         transaction: true,
       }),
       emailAndPassword: { enabled: true, disableSignUp },
-      plugins: [username()],
+      // Sessions can download private keys, so expire after 12 hours instead of the 7-day default.
+      session: { expiresIn: 60 * 60 * 12, updateAge: 60 * 60 },
+      plugins: [username()] as [ReturnType<typeof username>],
     },
   };
 }

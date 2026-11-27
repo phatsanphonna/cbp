@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
-  import { page } from "$app/state";
-  import { Button } from "#lib/components/ui/button/index.ts";
+  import { resolve } from '$app/paths';
+  import { page } from '$app/state';
+  import { Button } from '#lib/components/ui/button/index.ts';
 
-  const message = $derived(page.error?.message ?? "Something went wrong");
+  const message = $derived(page.error?.message ?? 'Something went wrong');
 </script>
 
 <svelte:head>
@@ -18,7 +18,5 @@
     {page.status}
     {message}
   </h1>
-  <Button href={resolve("/")} variant="outline" size="sm"
-    >Back to overview</Button
-  >
+  <Button href={resolve('/')} variant="outline" size="sm">Back to overview</Button>
 </section>

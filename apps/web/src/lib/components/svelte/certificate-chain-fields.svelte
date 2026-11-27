@@ -6,17 +6,17 @@
     FieldLabel,
     FieldLegend,
     FieldSet,
-  } from "#lib/components/ui/field/index.ts";
-  import { Input } from "#lib/components/ui/input/index.ts";
+  } from '#lib/components/ui/field/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
 
   const id = $props.id();
 </script>
 
 <FieldSet aria-describedby="{id}-requirement">
   <FieldLegend variant="label" required>Public certificate</FieldLegend>
-  <FieldDescription id="{id}-requirement"
-    >Upload a certificate file or paste its PEM contents.</FieldDescription
-  >
+  <FieldDescription id="{id}-requirement">
+    Upload a certificate file or paste its PEM contents.
+  </FieldDescription>
   <FieldGroup>
     <Field>
       <FieldLabel for="{id}-file">Public certificate file</FieldLabel>
@@ -27,10 +27,10 @@
         accept=".pem,.crt"
         aria-describedby="{id}-help"
       />
-      <FieldDescription id="{id}-help"
-        >Use fullchain.pem or a single public PEM certificate, up to 32 KB. Keep
-        your .key file private.</FieldDescription
-      >
+      <FieldDescription id="{id}-help">
+        Use fullchain.pem or a single public PEM certificate, up to 32 KB. Keep your .key file
+        private.
+      </FieldDescription>
     </Field>
     <Field>
       <FieldLabel for="{id}-pem">Or paste the PEM contents</FieldLabel>

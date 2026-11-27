@@ -1,19 +1,19 @@
-import Actions from "./code-block-actions.svelte";
-import Content from "./code-block-content.svelte";
-import CopyButton from "./code-block-copy-button.svelte";
-import Footer from "./code-block-footer.svelte";
-import Header from "./code-block-header.svelte";
-import Title from "./code-block-title.svelte";
+import Actions from './code-block-actions.svelte';
+import Content from './code-block-content.svelte';
+import CopyButton from './code-block-copy-button.svelte';
+import Footer from './code-block-footer.svelte';
+import Header from './code-block-header.svelte';
+import Title from './code-block-title.svelte';
 import Line, {
-  codeBlockLineVariants,
   type CodeBlockLineToken,
   type CodeBlockLineVariant,
-} from "./code-block-line.svelte";
+  codeBlockLineVariants,
+} from './code-block-line.svelte';
 import Root, {
-  codeBlockVariants,
   type CodeBlockSize,
   type CodeBlockVariant,
-} from "./code-block.svelte";
+  codeBlockVariants,
+} from './code-block.svelte';
 
 export {
   Root,
