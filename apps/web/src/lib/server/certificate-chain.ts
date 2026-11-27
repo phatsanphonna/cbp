@@ -1,4 +1,5 @@
 import { X509Certificate } from "node:crypto";
+import { isIP } from "node:net";
 
 const dnsName =
   /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
@@ -67,18 +68,24 @@ export function parseCertificateChain(pem: string) {
   const dnsNames = dnsEntries
     .map((name) => name.slice(4).toLowerCase())
     .filter(isDnsName);
+  const ipEntries = names.filter((name) => name.startsWith("IP Address:"));
+  const ipNames = ipEntries
+    .map((name) => name.slice("IP Address:".length))
+    .filter((name) => isIP(name) !== 0);
   const commonName = leaf.toLegacyObject().subject?.CN;
   if (
     !dnsEntries.length &&
+    !ipEntries.length &&
     typeof commonName === "string" &&
     isDnsName(commonName)
   ) {
     dnsNames.push(commonName.toLowerCase());
   }
-  const [domain] = dnsNames;
+  const [domain] = dnsNames.length ? dnsNames : ipNames;
   if (!domain)
     return {
-      message: "The leaf certificate has no usable DNS hostname.",
+      message:
+        "The leaf certificate has no usable DNS hostname or IP address.",
     } as const;
 
   const sans = names.flatMap((name) => {
@@ -89,6 +96,7 @@ export function parseCertificateChain(pem: string) {
   return {
     domain,
     covers(hostname: string) {
+      if (isIP(hostname)) return Boolean(leaf.checkIP(hostname));
       return hostname.startsWith("*.")
         ? dnsNames.includes(hostname.toLowerCase())
         : Boolean(leaf.checkHost(hostname, { partialWildcards: false }));

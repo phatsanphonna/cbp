@@ -4,6 +4,7 @@ import {
   webcrypto,
   X509Certificate as NodeX509Certificate,
 } from 'node:crypto';
+import { isIP } from 'node:net';
 import {
   BasicConstraintsExtension,
   ExtendedKeyUsage,
@@ -36,11 +37,23 @@ function isGeneratedSelfSigned(fullchain: string) {
 }
 
 function normalizeNames(names: readonly string[]) {
-  const normalized = names.map((name) => name.trim().toLowerCase());
+  const normalized = names.map((name) => {
+    const value = name.trim().toLowerCase();
+    if (!isIP(value) || value.includes('%')) return value;
+    const host = new URL(
+      `http://${value.includes(':') ? `[${value}]` : value}/`,
+    ).hostname;
+    return host.startsWith('[') ? host.slice(1, -1) : host;
+  });
   if (
     !normalized.length ||
     normalized.length > maxNames ||
-    normalized.some((name) => name.length > 253 || !dnsName.test(name))
+    normalized.some(
+      (name) =>
+        name.length > 253 ||
+        name.includes('%') ||
+        (!isIP(name) && !dnsName.test(name)),
+    )
   )
     return null;
   return [...new Set(normalized)];
@@ -55,7 +68,7 @@ export function readSelfSignedNames(value: FormDataEntryValue | null) {
   if (entries.length > maxNames) return null;
   const names = normalizeNames(entries);
   if (!names) return null;
-  return { domain: names[0], names };
+  return { domain: names.find((name) => !isIP(name)) ?? names[0], names };
 }
 
 export function selfSignedCertificateNames(
@@ -64,14 +77,14 @@ export function selfSignedCertificateNames(
 ) {
   if (!fullchain) return null;
   const parsed = parseCertificateChain(fullchain);
-  if (
-    'message' in parsed ||
-    !isGeneratedSelfSigned(fullchain) ||
-    parsed.domain !== domain
-  )
-    return null;
+  if ('message' in parsed || !isGeneratedSelfSigned(fullchain)) return null;
   const names = normalizeNames(parsed.metadata.sans);
-  return names?.join(',') === parsed.metadata.sans.join(',') ? names : null;
+  const normalizedDomain = normalizeNames([domain])?.[0];
+  const parsedDomain = normalizeNames([parsed.domain])?.[0];
+  return names?.length === parsed.metadata.sans.length &&
+    normalizedDomain === parsedDomain
+    ? names
+    : null;
 }
 
 function serialNumber() {
@@ -87,7 +100,11 @@ function extensions(names: string[]) {
     new KeyUsagesExtension(KeyUsageFlags.digitalSignature, true),
     new ExtendedKeyUsageExtension([ExtendedKeyUsage.serverAuth]),
     new SubjectAlternativeNameExtension(
-      names.map((value) => ({ type: 'dns', value })),
+      names.map((value) =>
+        isIP(value)
+          ? { type: 'ip' as const, value }
+          : { type: 'dns' as const, value },
+      ),
     ),
   ];
 }

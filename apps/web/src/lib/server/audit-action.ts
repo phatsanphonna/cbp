@@ -53,6 +53,9 @@ const actionLabels: Record<string, Record<string, string>> = {
     restoreChain: "Restore fullchain",
     remove: "Remove certificate",
   },
+  "/certificates/[id]/private-key": {
+    default: "Download certificate private key",
+  },
   "/deployments/[id]": { cancel: "Cancel queued deployment" },
   "/alerts": { clear: "Clear alert" },
   "/alerts/channels": {
@@ -70,9 +73,13 @@ export async function auditUserAction(
   resolve: () => Response | Promise<Response>,
 ) {
   const route = event.route.id;
+  const privateKeyDownload =
+    event.request.method === "GET" &&
+    route === "/certificates/[id]/private-key";
   if (
     !route ||
-    !["POST", "PUT", "PATCH", "DELETE"].includes(event.request.method)
+    (!privateKeyDownload &&
+      !["POST", "PUT", "PATCH", "DELETE"].includes(event.request.method))
   )
     return resolve();
 

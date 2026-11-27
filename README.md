@@ -149,7 +149,7 @@ Set `CBP_LETS_ENCRYPT_EMAIL` in `.env` for Compose or `.env.local` for local dev
 
 In **Certificates → Register certificate**, choose **Create with Let’s Encrypt** and enter one DNS hostname per line. CBP registers the certificate and enables automatic renewal after issuance. For an existing Let’s Encrypt certificate, open its certificate page to enable renewal or renew it immediately.
 
-Choose **Create self-signed** to make a one-year certificate for internal DNS names or wildcards. Download the private key after creation, or save it to Vault if you have credential-management access. Enabling automatic renewal or saving the key to Vault also keeps an encrypted copy in the database so CBP can renew it.
+Choose **Create self-signed** to make a one-year certificate for internal DNS names, IP addresses, or DNS wildcards. Download the private key after creation, or save it to Vault if you have credential-management access. Enabling automatic renewal or saving the key to Vault also keeps an encrypted copy in the database so CBP can renew it.
 
 Each DNS name on the certificate must allow public HTTP on port 80. Configure the reverse proxy or web server for each name to forward `/.well-known/acme-challenge/*` to the CLM web app without authentication or rewriting that path. HTTP-01 supports regular DNS names. Wildcards and IP addresses are ineligible. Allow enough time for domain validation on the proxy’s certificate registration requests.
 

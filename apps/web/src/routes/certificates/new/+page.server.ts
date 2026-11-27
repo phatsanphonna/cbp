@@ -147,7 +147,7 @@ async function createSelfSignedCertificate(
   if (!parsed) {
     return reject(
       400,
-      'Enter 1 to 100 valid DNS hostnames, one per line. Wildcards are allowed.',
+      'Enter 1 to 100 DNS hostnames or IP addresses, one per line. Wildcards are allowed for DNS names only.',
     );
   }
 
@@ -171,14 +171,12 @@ async function createSelfSignedCertificate(
   if (!saved)
     return reject(409, 'This certificate is already registered.');
 
-  let stored = false;
   let storeError: string | null = null;
   if (storePrivateKey) {
     try {
       await saveCredential('certificate', id, generated.privateKey);
-      stored = true;
     } catch {
-      storeError = 'Vault could not save the private key. Download it now.';
+      storeError = 'Could not save a copy of the private key to Vault.';
     }
   }
 
@@ -188,7 +186,6 @@ async function createSelfSignedCertificate(
       certificateId: id,
       domain: parsed.domain,
       privateKey: generated.privateKey,
-      stored,
       retained: autoRenew || storePrivateKey,
       storeError,
       autoRenew,

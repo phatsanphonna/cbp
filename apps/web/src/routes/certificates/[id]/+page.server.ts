@@ -117,6 +117,10 @@ export const load: PageServerLoad = async (event) => {
     agentDeployments,
     savedCredentials,
     canManageCredentials,
+    canDownloadPrivateKey:
+      canManageCredentials &&
+      hasTrustedTransport(event) &&
+      (certificate.hasRenewalKey || savedCredentials.key),
     canManageDeployments,
     canManageHosts,
     canManageCertificates,
@@ -277,7 +281,11 @@ export const actions: Actions = {
     } catch {
       return fail(503, { credentialError: 'Could not delete the credential from Vault.' });
     }
-    return { credentialMessage: 'Saved credential deleted.' };
+    return {
+      credentialMessage: kind === 'certificate'
+        ? 'Private key removed from Vault.'
+        : 'Saved credential deleted.',
+    };
   },
   deploy: (event) => deployCertificateAction(event, event.params.id),
   deployAnsible: (event) =>

@@ -4,7 +4,7 @@
   import { toast } from 'svelte-sonner';
   import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
   import { resolve } from "$app/paths";
-  import { ChevronDown, KeyRound } from "@lucide/svelte";
+  import { ChevronDown } from "@lucide/svelte";
   import CertificateChainFields from "#lib/components/svelte/certificate-chain-fields.svelte";
   import EditDeploymentEndpointDialog from "#lib/components/svelte/edit-deployment-endpoint-dialog.svelte";
   import DeploymentStatusBadge from "#lib/components/svelte/deployment-status-badge.svelte";
@@ -193,19 +193,11 @@
       >
         {certificate.displayDomain}
       </h1>
-      <div class="flex flex-wrap items-center gap-3">
-        <Badge
-          variant={certificate.status.startsWith("Valid")
-            ? "secondary"
-            : "destructive"}>{certificate.status}</Badge
-        >
-        {#if data.savedCredentials.key}
-          <Badge variant="outline">
-            <KeyRound data-icon="inline-start" aria-hidden="true" />
-            Private key saved
-          </Badge>
-        {/if}
-      </div>
+      <Badge
+        variant={certificate.status.startsWith('Valid')
+          ? 'secondary'
+          : 'destructive'}>{certificate.status}</Badge
+      >
     </div>
     <div class="flex flex-wrap gap-2">
       <Button href={resolve("/certificates")} variant="outline"
@@ -239,11 +231,27 @@
               {/snippet}
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
-            {#if data.canManageCredentials && data.savedCredentials.key}
-              <DropdownMenu.Item
-                variant="destructive"
-                onSelect={() => (deleteKeyOpen = true)}
-              >Delete saved private key</DropdownMenu.Item>
+            {#if data.canDownloadPrivateKey ||
+              (data.canManageCredentials && data.savedCredentials.key)}
+              {#if data.canDownloadPrivateKey}
+                <DropdownMenu.Item>
+                  {#snippet child({ props })}
+                    <a
+                      {...props}
+                      data-sveltekit-preload-data="off"
+                      href={resolve('/certificates/[id]/private-key', {
+                        id: certificate.id,
+                      })}
+                    >Download private key</a>
+                  {/snippet}
+                </DropdownMenu.Item>
+              {/if}
+              {#if data.canManageCredentials && data.savedCredentials.key}
+                <DropdownMenu.Item
+                  variant="destructive"
+                  onSelect={() => (deleteKeyOpen = true)}
+                >Remove key from Vault</DropdownMenu.Item>
+              {/if}
               <DropdownMenu.Separator />
             {/if}
             {#if data.canManageCertificates}
@@ -268,9 +276,15 @@
       <AlertDialog.Root bind:open={deleteKeyOpen}>
         <AlertDialog.Content onCloseAutoFocus={focusCertificateActions}>
           <AlertDialog.Header>
-            <AlertDialog.Title>Delete saved private key?</AlertDialog.Title>
+            <AlertDialog.Title>Remove key from Vault?</AlertDialog.Title>
             <AlertDialog.Description class="wrap-anywhere">
-              Remove the saved private key from Vault. It will no longer be available for future deployments.
+              {#if certificate.hasRenewalKey}
+                CBP will keep the key stored with this certificate. You can
+                still download it or use it to deploy the certificate.
+              {:else}
+                After removing the key from Vault, you’ll need to supply it
+                for future deployments. Download a copy first if you need one.
+              {/if}
             </AlertDialog.Description>
           </AlertDialog.Header>
           <form
@@ -299,7 +313,7 @@
                 type="submit"
                 variant="destructive"
                 disabled={deleteKeyPending}
-              >Delete private key</AlertDialog.Action>
+              >Remove from Vault</AlertDialog.Action>
             </AlertDialog.Footer>
           </form>
         </AlertDialog.Content>

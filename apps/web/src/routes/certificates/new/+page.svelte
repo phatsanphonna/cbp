@@ -92,13 +92,8 @@
             Certificate created for {generated.domain}
           </h2>
           <p class="text-xs text-muted-foreground">
-            {#if generated.stored}
-              The private key was saved to Vault for deployments. CBP also
-              keeps an encrypted copy for renewal. Download a backup below if
-              you want a local copy.
-            {:else if generated.retained}
-              CBP keeps an encrypted copy for renewal. Download a backup of the
-              private key now.
+            {#if generated.retained}
+              CBP saved the private key. Download a copy if you need it locally.
             {:else}
               Download and store this private key securely. CBP does not keep a
               copy, and it cannot be recovered later.
@@ -143,9 +138,7 @@
               }
               await update();
               if (result.type === 'success')
-                toast.success(
-                  'Self-signed certificate created. Download its private key now.',
-                );
+                toast.success('Self-signed certificate created.');
             } finally {
               issuing = false;
             }
@@ -154,7 +147,9 @@
       >
         <FieldGroup>
           <Field>
-            <FieldLabel for="self-signed-hostnames">DNS hostnames</FieldLabel>
+            <FieldLabel for="self-signed-hostnames">
+              DNS hostnames or IP addresses
+            </FieldLabel>
             <textarea
               id="self-signed-hostnames"
               name="hostnames"
@@ -165,13 +160,14 @@
               spellcheck={false}
               autocomplete="off"
               autocapitalize="none"
-              placeholder="internal.example.com"
+              placeholder={'internal.example.com\n10.164.160.51'}
               aria-describedby="self-signed-hostnames-help"
               class="w-full resize-y border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring"
             ></textarea>
             <FieldDescription id="self-signed-hostnames-help">
-              Enter up to 100 DNS names, one per line. Internal names and
-              wildcards are supported. The certificate is valid for one year.
+              Enter up to 100 DNS names or IP addresses, one per line.
+              Wildcards are supported for DNS names only. The certificate is
+              valid for one year.
             </FieldDescription>
           </Field>
           <p class="text-xs text-muted-foreground">
@@ -197,9 +193,8 @@
             </FieldLabel>
           </Field>
           <FieldDescription>
-            CBP renews it before expiry using the encrypted server key, then
-            marks linked deployments pending. It does not deploy the renewed
-            certificate automatically.
+            CBP saves the private key and renews the certificate before it
+            expires. Deploy the renewed certificate when it’s ready.
             {#if !data.selfSignedRenewalAvailable}
               Set <code>BETTER_AUTH_SECRET</code> to at least 32 characters to
               enable renewal.
@@ -214,7 +209,7 @@
                 bind:checked={storePrivateKey}
               />
               <FieldLabel for="self-signed-store-key">
-                Save the private key to Vault for deployments
+                Keep a copy of the private key in Vault
               </FieldLabel>
             </Field>
           {:else}
