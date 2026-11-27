@@ -115,14 +115,31 @@ export const certificates = pgTable("cbp_certificates", {
   serial: text().notNull(),
   fingerprint: text().unique(),
   fullchain: text(),
-  previousFullchain: text("previous_fullchain"),
   sans: text().array().notNull().default([]),
   autoRenew: boolean('auto_renew').notNull().default(false),
   renewalRetryAt: instant('renewal_retry_at'),
   renewalError: text('renewal_error'),
   renewalKey: text('renewal_key'),
-  previousRenewalKey: text('previous_renewal_key'),
 });
+
+export const certificateVersions = pgTable(
+  'cbp_certificate_versions',
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    certificateId: uuid('certificate_id')
+      .notNull()
+      .references(() => certificates.id, { onDelete: 'cascade' }),
+    fullchain: text().notNull(),
+    renewalKey: text('renewal_key'),
+    replacedAt: instant('replaced_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('cbp_certificate_versions_certificate_idx').on(
+      table.certificateId,
+      table.replacedAt,
+    ),
+  ],
+);
 
 export const acmeAccounts = pgTable('cbp_acme_accounts', {
   id: text().primaryKey(),

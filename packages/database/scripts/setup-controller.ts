@@ -51,13 +51,38 @@ try {
   `;
   await db.$client`
     alter table cbp_certificates
-      add column if not exists previous_fullchain text,
       add column if not exists auto_renew boolean not null default false,
       add column if not exists renewal_retry_at timestamp with time zone,
       add column if not exists renewal_error text,
-      add column if not exists renewal_key text,
-      add column if not exists previous_renewal_key text
+      add column if not exists renewal_key text
   `;
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`create table if not exists cbp_certificate_versions (
+      id uuid primary key default gen_random_uuid(),
+      certificate_id uuid not null,
+      fullchain text not null,
+      renewal_key text,
+      replaced_at timestamp with time zone not null default now(),
+      constraint cbp_certificate_versions_certificate_id_cbp_certificates_id_fk
+        foreign key (certificate_id) references cbp_certificates(id) on delete cascade
+    )`);
+    await tx.execute(sql`create index if not exists cbp_certificate_versions_certificate_idx
+      on cbp_certificate_versions (certificate_id, replaced_at)`);
+    // Move the single legacy previous version into the history table.
+    const [legacy] = await tx.execute<{ present: boolean }>(sql`select exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'cbp_certificates'
+        and column_name = 'previous_fullchain'
+    ) as present`);
+    if (legacy.present) {
+      await tx.execute(sql`insert into cbp_certificate_versions (certificate_id, fullchain, renewal_key)
+        select id, previous_fullchain, previous_renewal_key from cbp_certificates
+        where previous_fullchain is not null`);
+      await tx.execute(sql`alter table cbp_certificates
+        drop column previous_fullchain,
+        drop column if exists previous_renewal_key`);
+    }
+  });
   await db.$client`
     create table if not exists cbp_acme_accounts (
       id text primary key,
@@ -340,7 +365,7 @@ try {
       await tx.execute(sql`grant usage on schema public to cbp_web`);
       await tx.execute(sql`grant select, insert, update, delete on
         public.cbp_auth_user, public.cbp_auth_session, public.cbp_auth_account, public.cbp_auth_verification,
-        public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_deployments,
+        public.cbp_hosts, public.cbp_host_agents, public.cbp_certificates, public.cbp_certificate_versions, public.cbp_deployments,
         public.cbp_user_groups, public.cbp_user_group_members, public.cbp_user_group_permissions,
         public.cbp_user_permissions
         to cbp_web`);

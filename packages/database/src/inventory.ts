@@ -13,6 +13,7 @@ import {
   lt,
   lte,
   notExists,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -20,6 +21,7 @@ import type { openDatabase } from "./index.js";
 import {
   alerts,
   certificates,
+  certificateVersions,
   channels,
   deploymentJobs,
   deploymentRuns,
@@ -32,19 +34,15 @@ type Database = ReturnType<typeof openDatabase>;
 const inventoryId = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 const {
   fullchain: _fullchain,
-  previousFullchain: _previousFullchain,
   owner: _legacyOwner,
   groupId: _legacyGroup,
   autoRenew: _autoRenew,
   renewalRetryAt: _renewalRetryAt,
   renewalError: _renewalError,
   renewalKey: _renewalKey,
-  previousRenewalKey: _previousRenewalKey,
   ...certificateMetadata
 } = getTableColumns(certificates);
-const previousChainRevision = sql<
-  string | null
->`md5(${certificates.previousFullchain})`;
+const keptVersions = 3;
 
 export function listHosts(db: Database) {
   return db
@@ -455,7 +453,6 @@ export async function findCertificate(db: Database, id: string) {
       autoRenew: certificates.autoRenew,
       renewalRetryAt: certificates.renewalRetryAt,
       renewalError: certificates.renewalError,
-      previousChainRevision,
       hasRenewalKey: sql<boolean>`${certificates.renewalKey} is not null`,
     })
     .from(certificates)
@@ -473,7 +470,24 @@ export async function findCertificate(db: Database, id: string) {
     .leftJoin(hostAgents, eq(deployments.hostId, hostAgents.hostId))
     .where(eq(deployments.certificateId, id))
     .orderBy(asc(deployments.endpoint));
-  return { ...certificate, deployments: endpoints };
+  return {
+    ...certificate,
+    deployments: endpoints,
+    versions: await listCertificateVersions(db, id),
+  };
+}
+
+export function listCertificateVersions(db: Database, id: string) {
+  return db
+    .select({
+      id: certificateVersions.id,
+      fullchain: certificateVersions.fullchain,
+      replacedAt: certificateVersions.replacedAt,
+      hasKey: sql<boolean>`${certificateVersions.renewalKey} is not null`,
+    })
+    .from(certificateVersions)
+    .where(eq(certificateVersions.certificateId, id))
+    .orderBy(desc(certificateVersions.replacedAt), desc(certificateVersions.id));
 }
 
 export async function findCertificateDomain(db: Database, id: string) {
@@ -485,17 +499,22 @@ export async function findCertificateDomain(db: Database, id: string) {
   return certificate?.domain ?? null;
 }
 
-export async function findPreviousCertificateChain(db: Database, id: string) {
-  if (!inventoryId.test(id)) return null;
-  const [certificate] = await db
+export async function findCertificateVersion(
+  db: Database,
+  id: string,
+  versionId: string,
+) {
+  if (!inventoryId.test(id) || !inventoryId.test(versionId)) return null;
+  const [version] = await db
     .select({
       domain: certificates.domain,
-      fullchain: certificates.previousFullchain,
-      revision: previousChainRevision,
+      fullchain: certificateVersions.fullchain,
+      hasKey: sql<boolean>`${certificateVersions.renewalKey} is not null`,
     })
-    .from(certificates)
-    .where(eq(certificates.id, id));
-  return certificate ?? null;
+    .from(certificateVersions)
+    .innerJoin(certificates, eq(certificateVersions.certificateId, certificates.id))
+    .where(and(eq(certificateVersions.id, versionId), eq(certificates.id, id)));
+  return version ?? null;
 }
 
 export function registerCertificate(
@@ -518,7 +537,7 @@ export async function updateCertificateChain(
   db: Database,
   id: string,
   replacement: CertificateReplacement,
-  expectedPrevious?: string,
+  restoreVersionId?: string,
   renewal?: {
     fingerprint: string | null;
     retryAt: Date;
@@ -527,6 +546,8 @@ export async function updateCertificateChain(
   },
 ) {
   if (!inventoryId.test(id)) return false;
+  if (restoreVersionId !== undefined && !inventoryId.test(restoreVersionId))
+    return "changed" as const;
 
   try {
     return await db.transaction(async (tx) => {
@@ -534,10 +555,8 @@ export async function updateCertificateChain(
         .select({
           fingerprint: certificates.fingerprint,
           fullchain: certificates.fullchain,
-          previousFullchain: certificates.previousFullchain,
           renewalRetryAt: certificates.renewalRetryAt,
           renewalKey: certificates.renewalKey,
-          previousRenewalKey: certificates.previousRenewalKey,
         })
         .from(certificates)
         .where(eq(certificates.id, id))
@@ -549,11 +568,28 @@ export async function updateCertificateChain(
           current.renewalRetryAt?.getTime() !== renewal.retryAt.getTime())
       )
         return 'changed' as const;
-      if (
-        expectedPrevious !== undefined &&
-        current.previousFullchain !== expectedPrevious
-      )
-        return "changed" as const;
+      let restored: { renewalKey: string | null } | undefined;
+      if (restoreVersionId !== undefined) {
+        const [version] = await tx
+          .select({
+            fullchain: certificateVersions.fullchain,
+            renewalKey: certificateVersions.renewalKey,
+          })
+          .from(certificateVersions)
+          .where(
+            and(
+              eq(certificateVersions.id, restoreVersionId),
+              eq(certificateVersions.certificateId, id),
+            ),
+          )
+          .for("update");
+        if (!version || version.fullchain !== replacement.fullchain)
+          return "changed" as const;
+        await tx
+          .delete(certificateVersions)
+          .where(eq(certificateVersions.id, restoreVersionId));
+        restored = version;
+      }
 
       const chainChanged = current.fullchain !== replacement.fullchain;
       await tx
@@ -564,8 +600,8 @@ export async function updateCertificateChain(
             ? {
                 renewalKey: renewal
                   ? renewal.encryptedKey
-                  : expectedPrevious !== undefined
-                    ? current.previousRenewalKey
+                  : restored
+                    ? restored.renewalKey
                     : current.fingerprint === replacement.fingerprint
                       ? current.renewalKey
                       : null,
@@ -573,16 +609,32 @@ export async function updateCertificateChain(
                 renewalError: null,
               }
             : {}),
-          previousRenewalKey:
-            chainChanged && current.fullchain
-              ? renewal?.previousEncryptedKey ?? current.renewalKey
-              : current.previousRenewalKey,
-          previousFullchain:
-            chainChanged && current.fullchain
-              ? current.fullchain
-              : current.previousFullchain,
         })
         .where(eq(certificates.id, id));
+      if (chainChanged && current.fullchain) {
+        await tx.insert(certificateVersions).values({
+          certificateId: id,
+          fullchain: current.fullchain,
+          renewalKey: renewal?.previousEncryptedKey ?? current.renewalKey,
+        });
+        await tx.delete(certificateVersions).where(
+          and(
+            eq(certificateVersions.certificateId, id),
+            notInArray(
+              certificateVersions.id,
+              tx
+                .select({ id: certificateVersions.id })
+                .from(certificateVersions)
+                .where(eq(certificateVersions.certificateId, id))
+                .orderBy(
+                  desc(certificateVersions.replacedAt),
+                  desc(certificateVersions.id),
+                )
+                .limit(keptVersions),
+            ),
+          ),
+        );
+      }
       if (chainChanged || current.fingerprint !== replacement.fingerprint) {
         await tx
           .update(deployments)
