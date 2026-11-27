@@ -1,7 +1,16 @@
 x-database-url: &database-url 'postgresql://cbp:${POSTGRES_PASSWORD:?Set a URL-safe POSTGRES_PASSWORD in .env}@db:5432/cbp'
+# Docker passes these predefined proxy args to RUN steps without storing them in the image.
+x-proxy-args: &proxy-args
+  HTTP_PROXY: ${HTTP_PROXY:-${http_proxy:-}}
+  HTTPS_PROXY: ${HTTPS_PROXY:-${https_proxy:-}}
+  NO_PROXY: ${NO_PROXY:-${no_proxy:-}}
+  http_proxy: ${HTTP_PROXY:-${http_proxy:-}}
+  https_proxy: ${HTTPS_PROXY:-${https_proxy:-}}
+  no_proxy: ${NO_PROXY:-${no_proxy:-}}
 x-web-build: &web-build
   context: .
   target: web
+  args: *proxy-args
 
 services:
   db:
@@ -71,6 +80,27 @@ services:
         published: '${CBP_CONTROLLER_PORT:-50051}'
         host_ip: ${CBP_CONTROLLER_BIND:-127.0.0.1}
         protocol: tcp
+    # Loopback check: unset the proxy so the request stays local, and skip TLS verification
+    # because the certificate names the public host, not 127.0.0.1.
+    healthcheck:
+      test:
+        - CMD
+        - env
+        - -u
+        - HTTP_PROXY
+        - -u
+        - HTTPS_PROXY
+        - -u
+        - http_proxy
+        - -u
+        - https_proxy
+        - bun
+        - -e
+        - "const scheme = Bun.env.CBP_WEB_TLS_CERT ? 'https' : 'http'; const response = await fetch(scheme + '://127.0.0.1:3000/signin', { redirect: 'manual', tls: { rejectUnauthorized: false }, signal: AbortSignal.timeout(4000) }); process.exit(response.status < 500 ? 0 : 1);"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     restart: unless-stopped
 
   vault:
@@ -78,7 +108,9 @@ services:
     build:
       context: .
       target: vault
-    command: ['server', '-config=/vault/config/cbp.hcl']
+      args: *proxy-args
+    # The image entrypoint already loads /vault/config; naming the file again doubles the listener.
+    command: ['server']
     environment:
       VAULT_ADDR: http://127.0.0.1:8200
     network_mode: service:web
@@ -95,6 +127,7 @@ services:
     build:
       context: .
       target: controller
+      args: *proxy-args
     environment:
       CBP_CONTROLLER_TOKEN: ${CBP_CONTROLLER_TOKEN:?Set CBP_CONTROLLER_TOKEN in .env}
       CBP_WEB_URL: http://127.0.0.1:3000
@@ -124,6 +157,7 @@ services:
     build:
       context: .
       target: ansible
+      args: *proxy-args
     init: true
     environment:
       CBP_ANSIBLE_TOKEN: ${CBP_ANSIBLE_TOKEN:-}

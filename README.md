@@ -6,6 +6,8 @@ CBP is a web application for managing TLS certificates and deploying them to Lin
 
 The Compose stack runs the Bun web app, Go controller, and PostgreSQL. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL. Choose direct HTTPS if the web container will serve TLS, or use a reverse proxy to serve HTTPS in front of the container.
 
+If the Docker host reaches the internet through an HTTP proxy, set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in `.env` or your shell. Compose passes them to the image builds for Go, Bun, pip, and apt downloads, and the web app uses them for outbound requests.
+
 For an existing deployment, keep your `.env` and controller TLS files and back up the database before upgrading. For remote agents, set `CBP_CONTROLLER_BIND` in `.env` to the Docker host's agent-facing IP address in either setup. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment)
 
 ### Direct HTTPS
@@ -67,6 +69,10 @@ Enable the optional `ansible` profile to run the Ansible worker alongside the co
 
 CBP can store temporary deployment private keys and Ansible credentials in a Vault KV v2 engine mounted at `cbp`. Compose includes an optional single-node HashiCorp Vault service. It stores data in the `cbp-vault` volume, binds its API to loopback in the web container's network namespace, and is started with the `vault` profile.
 
+Vault is optional. Without it, deployments still work and hold each private key in web memory until a worker claims it. Saved credentials need Vault: the **Ansible credentials** page, host credential bindings, and saved certificate keys. Set `CBP_VAULT_ADDR` and `CBP_VAULT_TOKEN` together or not at all.
+
+The commands below use the base Compose file. With direct HTTPS, add `-f compose.yaml -f compose.https.yaml` to each one. Keep `--profile vault` on every later `up`, `ps`, and `logs`, or Compose leaves Vault out.
+
 Start Vault and initialize it once:
 
 ```sh
@@ -126,6 +132,8 @@ path "cbp/metadata/credentials/ansible-profile" {
 ```
 
 The Compose image installs this policy from `vault/cbp-policy.hcl`.
+
+If Vault logs `open /vault/config/cbp.hcl: permission denied`, the image was built from a checkout whose files are readable only by root, such as one cloned with `umask 077`. Rebuild from a Dockerfile that copies the files with `--chmod`, or run `chmod 0644 vault/*.hcl` and rebuild with `docker compose --profile vault up -d --build vault`.
 
 The web app removes temporary credentials when a worker claims a job or an administrator cancels it. It also cleans up temporary entries older than one hour, including entries left by interrupted requests. Administrators can save a private key and shared Ansible credentials per certificate, or create named Ansible credentials and bind them to hosts. Bound host credentials are used for deployments unless a host-specific override is supplied. Saved credentials retain one Vault version. Saved keys are checked against the current certificate before use. Unbind host credentials before deleting them or their hosts, and delete saved certificate credentials before removing a certificate. Vault must remain available and unsealed for cleanup and deployments. Job expiration remains ten minutes, and this integration does not add approvals or staged rollouts. The bundled Compose service shares the web container's network namespace, so `http://127.0.0.1:8200` reaches Vault from the app. Use an HTTPS API address for Vault outside Compose. Protect the token and replace it before it expires.
 

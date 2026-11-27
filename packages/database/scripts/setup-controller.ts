@@ -67,14 +67,20 @@ try {
     await tx.execute(sql`create index if not exists cbp_certificate_versions_certificate_idx
       on cbp_certificate_versions (certificate_id, replaced_at)`);
     // Move the single legacy previous version into the history table.
-    const [legacy] = await tx.execute<{ present: boolean }>(sql`select exists (
+    const legacyColumn = (name: string) => sql`exists (
       select 1 from information_schema.columns
       where table_schema = 'public' and table_name = 'cbp_certificates'
-        and column_name = 'previous_fullchain'
-    ) as present`);
+        and column_name = ${name}
+    )`;
+    const [legacy] = await tx.execute<{ present: boolean; withKey: boolean }>(
+      sql`select ${legacyColumn('previous_fullchain')} as present,
+        ${legacyColumn('previous_renewal_key')} as "withKey"`,
+    );
     if (legacy.present) {
+      // Some databases have the legacy chain column without its key column.
       await tx.execute(sql`insert into cbp_certificate_versions (certificate_id, fullchain, renewal_key)
-        select id, previous_fullchain, previous_renewal_key from cbp_certificates
+        select id, previous_fullchain, ${legacy.withKey ? sql.raw('previous_renewal_key') : sql`null`}
+        from cbp_certificates
         where previous_fullchain is not null`);
       await tx.execute(sql`alter table cbp_certificates
         drop column previous_fullchain,
