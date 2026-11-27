@@ -32,6 +32,11 @@
       trigger: 'Three consecutive host probes return no reply.',
       message: 'web-01 has not replied to 3 consecutive probes.',
     },
+    {
+      severity: 'High',
+      trigger: 'An agent finds a listener serving a certificate other than the deployed one.',
+      message: 'web-01 (example.com:443) is not serving the deployed certificate for example.com.',
+    },
   ] as const;
 </script>
 

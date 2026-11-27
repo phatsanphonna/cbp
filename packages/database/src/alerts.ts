@@ -1,11 +1,19 @@
 import { and, eq, gte, isNull, like, notInArray, or, sql } from 'drizzle-orm';
 import type { openDatabase } from './index.js';
-import { alertDeliveries, alerts, certificates, channels, hosts } from './inventory-schema.js';
+import {
+  alertDeliveries,
+  alerts,
+  certificates,
+  channels,
+  deployments,
+  hosts,
+} from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 const day = 24 * 60 * 60 * 1000;
 const certificateRule = 'certificate-expiry:%';
 const hostRule = 'host-no-reply:%';
+const driftRule = 'listener-drift:%';
 
 export type AlertDelivery = {
   alertId: string;
@@ -38,7 +46,7 @@ export async function claimAlertDeliveries(
           sql`, `,
         )})
         and (c.certificate_ids is null or (
-          a.rule_key like ${certificateRule}
+          (a.rule_key like ${certificateRule} or a.rule_key like ${driftRule})
           and exists (
             select 1 from ${certificates} cert
             where cert.id = any(c.certificate_ids) and cert.id::text = a.target_id
@@ -150,6 +158,29 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
       });
     }
 
+    for (const drift of await tx
+      .select({
+        id: deployments.id,
+        certificateId: deployments.certificateId,
+        endpoint: deployments.endpoint,
+        domain: certificates.domain,
+        hostName: hosts.name,
+      })
+      .from(deployments)
+      .innerJoin(certificates, eq(certificates.id, deployments.certificateId))
+      .leftJoin(hosts, eq(hosts.id, deployments.hostId))
+      .where(eq(deployments.listenerStatus, 'drifted'))) {
+      const where = drift.hostName ? `${drift.hostName} (${drift.endpoint})` : drift.endpoint;
+      desired.push({
+        ruleKey: `listener-drift:${drift.id}`,
+        // Certificate id lets certificate-scoped channels receive drift alerts.
+        targetId: drift.certificateId,
+        severity: 'High',
+        message: `${where} is not serving the deployed certificate for ${drift.domain}.`,
+        target: drift.domain,
+      });
+    }
+
     const activeKeys = desired.map(({ ruleKey }) => ruleKey);
     await tx
       .update(alerts)
@@ -157,7 +188,11 @@ export async function reconcileAlerts(db: Database, now = new Date()) {
       .where(
         and(
           isNull(alerts.resolvedAt),
-          or(like(alerts.ruleKey, certificateRule), like(alerts.ruleKey, hostRule)),
+          or(
+            like(alerts.ruleKey, certificateRule),
+            like(alerts.ruleKey, hostRule),
+            like(alerts.ruleKey, driftRule),
+          ),
           activeKeys.length ? notInArray(alerts.ruleKey, activeKeys) : undefined,
         ),
       );
