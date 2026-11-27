@@ -109,7 +109,8 @@ services:
       context: .
       target: vault
       args: *proxy-args
-    command: ['server', '-config=/vault/config/cbp.hcl']
+    # The image entrypoint already loads /vault/config; naming the file again doubles the listener.
+    command: ['server']
     environment:
       VAULT_ADDR: http://127.0.0.1:8200
     network_mode: service:web
