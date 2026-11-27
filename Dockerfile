@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && useradd --create-home --uid 10001 --shell /usr/sbin/nologin cbp-runner \
     && install -d -m 0700 -o cbp-runner -g cbp-runner /home/cbp-runner/.ssh \
     && install -m 0600 -o cbp-runner -g cbp-runner /dev/null /home/cbp-runner/.ssh/known_hosts
-COPY scripts/ansible/runner.py scripts/ansible/collect-host.yml scripts/ansible/deploy-nginx.yml /opt/cbp/ansible/
+# Set modes here: COPY keeps the checkout's modes, which a umask 077 clone leaves root-only.
+COPY --chmod=0444 scripts/ansible/runner.py scripts/ansible/collect-host.yml scripts/ansible/deploy-nginx.yml /opt/cbp/ansible/
 ENV HOME=/home/cbp-runner
 USER cbp-runner
 ENTRYPOINT ["python", "-u", "/opt/cbp/ansible/runner.py"]
@@ -65,5 +66,5 @@ RUN for file in /app/package.json /app/packages/database/package.json \
 CMD ["bun", "apps/web/scripts/serve-container.js"]
 
 FROM hashicorp/vault:1.20.4 AS vault
-COPY vault/server.hcl /vault/config/cbp.hcl
-COPY vault/cbp-policy.hcl /vault/policies/cbp.hcl
+COPY --chmod=0444 vault/server.hcl /vault/config/cbp.hcl
+COPY --chmod=0444 vault/cbp-policy.hcl /vault/policies/cbp.hcl
