@@ -6,6 +6,8 @@ CBP is a web application for managing TLS certificates and deploying them to Lin
 
 The Compose stack runs the Bun web app, Go controller, and PostgreSQL. Use a Linux host with Docker Engine, Docker Compose, Bash, and OpenSSL. Choose direct HTTPS if the web container will serve TLS, or use a reverse proxy to serve HTTPS in front of the container.
 
+If the Docker host reaches the internet through an HTTP proxy, set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in `.env` or your shell. Compose passes them to the image builds for Go, Bun, pip, and apt downloads, and the web app uses them for outbound requests.
+
 For an existing deployment, keep your `.env` and controller TLS files and back up the database before upgrading. For remote agents, set `CBP_CONTROLLER_BIND` in `.env` to the Docker host's agent-facing IP address in either setup. [Upgrade and backup steps](apps/controller/README.md#upgrade-an-existing-deployment)
 
 ### Direct HTTPS

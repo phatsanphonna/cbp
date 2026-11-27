@@ -57,7 +57,7 @@ docker compose ps --all
 docker compose logs --tail=50 db-setup web controller
 ```
 
-Expect `db` to be healthy, `db-setup` to exit with code 0, and `web` and `controller` to stay running. The setup job applies the schema and provisions `cbp_web`, the restricted database login used by the web app. The database is stored in the `cbp-db` named volume.
+Expect `db` and `web` to become healthy, `db-setup` to exit with code 0, and `controller` to stay running. The web healthcheck requests the sign-in page over loopback every 30 seconds. It marks the container unhealthy but does not restart it, so connect your monitoring to `docker compose ps` or the HTTPS URL. The setup job applies the schema and provisions `cbp_web`, the restricted database login used by the web app. The database is stored in the `cbp-db` named volume.
 
 ### 3. Configure browser HTTPS
 
