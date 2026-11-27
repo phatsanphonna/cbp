@@ -1,6 +1,8 @@
 const maxCredentialFormBytes = 8192;
 
-export async function readCredentialForm(request: Request) {
+export async function readCredentialForm(
+  request: Request,
+): Promise<{ status: 400 | 413 } | { fields: FormData }> {
   if (Number(request.headers.get('content-length')) > maxCredentialFormBytes)
     return { status: 413 } as const;
   if (!request.body) return { status: 400 } as const;

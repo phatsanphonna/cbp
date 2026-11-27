@@ -19,9 +19,13 @@ export type AlertDelivery = {
 const severityOrder = sql`array['Info', 'Warning', 'High', 'Critical']`;
 const maxAttempts = 5;
 
-export async function claimAlertDeliveries(db: Database, channelIds: number[]) {
+export async function claimAlertDeliveries(
+  db: Database,
+  channelIds: number[],
+): Promise<AlertDelivery[]> {
   if (!channelIds.length) return [];
-  return db.execute<AlertDelivery>(sql`
+  // Raw SQL rows are untyped; the final select list matches AlertDelivery.
+  const rows = await db.execute(sql`
     with candidates as (
       select a.id as alert_id, c.id as channel_id, a.severity, a.message, a.target
       from ${alerts} a
@@ -58,6 +62,7 @@ export async function claimAlertDeliveries(db: Database, channelIds: number[]) {
     select alert_id as "alertId", channel_id as "channelId", severity, attempts, message, target
     from claimed join candidates using (alert_id, channel_id, severity)
   `);
+  return rows as unknown as AlertDelivery[];
 }
 
 export async function markAlertDelivered(db: Database, delivery: AlertDelivery) {

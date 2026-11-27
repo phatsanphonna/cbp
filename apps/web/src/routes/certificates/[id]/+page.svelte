@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { enhance } from '$app/forms';
   import { createColumnHelper, renderSnippet } from '@tanstack/svelte-table';
   import { toast } from 'svelte-sonner';
@@ -104,8 +105,9 @@
     privateKey?: string;
     warning?: string;
   };
-  let manualRenewOpen = $state(Boolean(form?.renewalResult));
-  let renewalComplete = $state<RenewalResult | null>(form?.renewalResult ?? null);
+  // Initial values only: a no-JS form post reopens the dialog; enhanced submits update it below.
+  let manualRenewOpen = $state(untrack(() => Boolean(form?.renewalResult)));
+  let renewalComplete = $state<RenewalResult | null>(untrack(() => form?.renewalResult ?? null));
   const certificate = $derived(data.certificate);
   // Renewing from the stored key requires credentials.manage on the server.
   const canUseStoredKey = $derived(certificate.hasRenewalKey && data.canManageCredentials);

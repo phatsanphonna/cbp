@@ -18,10 +18,12 @@ type Owner = { hostId: string } | { certificateId: string };
 type Job = typeof deploymentJobs.$inferSelect;
 type Worker = { method: 'Agent'; hash: string } | { method: 'Ansible'; endpoint: string };
 const inventoryId = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
-type DeploymentPayload = Pick<
-  Job,
-  'id' | 'deploymentId' | 'hostId' | 'engine' | 'endpoint' | 'fullchain'
-> & { method?: Job['method'] };
+// Job rows keep history after a host or deployment is deleted; new jobs always have both.
+type DeploymentPayload = Pick<Job, 'id' | 'engine' | 'endpoint' | 'fullchain'> & {
+  deploymentId: string;
+  hostId: string;
+  method?: Job['method'];
+};
 const active = inArray(deploymentJobs.status, ['Queued', 'Running']);
 const unexpired = gt(deploymentJobs.expiresAt, sql`now()`);
 const expired = lte(deploymentJobs.expiresAt, sql`now()`);
@@ -372,6 +374,7 @@ export async function findRecoverableDeployment(db: Database, jobId: string) {
 export async function queueDeploymentRecovery(db: Database, sourceId: string, id: string) {
   const source = await findRecoverableDeployment(db, sourceId);
   if (!source?.hostId || !source.deploymentId) return { status: 'missing' } as const;
+  const { hostId, deploymentId } = source;
 
   return db.transaction(async (tx) => {
     const [host] = await tx
@@ -382,7 +385,7 @@ export async function queueDeploymentRecovery(db: Database, sourceId: string, id
         ansibleManaged: hosts.ansibleManaged,
       })
       .from(hosts)
-      .where(eq(hosts.id, source.hostId!))
+      .where(eq(hosts.id, hostId))
       .for('update');
     if (!host || (source.method === 'Agent' ? !host.agentManaged : !host.ansibleManaged))
       return { status: 'missing' } as const;
@@ -401,7 +404,7 @@ export async function queueDeploymentRecovery(db: Database, sourceId: string, id
       })
       .from(deployments)
       .innerJoin(certificates, eq(certificates.id, deployments.certificateId))
-      .where(and(eq(deployments.id, source.deploymentId), eq(deployments.hostId, host.id)))
+      .where(and(eq(deployments.id, deploymentId), eq(deployments.hostId, host.id)))
       .for('share', { of: deployments });
     if (
       !deployment ||

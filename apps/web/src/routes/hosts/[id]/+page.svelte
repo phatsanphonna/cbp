@@ -16,7 +16,9 @@
   import LinkDeploymentDialog from '#lib/components/svelte/link-deployment-dialog.svelte';
   import ServedCertificateExpiry from '#lib/components/svelte/served-certificate-expiry.svelte';
   import FormSelect from '#lib/components/svelte/form-select.svelte';
-  import { Field, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
+  import { Field, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import { Spinner } from '#lib/components/ui/spinner/index.ts';
   import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
   import { Badge } from '#lib/components/ui/badge/index.ts';
   import { Button } from '#lib/components/ui/button/index.ts';
@@ -31,6 +33,7 @@
 
   let { data, form }: PageProps = $props();
   let selectedCredential = $state('none');
+  let savingCredential = $state(false);
   $effect(() => {
     selectedCredential = data.credentials.bound ?? 'none';
   });
@@ -224,59 +227,81 @@
       </div>
     </dl>
     {#if data.canManageCredentials && (host.ansibleManaged || data.credentials.bound)}
-      <div class="border-t p-4">
-        <h3 class="text-sm font-medium">Ansible credential</h3>
+      <section class="grid gap-3 border-t p-4" aria-labelledby="ansible-credential-heading">
+        <div class="grid gap-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <h3 id="ansible-credential-heading" class="text-sm font-medium">Ansible credential</h3>
+            {#if data.credentials.available}
+              <Badge variant={data.credentials.bound ? 'secondary' : 'outline'}>
+                {data.credentials.bound ? 'Bound' : 'Not bound'}
+              </Badge>
+            {/if}
+          </div>
+          {#if data.credentials.error}
+            <p class="text-xs text-destructive">Could not load credentials from Vault.</p>
+          {:else if data.credentials.available}
+            <p class="text-xs text-muted-foreground">
+              The Ansible worker signs in to this host over SSH with the bound credential.
+            </p>
+          {:else}
+            <p class="text-xs text-muted-foreground">
+              Saved credentials need Vault and the trusted HTTPS address.
+            </p>
+          {/if}
+        </div>
         {#if data.credentials.available}
           <form
             method="POST"
             action="?/bindCredential"
-            class="mt-3 max-w-md"
+            class="flex max-w-md flex-wrap items-end gap-2"
             use:enhance={() => {
+              savingCredential = true;
               return async ({ result, update }) => {
-                await update();
-                if (
-                  result.type === 'success' &&
-                  typeof result.data?.credentialMessage === 'string'
-                ) {
-                  toast.success(result.data.credentialMessage);
-                } else if (
-                  result.type === 'failure' &&
-                  typeof result.data?.credentialError === 'string'
-                ) {
-                  toast.error(result.data.credentialError);
+                try {
+                  await update();
+                  notifyFormResult(result, {
+                    success: 'credentialMessage',
+                    error: 'credentialError',
+                  });
+                } finally {
+                  savingCredential = false;
                 }
               };
             }}
           >
-            <FieldGroup>
-              <Field>
-                <FieldLabel for="host-credential">Credential for this host</FieldLabel>
-                <FormSelect
-                  id="host-credential"
-                  name="credentialId"
-                  bind:value={selectedCredential}
-                  items={[
-                    { value: 'none', label: 'No credential' },
-                    ...data.credentials.profiles.map((profile) => ({
-                      value: profile.id,
-                      label: profile.name,
-                    })),
-                  ]}
-                />
-              </Field>
-              <Button type="submit" size="sm">Save binding</Button>
-            </FieldGroup>
+            <Field class="min-w-48 flex-1">
+              <FieldLabel for="host-credential">Credential for this host</FieldLabel>
+              <FormSelect
+                id="host-credential"
+                name="credentialId"
+                bind:value={selectedCredential}
+                items={[
+                  { value: 'none', label: 'No credential' },
+                  ...data.credentials.profiles.map((profile) => ({
+                    value: profile.id,
+                    label: profile.name,
+                  })),
+                ]}
+              />
+            </Field>
+            <Button
+              type="submit"
+              disabled={savingCredential ||
+                selectedCredential === (data.credentials.bound ?? 'none')}
+              aria-busy={savingCredential}
+            >
+              {#if savingCredential}<Spinner data-icon="inline-start" aria-hidden="true" />{/if}
+              Save binding
+            </Button>
           </form>
           <a
             href={resolve('/ansible-credentials')}
-            class="mt-3 inline-block text-xs text-primary underline underline-offset-4"
+            class="justify-self-start text-xs text-primary underline underline-offset-4"
           >
             Manage credentials
           </a>
-        {:else if data.credentials.error}
-          <p class="mt-2 text-xs text-destructive">Could not load credentials from Vault.</p>
         {/if}
-      </div>
+      </section>
     {/if}
     {#key host.id}
       <AgentEnrollment

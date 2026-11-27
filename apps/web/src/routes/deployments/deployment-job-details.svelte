@@ -295,10 +295,15 @@
                               await update();
                               if (result.type === 'success')
                                 toast.success('Queued deployment canceled.');
-                              else
+                              else {
+                                const message =
+                                  result.type === 'failure' ? result.data?.cancelError : null;
                                 toast.error(
-                                  result.data?.cancelError ?? 'Could not cancel the deployment.',
+                                  typeof message === 'string'
+                                    ? message
+                                    : 'Could not cancel the deployment.',
                                 );
+                              }
                             } finally {
                               cancelPendingId = null;
                             }

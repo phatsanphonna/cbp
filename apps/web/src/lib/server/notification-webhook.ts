@@ -1,7 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import { request } from 'node:https';
 import { isIP } from 'node:net';
-import { checkServerIdentity } from 'node:tls';
+import { checkServerIdentity, type PeerCertificate } from 'node:tls';
 
 export function parseWebhookUrl(value: string) {
   const url = URL.parse(value);
@@ -99,7 +99,8 @@ export async function postPublicWebhook(
       tls: {
         serverName: url.hostname,
         rejectUnauthorized: true,
-        checkServerIdentity: (_, cert) => checkServerIdentity(url.hostname, cert),
+        checkServerIdentity: (_: string, cert: PeerCertificate) =>
+          checkServerIdentity(url.hostname, cert),
       },
       redirect: 'error',
       signal: AbortSignal.timeout(10_000),

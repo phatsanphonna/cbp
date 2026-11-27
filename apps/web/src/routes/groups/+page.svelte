@@ -75,7 +75,7 @@
   function permissionLabels(keys: string[]) {
     return keys
       .map((key) => data.permissions.find((permission) => permission.key === key)?.label)
-      .filter((label): label is string => Boolean(label));
+      .filter((label) => label !== undefined);
   }
 </script>
 

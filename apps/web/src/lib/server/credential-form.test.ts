@@ -12,7 +12,7 @@ test('reads a normal sign-in form', async () => {
     }),
   });
   const result = await readCredentialForm(request);
-  expect(result.fields?.get('identifier')).toBe('operator');
+  expect('fields' in result && result.fields.get('identifier')).toBe('operator');
 });
 
 test('rejects oversized bodies without relying on Content-Length', async () => {

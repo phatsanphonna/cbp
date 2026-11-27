@@ -58,7 +58,7 @@ export function parseCertificateChain(pem: string) {
 
   // Quoted SAN values can contain commas. Keep them intact while extracting DNS and IP names.
   const names =
-    leaf.subjectAltName?.match(/(?:"(?:\\.|[^"\\])*"|[^",])+/g).map((name) => name.trim()) ?? [];
+    leaf.subjectAltName?.match(/(?:"(?:\\.|[^"\\])*"|[^",])+/g)?.map((name) => name.trim()) ?? [];
   const dnsEntries = names.filter((name) => name.startsWith('DNS:'));
   const dnsNames = dnsEntries.map((name) => name.slice(4).toLowerCase()).filter(isDnsName);
   const ipEntries = names.filter((name) => name.startsWith('IP Address:'));

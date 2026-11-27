@@ -24,7 +24,7 @@ async function findGroup(id: number) {
   return (await listAccessGroups(getDatabase())).find((group) => group.id === id);
 }
 
-const allowedPermissions = new Set(accessPermissions.map(({ key }) => key));
+const allowedPermissions = new Set<string>(accessPermissions.map(({ key }) => key));
 
 function readId(value: FormDataEntryValue | null) {
   const id = Number(value);

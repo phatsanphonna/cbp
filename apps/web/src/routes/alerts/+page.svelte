@@ -36,7 +36,6 @@
         ? [
             column.accessor('id', {
               header: 'Actions',
-              enableSorting: false,
               cell: ({ row }) => renderSnippet(clearButton, row.original),
             }),
           ]

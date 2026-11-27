@@ -22,7 +22,8 @@ export const POST = controllerPost(async (db, { hostId, token, jobId, outcome, d
   )
     return 400;
   if (outcome !== 'ok' && !Object.hasOwn(messages, outcome)) return 400;
-  let detail = outcome === 'ok' ? null : messages[outcome as keyof typeof messages];
+  let detail: string | null =
+    outcome === 'ok' ? null : messages[outcome as keyof typeof messages];
   if (
     (outcome === 'certificate' || outcome === 'verify') &&
     typeof diagnostic === 'string' &&

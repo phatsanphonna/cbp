@@ -1,5 +1,3 @@
-import { mkdtemp, rm, rmdir } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,51 +29,30 @@ if (env.CBP_CONTROLLER_TOKEN && !env.CBP_WEB_URL) {
   env.CBP_WEB_URL = env.BETTER_AUTH_URL || 'http://127.0.0.1:5173';
 }
 
-const directory = await mkdtemp(join(tmpdir(), 'cbp-controller-'));
-const executable = join(directory, windows ? 'cbp-controller.exe' : 'cbp-controller');
-const options = {
-  cwd: root,
-  env,
-  stdin: 'inherit',
-  stdout: 'inherit',
-  stderr: 'inherit',
-} as const;
-let child: ReturnType<typeof Bun.spawn> | undefined;
+// Live reload via air (config: apps/controller/.air.toml). Uses an installed `air`, else `go run`.
+const air = Bun.which('air');
+const child = Bun.spawn(
+  [
+    ...(air ? [air] : [go, 'run', 'github.com/air-verse/air@v1.67.4']),
+    '-c',
+    'apps/controller/.air.toml',
+    '--',
+    'serve',
+    '-listen',
+    env.CBP_CONTROLLER_LISTEN || '127.0.0.1:50051',
+    '-tls-cert',
+    cert,
+    '-tls-key',
+    key,
+  ],
+  { cwd: root, env, stdin: 'inherit', stdout: 'inherit', stderr: 'inherit' },
+);
 let stopping = false;
-
-function stop() {
+const stop = () => {
   stopping = true;
-  child?.kill();
-}
-
+  child.kill();
+};
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
-
-try {
-  child = Bun.spawn([go, 'build', '-o', executable, './apps/controller'], options);
-  const built = await child.exited;
-  if (built === 0 && !stopping) {
-    child = Bun.spawn(
-      [
-        executable,
-        'serve',
-        '-listen',
-        env.CBP_CONTROLLER_LISTEN || '127.0.0.1:50051',
-        '-tls-cert',
-        cert,
-        '-tls-key',
-        key,
-      ],
-      options,
-    );
-    process.exitCode = await child.exited;
-  } else {
-    process.exitCode = built;
-  }
-} finally {
-  if (stopping) process.exitCode = 0;
-  process.off('SIGINT', stop);
-  process.off('SIGTERM', stop);
-  await rm(executable, { force: true });
-  await rmdir(directory);
-}
+const code = await child.exited;
+process.exitCode = stopping ? 0 : code;

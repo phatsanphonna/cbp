@@ -1,0 +1,14 @@
+# Live reload for `bun run dev:controller`; paths are relative to the repo root (go.work).
+root = "."
+tmp_dir = ".cbp-dev/air"
+
+[build]
+cmd = "go build -o .cbp-dev/air/cbp-controller.exe ./apps/controller"
+entrypoint = [".cbp-dev/air/cbp-controller.exe"]
+include_dir = ["apps/controller", "packages/agent-rpc"]
+include_ext = ["go"]
+exclude_regex = ["_test\\.go$"]
+delay = 500
+
+[misc]
+clean_on_exit = true

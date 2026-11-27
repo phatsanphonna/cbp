@@ -55,7 +55,7 @@
   }
 
   function pageHref(target: number) {
-    const params = new URLSearchParams(page.url.searchParams);
+    const params = new URLSearchParams(page.url.search);
     params.set('page', String(target));
     return `${resolve('/audit')}?${params}`;
   }

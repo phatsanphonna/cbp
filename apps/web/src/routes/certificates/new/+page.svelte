@@ -22,10 +22,14 @@
   const issuance = registration + '?method=letsencrypt';
   const selfSigned = registration + '?method=selfsigned';
   const generated = $derived(form && 'generated' in form ? form.generated : null);
-  const submittedHostnames = $derived(form && 'hostnames' in form ? (form.hostnames ?? '') : '');
-  const submittedAutoRenew = $derived(form && 'autoRenew' in form ? form.autoRenew : false);
+  const submittedHostnames = $derived(
+    form && 'hostnames' in form && typeof form.hostnames === 'string' ? form.hostnames : '',
+  );
+  const submittedAutoRenew = $derived(
+    form != null && 'autoRenew' in form && form.autoRenew === true,
+  );
   const submittedStorePrivateKey = $derived(
-    form && 'storePrivateKey' in form ? form.storePrivateKey : false,
+    form != null && 'storePrivateKey' in form && form.storePrivateKey === true,
   );
   let autoRenew = $state(false);
   let storePrivateKey = $state(false);
@@ -56,7 +60,7 @@
     onValueChange={(method) => {
       const target =
         method === 'letsencrypt' ? issuance : method === 'selfsigned' ? selfSigned : registration;
-      void goto(target, { keepFocus: true, noScroll: true });
+      void goto(target, { reset: false });
     }}
   >
     <Tabs.List aria-label="Certificate registration method">
@@ -242,7 +246,7 @@
             <textarea
               id="issuance-hostnames"
               name="hostnames"
-              value={form?.hostnames ?? ''}
+              value={submittedHostnames}
               required
               maxlength={25400}
               rows={4}

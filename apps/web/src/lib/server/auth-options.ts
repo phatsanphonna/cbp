@@ -6,7 +6,10 @@ import { username } from 'better-auth/plugins';
 
 export function authOptions(
   disableSignUp = true,
-  settings: { BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string } = env,
+  settings: { BETTER_AUTH_SECRET?: string; BETTER_AUTH_URL?: string } = {
+    BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
+    BETTER_AUTH_URL: env.BETTER_AUTH_URL,
+  },
   database?: ReturnType<typeof openDatabase>,
 ) {
   const secret = settings.BETTER_AUTH_SECRET;
@@ -29,7 +32,7 @@ export function authOptions(
       emailAndPassword: { enabled: true, disableSignUp },
       // Sessions can download private keys, so expire after 12 hours instead of the 7-day default.
       session: { expiresIn: 60 * 60 * 12, updateAge: 60 * 60 },
-      plugins: [username()],
+      plugins: [username()] as [ReturnType<typeof username>],
     },
   };
 }

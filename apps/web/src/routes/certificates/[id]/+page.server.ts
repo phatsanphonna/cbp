@@ -1,5 +1,5 @@
 import { resolve } from '$app/paths';
-import { error, fail, redirect } from '@sveltejs/kit';
+import { error, fail, redirect, type ServerLoadEvent } from '@sveltejs/kit';
 import {
   findCertificate,
   findCertificateDomain,
@@ -39,9 +39,10 @@ import {
   selfSignedIssuer,
 } from '#lib/server/self-signed-certificate.js';
 import { findRenewalSource, setAutoDeploy, setAutoRenew } from '@cbp/database/renewals';
-import type { Actions, PageServerLoad, RequestEvent } from './$types';
+import type { Actions, RequestEvent } from './$types';
 
-export const load: PageServerLoad = async (event) => {
+// Typed on any route with an `id` param so /certificates/[id]/deploy can reuse it.
+export const load = async (event: ServerLoadEvent<{ id: string }>) => {
   const { params, cookies, depends } = event;
   depends('cbp:agent-deployments');
   const database = getDatabase();
@@ -275,7 +276,7 @@ async function renewNow(event: RequestEvent) {
     }
   }
   const result = await renewCertificateNow(params.id, privateKey);
-  if ('status' in result) return fail(result.status, { renewalError: result.message });
+  if (!result.ok) return fail(result.status, { renewalError: result.message });
   locals.auditTargetId = params.id;
   return {
     renewalResult: {

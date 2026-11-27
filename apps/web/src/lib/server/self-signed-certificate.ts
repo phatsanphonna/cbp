@@ -1,7 +1,6 @@
 import {
   createPrivateKey,
   randomBytes,
-  webcrypto,
   X509Certificate as NodeX509Certificate,
 } from 'node:crypto';
 import { isIP } from 'node:net';
@@ -109,7 +108,7 @@ function metadata(fullchain: string) {
 export async function generateSelfSignedCertificate(inputNames: string[]) {
   const names = normalizeNames(inputNames);
   if (!names) throw new Error('Invalid self-signed certificate names');
-  const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+  const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
     'sign',
     'verify',
   ]);
@@ -124,10 +123,10 @@ export async function generateSelfSignedCertificate(inputNames: string[]) {
       keys,
       extensions: extensions(names),
     },
-    webcrypto,
+    crypto,
   );
   const fullchain = certificate.toString('pem');
-  const key = await webcrypto.subtle.exportKey('pkcs8', keys.privateKey);
+  const key = await crypto.subtle.exportKey('pkcs8', keys.privateKey);
   return {
     metadata: metadata(fullchain),
     privateKey: PemConverter.encode(key, PemConverter.PrivateKeyTag),
@@ -148,7 +147,7 @@ export async function renewSelfSignedCertificate(
   )
     throw new Error('The self-signed certificate key does not match');
 
-  const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+  const keys = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
     'sign',
     'verify',
   ]);
@@ -163,10 +162,10 @@ export async function renewSelfSignedCertificate(
       signingAlgorithm: { name: 'ECDSA', hash: 'SHA-256' },
       extensions: extensions(normalized),
     },
-    webcrypto,
+    crypto,
   );
   const renewedFullchain = certificate.toString('pem');
-  const key = await webcrypto.subtle.exportKey('pkcs8', keys.privateKey);
+  const key = await crypto.subtle.exportKey('pkcs8', keys.privateKey);
   return {
     metadata: metadata(renewedFullchain),
     privateKey: PemConverter.encode(key, PemConverter.PrivateKeyTag),

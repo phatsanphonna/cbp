@@ -4,6 +4,10 @@
 
 Use Ponytail `ultra` mode by default for coding tasks in this repository. Before editing, question scope that the task does not justify. Make the smallest change that fully solves the request, and reuse existing code before adding abstractions or dependencies. Follow this guidance directly if the Ponytail skill is unavailable. Honor any mode the user explicitly requests for the current session.
 
+## Following Project Guidelines
+
+AI agents must treat this document as the repository's source of truth. Before making changes, read the applicable guidance and any more-specific instructions, inspect relevant existing code, and follow the established project structure, coding style, and UI conventions. Prefer existing patterns over introducing new ones. If the user's request explicitly conflicts with a guideline, follow the request and state the tradeoff.
+
 ## Build, Test, and Development
 
 Use Bun 1.4.5 and Go 1.27.4. Run these commands from the repository root.

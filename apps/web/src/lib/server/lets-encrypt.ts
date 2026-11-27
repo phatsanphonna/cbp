@@ -125,12 +125,12 @@ export async function renewDueCertificate() {
 export async function renewCertificateNow(id: string, privateKeyOverride?: string) {
   const db = getDatabase();
   const source = await findRenewalSource(db, id);
-  if (!source) return { ok: false, status: 404, message: 'Certificate not found.' };
+  if (!source) return { ok: false as const, status: 404, message: 'Certificate not found.' };
 
   if (source.issuer === 'CN=Self-signed certificate') {
     if (!selfSignedRenewalAvailable)
       return {
-        ok: false,
+        ok: false as const,
         status: 503,
         message: 'A 32-character server secret is required for renewal.',
       };
@@ -139,7 +139,7 @@ export async function renewCertificateNow(id: string, privateKeyOverride?: strin
       (!source.hasRenewalKey && !privateKeyOverride)
     )
       return {
-        ok: false,
+        ok: false as const,
         status: 400,
         message:
           'This self-signed certificate needs a valid fullchain and matching private key to renew.',
@@ -160,13 +160,13 @@ export async function renewCertificateNow(id: string, privateKeyOverride?: strin
 
   if (!renewalAvailable)
     return {
-      ok: false,
+      ok: false as const,
       status: 503,
       message: 'Configure Let’s Encrypt on the server first.',
     };
   if (!letsEncryptNames(source.domain, source.fullchain))
     return {
-      ok: false,
+      ok: false as const,
       status: 400,
       message:
         'This certificate needs a valid Let’s Encrypt fullchain with non-wildcard DNS names.',

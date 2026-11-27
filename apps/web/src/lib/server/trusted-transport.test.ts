@@ -36,8 +36,14 @@ test('the Bun adapter uses forwarded transport and IP only from the trusted prox
 test('HTTP development requires a loopback host and peer', () => {
   const url = new URL('http://localhost');
   const request = new Request(url);
-  expect(hasTrustedTransport({ url, request, getClientAddress: () => '127.0.0.1' })).toBe(true);
-  expect(hasTrustedTransport({ url, request, getClientAddress: () => '192.0.2.1' })).toBe(false);
+  const connection = (address: string) => ({
+    url,
+    request,
+    platform: undefined,
+    getClientAddress: () => address,
+  });
+  expect(hasTrustedTransport(connection('127.0.0.1'))).toBe(true);
+  expect(hasTrustedTransport(connection('192.0.2.1'))).toBe(false);
 });
 
 test('native HTTPS trusts the TLS listener and keeps the socket client IP', () => {
