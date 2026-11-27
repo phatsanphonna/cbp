@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { enhance } from "$app/forms";
-  import { toast } from "svelte-sonner";
-  import * as AlertDialog from "#lib/components/ui/alert-dialog/index.ts";
-  import { Button } from "#lib/components/ui/button/index.ts";
+  import { enhance } from '$app/forms';
+  import { toast } from 'svelte-sonner';
+  import * as AlertDialog from '#lib/components/ui/alert-dialog/index.ts';
+  import { Button } from '#lib/components/ui/button/index.ts';
 
   let {
     deploymentId,
@@ -27,16 +27,17 @@
         type="button"
         variant="outline"
         {disabled}
-        aria-label={`Delete endpoint ${endpoint}`}>Delete endpoint</Button
+        aria-label={`Delete endpoint ${endpoint}`}
       >
+        Delete endpoint
+      </Button>
     {/snippet}
   </AlertDialog.Trigger>
   <AlertDialog.Content>
     <AlertDialog.Header>
       <AlertDialog.Title>Delete endpoint?</AlertDialog.Title>
       <AlertDialog.Description class="wrap-anywhere">
-        Remove {endpoint} from the deployment inventory and cancel any queued deployment
-        for it.
+        Remove {endpoint} from the deployment inventory and cancel any queued deployment for it.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <form
@@ -47,12 +48,15 @@
         return async ({ result, update }) => {
           try {
             await update();
-            if (result.type === "success") {
+            if (result.type === 'success') {
               open = false;
-              if (typeof result.data?.removeDeploymentMessage === "string") {
+              if (typeof result.data?.removeDeploymentMessage === 'string') {
                 toast.success(result.data.removeDeploymentMessage);
               }
-            } else if (result.type === 'failure' && typeof result.data?.removeDeploymentError === 'string') {
+            } else if (
+              result.type === 'failure' &&
+              typeof result.data?.removeDeploymentError === 'string'
+            ) {
               toast.error(result.data.removeDeploymentError);
             }
           } finally {
@@ -64,9 +68,9 @@
       <input type="hidden" name="deploymentId" value={deploymentId} />
       <AlertDialog.Footer>
         <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
-        <Button type="submit" variant="destructive" disabled={pending}
-          >{pending ? "Deleting…" : "Delete endpoint"}</Button
-        >
+        <Button type="submit" variant="destructive" disabled={pending}>
+          {pending ? 'Deleting…' : 'Delete endpoint'}
+        </Button>
       </AlertDialog.Footer>
     </form>
   </AlertDialog.Content>

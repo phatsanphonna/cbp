@@ -1,14 +1,11 @@
 <script lang="ts">
-  import { mode } from "mode-watcher";
-  import {
-    Toaster as Sonner,
-    type ToasterProps as SonnerProps,
-  } from "svelte-sonner";
-  import Loader2Icon from "@lucide/svelte/icons/loader-2";
-  import CircleCheckIcon from "@lucide/svelte/icons/circle-check";
-  import OctagonXIcon from "@lucide/svelte/icons/octagon-x";
-  import InfoIcon from "@lucide/svelte/icons/info";
-  import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
+  import { mode } from 'mode-watcher';
+  import { Toaster as Sonner, type ToasterProps as SonnerProps } from 'svelte-sonner';
+  import Loader2Icon from '@lucide/svelte/icons/loader-2';
+  import CircleCheckIcon from '@lucide/svelte/icons/circle-check';
+  import OctagonXIcon from '@lucide/svelte/icons/octagon-x';
+  import InfoIcon from '@lucide/svelte/icons/info';
+  import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 
   let { ...restProps }: SonnerProps = $props();
 </script>
@@ -18,7 +15,7 @@
   class="toaster group"
   toastOptions={{
     classes: {
-      toast: "cn-toast",
+      toast: 'cn-toast',
     },
   }}
   {...restProps}
@@ -52,17 +49,13 @@
     font-family: inherit;
   }
 
-  :global(
-    .toaster [data-sonner-toast][data-styled="true"] [data-close-button]
-  ) {
+  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]) {
     border-radius: var(--radius);
   }
 
   :global(
     .toaster
-      [data-sonner-toast][data-styled="true"]:not(
-        [data-rich-colors="true"][data-type]
-      )
+      [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type])
       [data-close-button]
   ) {
     border-color: var(--border);
@@ -71,9 +64,7 @@
 
   :global(
     .toaster
-      [data-sonner-toast][data-styled="true"]:not(
-        [data-rich-colors="true"][data-type]
-      ):hover
+      [data-sonner-toast][data-styled='true']:not([data-rich-colors='true'][data-type]):hover
       [data-close-button]:hover
   ) {
     background: var(--accent);
@@ -81,11 +72,7 @@
     color: var(--accent-foreground);
   }
 
-  :global(
-    .toaster
-      [data-sonner-toast][data-styled="true"]
-      [data-close-button]:focus-visible
-  ) {
+  :global(.toaster [data-sonner-toast][data-styled='true'] [data-close-button]:focus-visible) {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }

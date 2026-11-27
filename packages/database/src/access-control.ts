@@ -1,12 +1,12 @@
-import { asc, eq, inArray } from "drizzle-orm";
-import type { openDatabase } from "./index.js";
-import { user } from "./auth-schema.js";
+import { asc, eq, inArray } from 'drizzle-orm';
+import type { openDatabase } from './index.js';
+import { user } from './auth-schema.js';
 import {
   userGroupMembers,
   userGroupPermissions,
   userGroups,
   userPermissions,
-} from "./inventory-schema.js";
+} from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 
@@ -15,10 +15,7 @@ export async function listUserPermissions(db: Database, userId: string) {
     db
       .selectDistinct({ permission: userGroupPermissions.permission })
       .from(userGroupMembers)
-      .innerJoin(
-        userGroupPermissions,
-        eq(userGroupPermissions.groupId, userGroupMembers.groupId),
-      )
+      .innerJoin(userGroupPermissions, eq(userGroupPermissions.groupId, userGroupMembers.groupId))
       .where(eq(userGroupMembers.userId, userId)),
     db
       .select({ permission: userPermissions.permission })
@@ -32,7 +29,12 @@ export async function listAccessGroups(db: Database) {
   const [groups, members, grants] = await Promise.all([
     db.select().from(userGroups).orderBy(asc(userGroups.name)),
     db
-      .select({ groupId: userGroupMembers.groupId, userId: user.id, name: user.name, email: user.email })
+      .select({
+        groupId: userGroupMembers.groupId,
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+      })
       .from(userGroupMembers)
       .innerJoin(user, eq(user.id, userGroupMembers.userId))
       .orderBy(asc(user.name), asc(user.email)),
@@ -60,16 +62,17 @@ export async function listAccessUsers(db: Database) {
       .from(user)
       .orderBy(asc(user.name), asc(user.email)),
     db
-      .select({ userId: userGroupMembers.userId, groupId: userGroups.id, groupName: userGroups.name })
+      .select({
+        userId: userGroupMembers.userId,
+        groupId: userGroups.id,
+        groupName: userGroups.name,
+      })
       .from(userGroupMembers)
       .innerJoin(userGroups, eq(userGroups.id, userGroupMembers.groupId)),
     db
       .select({ userId: userGroupMembers.userId, permission: userGroupPermissions.permission })
       .from(userGroupMembers)
-      .innerJoin(
-        userGroupPermissions,
-        eq(userGroupPermissions.groupId, userGroupMembers.groupId),
-      ),
+      .innerJoin(userGroupPermissions, eq(userGroupPermissions.groupId, userGroupMembers.groupId)),
     db
       .select({ userId: userPermissions.userId, permission: userPermissions.permission })
       .from(userPermissions),
@@ -85,14 +88,16 @@ export async function listAccessUsers(db: Database) {
     directPermissions: directGrants
       .filter((grant) => grant.userId === account.id)
       .map(({ permission }) => permission),
-    permissions: [...new Set([
-      ...groupGrants
-        .filter((grant) => grant.userId === account.id)
-        .map(({ permission }) => permission),
-      ...directGrants
-        .filter((grant) => grant.userId === account.id)
-        .map(({ permission }) => permission),
-    ])],
+    permissions: [
+      ...new Set([
+        ...groupGrants
+          .filter((grant) => grant.userId === account.id)
+          .map(({ permission }) => permission),
+        ...directGrants
+          .filter((grant) => grant.userId === account.id)
+          .map(({ permission }) => permission),
+      ]),
+    ],
   }));
 }
 
@@ -112,11 +117,7 @@ export async function createAccessGroup(db: Database, name: string) {
   return group?.id;
 }
 
-export async function renameAccessGroup(
-  db: Database,
-  id: number,
-  name: string,
-) {
+export async function renameAccessGroup(db: Database, id: number, name: string) {
   const [group] = await db
     .update(userGroups)
     .set({ name })
@@ -133,66 +134,50 @@ export async function removeAccessGroup(db: Database, id: number) {
   return group?.id;
 }
 
-export async function setAccessGroupMembers(
-  db: Database,
-  groupId: number,
-  userIds: string[],
-) {
+export async function setAccessGroupMembers(db: Database, groupId: number, userIds: string[]) {
   return db.transaction(async (tx) => {
     const [group] = await tx
       .select({ id: userGroups.id })
       .from(userGroups)
       .where(eq(userGroups.id, groupId))
-      .for("update");
-    if (!group) return "missing" as const;
+      .for('update');
+    if (!group) return 'missing' as const;
     if (userIds.length) {
-      const existing = await tx
-        .select({ id: user.id })
-        .from(user)
-        .where(inArray(user.id, userIds));
-      if (existing.length !== userIds.length) return "invalid-users" as const;
+      const existing = await tx.select({ id: user.id }).from(user).where(inArray(user.id, userIds));
+      if (existing.length !== userIds.length) return 'invalid-users' as const;
     }
     await tx.delete(userGroupMembers).where(eq(userGroupMembers.groupId, groupId));
     if (userIds.length) {
-      await tx.insert(userGroupMembers).values(
-        userIds.map((userId) => ({ groupId, userId })),
-      );
+      await tx.insert(userGroupMembers).values(userIds.map((userId) => ({ groupId, userId })));
     }
-    return "saved" as const;
+    return 'saved' as const;
   });
 }
 
-export async function setAccessUserGroups(
-  db: Database,
-  userId: string,
-  groupIds: number[],
-) {
+export async function setAccessUserGroups(db: Database, userId: string, groupIds: number[]) {
   return db.transaction(async (tx) => {
     const [account] = await tx
       .select({ id: user.id })
       .from(user)
       .where(eq(user.id, userId))
-      .for("update");
-    if (!account) return "missing" as const;
+      .for('update');
+    if (!account) return 'missing' as const;
     const uniqueGroupIds = [...new Set(groupIds)];
     if (uniqueGroupIds.length) {
       const existing = await tx
         .select({ id: userGroups.id })
         .from(userGroups)
         .where(inArray(userGroups.id, uniqueGroupIds))
-        .for("update");
-      if (existing.length !== uniqueGroupIds.length)
-        return "invalid-groups" as const;
+        .for('update');
+      if (existing.length !== uniqueGroupIds.length) return 'invalid-groups' as const;
     }
-    await tx
-      .delete(userGroupMembers)
-      .where(eq(userGroupMembers.userId, userId));
+    await tx.delete(userGroupMembers).where(eq(userGroupMembers.userId, userId));
     if (uniqueGroupIds.length) {
-      await tx.insert(userGroupMembers).values(
-        uniqueGroupIds.map((groupId) => ({ groupId, userId })),
-      );
+      await tx
+        .insert(userGroupMembers)
+        .values(uniqueGroupIds.map((groupId) => ({ groupId, userId })));
     }
-    return "saved" as const;
+    return 'saved' as const;
   });
 }
 
@@ -206,16 +191,16 @@ export async function setAccessUserPermissions(
       .select({ id: user.id })
       .from(user)
       .where(eq(user.id, userId))
-      .for("update");
-    if (!account) return "missing" as const;
+      .for('update');
+    if (!account) return 'missing' as const;
     const uniquePermissions = [...new Set(permissions)];
     await tx.delete(userPermissions).where(eq(userPermissions.userId, userId));
     if (uniquePermissions.length) {
-      await tx.insert(userPermissions).values(
-        uniquePermissions.map((permission) => ({ userId, permission })),
-      );
+      await tx
+        .insert(userPermissions)
+        .values(uniquePermissions.map((permission) => ({ userId, permission })));
     }
-    return "saved" as const;
+    return 'saved' as const;
   });
 }
 
@@ -229,15 +214,13 @@ export async function setAccessGroupPermissions(
       .select({ id: userGroups.id })
       .from(userGroups)
       .where(eq(userGroups.id, groupId))
-      .for("update");
+      .for('update');
     if (!group) return false;
-    await tx
-      .delete(userGroupPermissions)
-      .where(eq(userGroupPermissions.groupId, groupId));
+    await tx.delete(userGroupPermissions).where(eq(userGroupPermissions.groupId, groupId));
     if (permissions.length) {
-      await tx.insert(userGroupPermissions).values(
-        permissions.map((permission) => ({ groupId, permission })),
-      );
+      await tx
+        .insert(userGroupPermissions)
+        .values(permissions.map((permission) => ({ groupId, permission })));
     }
     return true;
   });

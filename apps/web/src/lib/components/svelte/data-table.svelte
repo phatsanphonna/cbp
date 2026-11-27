@@ -1,13 +1,8 @@
 <script lang="ts" generics="Row extends RowData">
-  import {
-    createTable,
-    FlexRender,
-    type ColumnDef,
-    type RowData,
-  } from "@tanstack/svelte-table";
-  import { Input } from "#lib/components/ui/input/index.ts";
-  import * as Table from "#lib/components/ui/table/index.ts";
-  import { features, type DataTableFeatures } from "./data-table-features.js";
+  import { type ColumnDef, createTable, FlexRender, type RowData } from '@tanstack/svelte-table';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import * as Table from '#lib/components/ui/table/index.ts';
+  import { type DataTableFeatures, features } from './data-table-features.js';
 
   let {
     caption,
@@ -16,8 +11,8 @@
     rowKey,
     rowHeader,
     filter,
-    emptyMessage = "No records to display.",
-    tableClass = "",
+    emptyMessage = 'No records to display.',
+    tableClass = '',
   }: {
     caption: string;
     columns: ColumnDef<DataTableFeatures, Row>[];
@@ -40,9 +35,7 @@
     getRowId: (item) => rowKey(item),
   });
 
-  const filterColumn = $derived(
-    filter ? table.getColumn(filter.column) : undefined,
-  );
+  const filterColumn = $derived(filter ? table.getColumn(filter.column) : undefined);
   const rows = $derived(table.getRowModel().rows);
 </script>
 
@@ -53,12 +46,11 @@
       aria-label={filter.label}
       placeholder={filter.label}
       class="max-w-64"
-      oninput={(event) =>
-        filterColumn?.setFilterValue(event.currentTarget.value.trim())}
+      oninput={(event) => filterColumn?.setFilterValue(event.currentTarget.value.trim())}
     />
     <p class="text-xs text-muted-foreground" aria-live="polite">
       {rows.length} of {data.length}
-      {data.length === 1 ? "record" : "records"}
+      {data.length === 1 ? 'record' : 'records'}
     </p>
   </div>
 {/if}
@@ -71,7 +63,7 @@
         <Table.Row>
           {#each group.headers as header (header.id)}
             <Table.Head
-              scope={header.colSpan > 1 ? "colgroup" : "col"}
+              scope={header.colSpan > 1 ? 'colgroup' : 'col'}
               colspan={header.colSpan}
               class="px-4 text-muted-foreground"
             >

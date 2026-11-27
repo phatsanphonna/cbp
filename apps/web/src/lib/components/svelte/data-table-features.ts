@@ -3,7 +3,7 @@ import {
   createFilteredRowModel,
   filterFn_includesString,
   tableFeatures,
-} from "@tanstack/svelte-table";
+} from '@tanstack/svelte-table';
 
 export const features = tableFeatures({
   columnFilteringFeature,

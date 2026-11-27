@@ -17,12 +17,12 @@ import {
 } from '@peculiar/x509';
 import { parseCertificateChain } from './certificate-chain.js';
 
-const dnsName = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
+const dnsName =
+  /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i;
 const maxNames = 100;
 const validityMs = 365 * 24 * 60 * 60_000;
 export const selfSignedIssuer = 'CN=Self-signed certificate';
-export const selfSignedKeyContext = (id: string) =>
-  'cbp/selfsigned/certificate/v1/' + id;
+export const selfSignedKeyContext = (id: string) => 'cbp/selfsigned/certificate/v1/' + id;
 
 function isGeneratedSelfSigned(fullchain: string) {
   try {
@@ -40,19 +40,14 @@ function normalizeNames(names: readonly string[]) {
   const normalized = names.map((name) => {
     const value = name.trim().toLowerCase();
     if (!isIP(value) || value.includes('%')) return value;
-    const host = new URL(
-      `http://${value.includes(':') ? `[${value}]` : value}/`,
-    ).hostname;
+    const host = new URL(`http://${value.includes(':') ? `[${value}]` : value}/`).hostname;
     return host.startsWith('[') ? host.slice(1, -1) : host;
   });
   if (
     !normalized.length ||
     normalized.length > maxNames ||
     normalized.some(
-      (name) =>
-        name.length > 253 ||
-        name.includes('%') ||
-        (!isIP(name) && !dnsName.test(name)),
+      (name) => name.length > 253 || name.includes('%') || (!isIP(name) && !dnsName.test(name)),
     )
   )
     return null;
@@ -71,18 +66,14 @@ export function readSelfSignedNames(value: FormDataEntryValue | null) {
   return { domain: names.find((name) => !isIP(name)) ?? names[0], names };
 }
 
-export function selfSignedCertificateNames(
-  domain: string,
-  fullchain: string | null,
-) {
+export function selfSignedCertificateNames(domain: string, fullchain: string | null) {
   if (!fullchain) return null;
   const parsed = parseCertificateChain(fullchain);
   if ('message' in parsed || !isGeneratedSelfSigned(fullchain)) return null;
   const names = normalizeNames(parsed.metadata.sans);
   const normalizedDomain = normalizeNames([domain])?.[0];
   const parsedDomain = normalizeNames([parsed.domain])?.[0];
-  return names?.length === parsed.metadata.sans.length &&
-    normalizedDomain === parsedDomain
+  return names?.length === parsed.metadata.sans.length && normalizedDomain === parsedDomain
     ? names
     : null;
 }
@@ -101,9 +92,7 @@ function extensions(names: string[]) {
     new ExtendedKeyUsageExtension([ExtendedKeyUsage.serverAuth]),
     new SubjectAlternativeNameExtension(
       names.map((value) =>
-        isIP(value)
-          ? { type: 'ip' as const, value }
-          : { type: 'dns' as const, value },
+        isIP(value) ? { type: 'ip' as const, value } : { type: 'dns' as const, value },
       ),
     ),
   ];
@@ -120,11 +109,10 @@ function metadata(fullchain: string) {
 export async function generateSelfSignedCertificate(inputNames: string[]) {
   const names = normalizeNames(inputNames);
   if (!names) throw new Error('Invalid self-signed certificate names');
-  const keys = await webcrypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
+  const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ]);
   const now = Date.now();
   const certificate = await X509CertificateGenerator.createSelfSigned(
     {
@@ -160,11 +148,10 @@ export async function renewSelfSignedCertificate(
   )
     throw new Error('The self-signed certificate key does not match');
 
-  const keys = await webcrypto.subtle.generateKey(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    true,
-    ['sign', 'verify'],
-  );
+  const keys = await webcrypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, [
+    'sign',
+    'verify',
+  ]);
   const now = Date.now();
   const certificate = await X509CertificateGenerator.createSelfSigned(
     {

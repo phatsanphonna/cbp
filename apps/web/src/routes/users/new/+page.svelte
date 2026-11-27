@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { enhance } from "$app/forms";
+  import { enhance } from '$app/forms';
   import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
-  import { resolve } from "$app/paths";
-  import { Button } from "#lib/components/ui/button/index.ts";
+  import { resolve } from '$app/paths';
+  import { Button } from '#lib/components/ui/button/index.ts';
   import {
     Field,
     FieldDescription,
     FieldGroup,
     FieldLabel,
-  } from "#lib/components/ui/field/index.ts";
-  import { Input } from "#lib/components/ui/input/index.ts";
-  import type { PageProps } from "./$types";
+  } from '#lib/components/ui/field/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import type { PageProps } from './$types';
 
   let { form }: PageProps = $props();
   let submitting = $state(false);
@@ -20,20 +20,15 @@
   <title>Create user | CBP</title>
 </svelte:head>
 
-<section
-  class="w-full flex-1 px-5 py-6 md:px-8"
-  aria-labelledby="create-user-heading"
->
+<section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="create-user-heading">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="grid gap-1">
-      <h1 id="create-user-heading" class="font-heading text-xl font-semibold">
-        Create user
-      </h1>
+      <h1 id="create-user-heading" class="font-heading text-xl font-semibold">Create user</h1>
       <p class="text-xs text-muted-foreground">
         Create an account that can sign in with a username or email address.
       </p>
     </div>
-    <Button href={resolve("/users")} variant="outline">Back to users</Button>
+    <Button href={resolve('/users')} variant="outline">Back to users</Button>
   </header>
 
   <form
@@ -54,13 +49,7 @@
     <FieldGroup>
       <Field>
         <FieldLabel for="account-name" required>Name</FieldLabel>
-        <Input
-          id="account-name"
-          name="name"
-          value={form?.values?.name}
-          required
-          maxlength={120}
-        />
+        <Input id="account-name" name="name" value={form?.values?.name} required maxlength={120} />
       </Field>
       <Field>
         <FieldLabel for="account-email" required>Email address</FieldLabel>
@@ -86,9 +75,9 @@
           autocapitalize="none"
           aria-describedby="username-help"
         />
-        <FieldDescription id="username-help"
-          >3 to 30 letters, numbers, underscores, or periods.</FieldDescription
-        >
+        <FieldDescription id="username-help">
+          3 to 30 letters, numbers, underscores, or periods.
+        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel for="account-password" required>Password</FieldLabel>
@@ -98,18 +87,16 @@
           type="password"
           autocomplete="new-password"
           required
-          minlength={8}
+          minlength={12}
           maxlength={128}
           aria-describedby="password-help"
         />
-        <FieldDescription id="password-help"
-          >8 to 128 characters.</FieldDescription
-        >
+        <FieldDescription id="password-help">12 to 128 characters.</FieldDescription>
       </Field>
       <div class="flex justify-end">
-        <Button type="submit" disabled={submitting}
-          >{submitting ? "Creating user…" : "Create user"}</Button
-        >
+        <Button type="submit" disabled={submitting}>
+          {submitting ? 'Creating user…' : 'Create user'}
+        </Button>
       </div>
     </FieldGroup>
   </form>

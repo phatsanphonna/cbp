@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -11,112 +11,109 @@ import {
   unique,
   uniqueIndex,
   uuid,
-} from "drizzle-orm/pg-core";
-import { user } from "./auth-schema.js";
+} from 'drizzle-orm/pg-core';
+import { user } from './auth-schema.js';
 
 const instant = (name: string) => timestamp(name, { withTimezone: true });
 
-export const userGroups = pgTable("cbp_user_groups", {
+export const userGroups = pgTable('cbp_user_groups', {
   id: integer().primaryKey().generatedAlwaysAsIdentity(),
   name: text().notNull().unique(),
 });
 
 export const userGroupMembers = pgTable(
-  "cbp_user_group_members",
+  'cbp_user_group_members',
   {
-    groupId: integer("group_id")
+    groupId: integer('group_id')
       .notNull()
-      .references(() => userGroups.id, { onDelete: "cascade" }),
-    userId: text("user_id")
+      .references(() => userGroups.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => user.id, { onDelete: 'cascade' }),
   },
   (table) => [
     primaryKey({ columns: [table.groupId, table.userId] }),
-    index("cbp_user_group_members_user_idx").on(table.userId),
+    index('cbp_user_group_members_user_idx').on(table.userId),
   ],
 );
 
 export const userGroupPermissions = pgTable(
-  "cbp_user_group_permissions",
+  'cbp_user_group_permissions',
   {
-    groupId: integer("group_id")
+    groupId: integer('group_id')
       .notNull()
-      .references(() => userGroups.id, { onDelete: "cascade" }),
+      .references(() => userGroups.id, { onDelete: 'cascade' }),
     permission: text().notNull(),
   },
   (table) => [primaryKey({ columns: [table.groupId, table.permission] })],
 );
 
 export const userPermissions = pgTable(
-  "cbp_user_permissions",
+  'cbp_user_permissions',
   {
-    userId: text("user_id")
+    userId: text('user_id')
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => user.id, { onDelete: 'cascade' }),
     permission: text().notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.permission] })],
 );
 
-export const hosts = pgTable("cbp_hosts", {
+export const hosts = pgTable('cbp_hosts', {
   id: uuid().defaultRandom().primaryKey(),
   name: text().notNull().unique(),
-  applianceType: text("appliance_type"),
+  applianceType: text('appliance_type'),
   hostname: text(),
   fqdn: text(),
-  operatingSystem: text("operating_system"),
+  operatingSystem: text('operating_system'),
   architecture: text(),
-  httpsListeners: text("https_listeners"),
-  lastProbedAt: instant("last_probed_at"),
-  lastPingAt: instant("last_ping_at"),
-  consecutivePingFailures: integer("consecutive_ping_failures")
-    .notNull()
-    .default(0),
-  lastPingStatus: text("last_ping_status", {
-    enum: ["reachable", "no-reply", "unavailable"],
+  httpsListeners: text('https_listeners'),
+  lastProbedAt: instant('last_probed_at'),
+  lastPingAt: instant('last_ping_at'),
+  consecutivePingFailures: integer('consecutive_ping_failures').notNull().default(0),
+  lastPingStatus: text('last_ping_status', {
+    enum: ['reachable', 'no-reply', 'unavailable'],
   }),
-  lastPingAddress: text("last_ping_address"),
-  allowedDeploymentServices: text("allowed_deployment_services").array(),
-  deploymentServiceVersions: jsonb("deployment_service_versions").$type<
-    Record<string, string>
-  >(),
-  agentManaged: boolean("agent_managed").notNull().default(false),
-  ansibleManaged: boolean("ansible_managed").notNull().default(false),
-  agentSeenAt: instant("agent_seen_at"),
-  ansibleRunAt: instant("ansible_run_at"),
-  ansibleSucceeded: boolean("ansible_succeeded"),
+  lastPingAddress: text('last_ping_address'),
+  allowedDeploymentServices: text('allowed_deployment_services').array(),
+  deploymentServiceVersions: jsonb('deployment_service_versions').$type<Record<string, string>>(),
+  agentManaged: boolean('agent_managed').notNull().default(false),
+  ansibleManaged: boolean('ansible_managed').notNull().default(false),
+  agentSeenAt: instant('agent_seen_at'),
+  ansibleRunAt: instant('ansible_run_at'),
+  ansibleSucceeded: boolean('ansible_succeeded'),
 });
 
-export const hostAgents = pgTable("cbp_host_agents", {
-  hostId: uuid("host_id")
+export const hostAgents = pgTable('cbp_host_agents', {
+  hostId: uuid('host_id')
     .primaryKey()
-    .references(() => hosts.id, { onDelete: "cascade" }),
-  inviteHash: text("invite_hash"),
-  inviteExpiresAt: instant("invite_expires_at"),
-  tokenHash: text("token_hash"),
+    .references(() => hosts.id, { onDelete: 'cascade' }),
+  inviteHash: text('invite_hash'),
+  inviteExpiresAt: instant('invite_expires_at'),
+  tokenHash: text('token_hash'),
 });
 
-export const controllerStatus = pgTable("cbp_controller_status", {
+export const controllerStatus = pgTable('cbp_controller_status', {
   id: integer().primaryKey(),
-  lastSeenAt: instant("last_seen_at").notNull(),
+  lastSeenAt: instant('last_seen_at').notNull(),
 });
 
-export const certificates = pgTable("cbp_certificates", {
+export const certificates = pgTable('cbp_certificates', {
   id: uuid().defaultRandom().primaryKey(),
   domain: text().notNull(),
   issuer: text().notNull(),
   owner: text(),
-  groupId: integer("group_id").references(() => userGroups.id, {
-    onDelete: "set null",
+  groupId: integer('group_id').references(() => userGroups.id, {
+    onDelete: 'set null',
   }),
-  validFrom: instant("valid_from").notNull(),
-  validUntil: instant("valid_until").notNull(),
+  validFrom: instant('valid_from').notNull(),
+  validUntil: instant('valid_until').notNull(),
   serial: text().notNull(),
   fingerprint: text().unique(),
   fullchain: text(),
   sans: text().array().notNull().default([]),
   autoRenew: boolean('auto_renew').notNull().default(false),
+  autoDeploy: boolean('auto_deploy').notNull().default(false),
   renewalRetryAt: instant('renewal_retry_at'),
   renewalError: text('renewal_error'),
   renewalKey: text('renewal_key'),
@@ -134,10 +131,7 @@ export const certificateVersions = pgTable(
     replacedAt: instant('replaced_at').notNull().defaultNow(),
   },
   (table) => [
-    index('cbp_certificate_versions_certificate_idx').on(
-      table.certificateId,
-      table.replacedAt,
-    ),
+    index('cbp_certificate_versions_certificate_idx').on(table.certificateId, table.replacedAt),
   ],
 );
 
@@ -153,51 +147,49 @@ export const acmeChallenges = pgTable('cbp_acme_challenges', {
 });
 
 export const deployments = pgTable(
-  "cbp_deployments",
+  'cbp_deployments',
   {
     id: uuid().defaultRandom().primaryKey(),
-    certificateId: uuid("certificate_id")
+    certificateId: uuid('certificate_id')
       .notNull()
-      .references(() => certificates.id, { onDelete: "cascade" }),
-    hostId: uuid("host_id").references(() => hosts.id, {
-      onDelete: "set null",
+      .references(() => certificates.id, { onDelete: 'cascade' }),
+    hostId: uuid('host_id').references(() => hosts.id, {
+      onDelete: 'set null',
     }),
     endpoint: text().notNull(),
     engine: text(),
-    method: text({ enum: ["Agent", "Ansible", "Manual"] }).notNull(),
-    status: text({ enum: ["Pending", "Verified", "Failed"] })
+    method: text({ enum: ['Agent', 'Ansible', 'Manual'] }).notNull(),
+    status: text({ enum: ['Pending', 'Verified', 'Failed'] })
       .notNull()
-      .default("Pending"),
-    listenerStatus: text("listener_status", {
-      enum: ["ready", "drifted", "unreachable", "tls-error", "not-allowed"],
+      .default('Pending'),
+    listenerStatus: text('listener_status', {
+      enum: ['ready', 'drifted', 'unreachable', 'tls-error', 'not-allowed'],
     }),
-    listenerAddress: text("listener_address"),
-    listenerCheckedAt: instant("listener_checked_at"),
-    listenerFingerprint: text("listener_fingerprint"),
-    servedCertificateExpiresAt: instant("served_certificate_expires_at"),
-    servedCertificateObservedAt: instant("served_certificate_observed_at"),
-    expectedFingerprint: text("expected_fingerprint"),
+    listenerAddress: text('listener_address'),
+    listenerCheckedAt: instant('listener_checked_at'),
+    listenerFingerprint: text('listener_fingerprint'),
+    servedCertificateExpiresAt: instant('served_certificate_expires_at'),
+    servedCertificateObservedAt: instant('served_certificate_observed_at'),
+    expectedFingerprint: text('expected_fingerprint'),
   },
   (table) => [unique().on(table.certificateId, table.endpoint)],
 );
 
 export const deploymentRuns = pgTable(
-  "cbp_deployment_runs",
+  'cbp_deployment_runs',
   {
     id: uuid().defaultRandom().primaryKey(),
     slug: text().notNull().unique(),
-    certificateId: uuid("certificate_id").references(() => certificates.id, {
-      onDelete: "set null",
+    certificateId: uuid('certificate_id').references(() => certificates.id, {
+      onDelete: 'set null',
     }),
-    certificateName: text("certificate_name")
-      .notNull()
-      .default("Unknown certificate"),
-    certificateSans: text("certificate_sans").array().notNull().default([]),
-    certificateFingerprint: text("certificate_fingerprint"),
-    submittedAt: instant("submitted_at").defaultNow(),
+    certificateName: text('certificate_name').notNull().default('Unknown certificate'),
+    certificateSans: text('certificate_sans').array().notNull().default([]),
+    certificateFingerprint: text('certificate_fingerprint'),
+    submittedAt: instant('submitted_at').defaultNow(),
   },
   (table) => [
-    index("cbp_deployment_runs_submitted_idx").on(
+    index('cbp_deployment_runs_submitted_idx').on(
       table.submittedAt.desc().nullsLast(),
       table.id.desc(),
     ),
@@ -205,121 +197,111 @@ export const deploymentRuns = pgTable(
 );
 
 export const deploymentJobs = pgTable(
-  "cbp_deployment_jobs",
+  'cbp_deployment_jobs',
   {
     id: uuid().defaultRandom().primaryKey(),
-    runId: uuid("run_id")
+    runId: uuid('run_id')
       .notNull()
-      .references(() => deploymentRuns.id, { onDelete: "cascade" }),
-    deploymentId: uuid("deployment_id").references(() => deployments.id, {
-      onDelete: "set null",
+      .references(() => deploymentRuns.id, { onDelete: 'cascade' }),
+    deploymentId: uuid('deployment_id').references(() => deployments.id, {
+      onDelete: 'set null',
     }),
-    hostId: uuid("host_id").references(() => hosts.id, {
-      onDelete: "set null",
+    hostId: uuid('host_id').references(() => hosts.id, {
+      onDelete: 'set null',
     }),
-    hostName: text("host_name").notNull().default("Unknown host"),
-    agentHash: text("agent_hash"),
-    method: text({ enum: ["Agent", "Ansible"] })
+    hostName: text('host_name').notNull().default('Unknown host'),
+    agentHash: text('agent_hash'),
+    method: text({ enum: ['Agent', 'Ansible'] })
       .notNull()
-      .default("Agent"),
+      .default('Agent'),
     recovery: boolean().notNull().default(false),
     endpoint: text().notNull(),
     engine: text().notNull(),
     fullchain: text().notNull(),
     status: text({
-      enum: ["Queued", "Running", "Deployed", "Failed", "Expired"],
+      enum: ['Queued', 'Running', 'Deployed', 'Failed', 'Expired'],
     }).notNull(),
     detail: text(),
-    log: text().notNull().default(""),
-    startedAt: instant("started_at"),
-    finishedAt: instant("finished_at"),
-    expiresAt: instant("expires_at").notNull(),
+    log: text().notNull().default(''),
+    startedAt: instant('started_at'),
+    finishedAt: instant('finished_at'),
+    expiresAt: instant('expires_at').notNull(),
   },
   (table) => [
-    index("cbp_deployment_jobs_run_idx").on(table.runId),
-    index("cbp_deployment_jobs_deployment_idx").on(table.deploymentId),
-    index("cbp_deployment_jobs_host_idx").on(table.hostId),
+    index('cbp_deployment_jobs_run_idx').on(table.runId),
+    index('cbp_deployment_jobs_deployment_idx').on(table.deploymentId),
+    index('cbp_deployment_jobs_host_idx').on(table.hostId),
   ],
 );
 
 export const auditEvents = pgTable(
-  "cbp_audit_events",
+  'cbp_audit_events',
   {
     id: uuid().defaultRandom().primaryKey(),
-    occurredAt: instant("occurred_at").notNull().defaultNow(),
-    actorId: text("actor_id"),
-    actorName: text("actor_name"),
+    occurredAt: instant('occurred_at').notNull().defaultNow(),
+    actorId: text('actor_id'),
+    actorName: text('actor_name'),
     action: text().notNull(),
     route: text().notNull(),
-    targetId: text("target_id"),
+    targetId: text('target_id'),
     status: integer().notNull(),
   },
-  (table) => [
-    index("cbp_audit_events_occurred_at_idx").on(table.occurredAt, table.id),
-  ],
+  (table) => [index('cbp_audit_events_occurred_at_idx').on(table.occurredAt, table.id)],
 );
 
 export const alerts = pgTable(
-  "cbp_alerts",
+  'cbp_alerts',
   {
     id: uuid().defaultRandom().primaryKey(),
-    ruleKey: text("rule_key"),
-    targetId: text("target_id"),
-    severity: text({ enum: ["Info", "Warning", "High", "Critical"] }).notNull(),
+    ruleKey: text('rule_key'),
+    targetId: text('target_id'),
+    severity: text({ enum: ['Info', 'Warning', 'High', 'Critical'] }).notNull(),
     message: text().notNull(),
     target: text().notNull(),
-    detectedAt: instant("detected_at").notNull().defaultNow(),
-    resolvedAt: instant("resolved_at"),
-    clearedAt: instant("cleared_at"),
+    detectedAt: instant('detected_at').notNull().defaultNow(),
+    resolvedAt: instant('resolved_at'),
+    clearedAt: instant('cleared_at'),
   },
   (table) => [
-    uniqueIndex("cbp_alerts_open_rule_idx")
+    uniqueIndex('cbp_alerts_open_rule_idx')
       .on(table.ruleKey)
       .where(sql`${table.resolvedAt} is null`),
   ],
 );
 
 export const channels = pgTable(
-  "cbp_notification_channels",
+  'cbp_notification_channels',
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     provider: text({
-      enum: [
-        "Slack",
-        "LINE",
-        "Telegram",
-        "Email",
-        "Webhook",
-        "Microsoft Teams",
-        "Discord",
-      ],
+      enum: ['Slack', 'LINE', 'Telegram', 'Email', 'Webhook', 'Microsoft Teams', 'Discord'],
     }).notNull(),
     destination: text().notNull(),
-    encryptedSettings: text("encrypted_settings"),
-    certificateIds: uuid("certificate_ids").array(),
-    severity: text({ enum: ["Info", "Warning", "High", "Critical"] }).notNull(),
+    encryptedSettings: text('encrypted_settings'),
+    certificateIds: uuid('certificate_ids').array(),
+    severity: text({ enum: ['Info', 'Warning', 'High', 'Critical'] }).notNull(),
     enabled: boolean().notNull().default(true),
   },
   (table) => [unique().on(table.provider, table.destination)],
 );
 
 export const alertDeliveries = pgTable(
-  "cbp_alert_deliveries",
+  'cbp_alert_deliveries',
   {
-    alertId: uuid("alert_id")
+    alertId: uuid('alert_id')
       .notNull()
-      .references(() => alerts.id, { onDelete: "cascade" }),
-    channelId: integer("channel_id")
+      .references(() => alerts.id, { onDelete: 'cascade' }),
+    channelId: integer('channel_id')
       .notNull()
-      .references(() => channels.id, { onDelete: "cascade" }),
+      .references(() => channels.id, { onDelete: 'cascade' }),
     severity: text().notNull(),
     attempts: integer().notNull(),
-    nextAttemptAt: instant("next_attempt_at").notNull(),
-    deliveredAt: instant("delivered_at"),
+    nextAttemptAt: instant('next_attempt_at').notNull(),
+    deliveredAt: instant('delivered_at'),
   },
   (table) => [
     primaryKey({
-      name: "cbp_alert_deliveries_pkey",
+      name: 'cbp_alert_deliveries_pkey',
       columns: [table.alertId, table.channelId, table.severity],
     }),
   ],

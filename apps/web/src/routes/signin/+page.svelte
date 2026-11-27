@@ -1,6 +1,6 @@
 <script lang="ts">
-  import LoginForm from "#lib/components/svelte/login-form.svelte";
-  import type { PageProps } from "./$types";
+  import LoginForm from '#lib/components/svelte/login-form.svelte';
+  import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
 </script>

@@ -1,5 +1,5 @@
-import { DATABASE_URL } from "$app/env/private";
-import { openDatabase } from "@cbp/database";
+import { DATABASE_URL } from '$app/env/private';
+import { openDatabase } from '@cbp/database';
 
 let database: ReturnType<typeof openDatabase> | undefined;
 

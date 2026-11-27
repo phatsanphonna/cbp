@@ -6,7 +6,12 @@
   import CertificateChainFields from '#lib/components/svelte/certificate-chain-fields.svelte';
   import { Button } from '#lib/components/ui/button/index.ts';
   import { Checkbox } from '#lib/components/ui/checkbox/index.ts';
-  import { Field, FieldDescription, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import {
+    Field,
+    FieldDescription,
+    FieldGroup,
+    FieldLabel,
+  } from '#lib/components/ui/field/index.ts';
   import { Spinner } from '#lib/components/ui/spinner/index.ts';
   import * as Tabs from '#lib/components/ui/tabs/index.ts';
   import type { PageProps } from './$types';
@@ -16,15 +21,9 @@
   const registration = resolve('/certificates/new');
   const issuance = registration + '?method=letsencrypt';
   const selfSigned = registration + '?method=selfsigned';
-  const generated = $derived(
-    form && 'generated' in form ? form.generated : null,
-  );
-  const submittedHostnames = $derived(
-    form && 'hostnames' in form ? form.hostnames ?? '' : '',
-  );
-  const submittedAutoRenew = $derived(
-    form && 'autoRenew' in form ? form.autoRenew : false,
-  );
+  const generated = $derived(form && 'generated' in form ? form.generated : null);
+  const submittedHostnames = $derived(form && 'hostnames' in form ? (form.hostnames ?? '') : '');
+  const submittedAutoRenew = $derived(form && 'autoRenew' in form ? form.autoRenew : false);
   const submittedStorePrivateKey = $derived(
     form && 'storePrivateKey' in form ? form.storePrivateKey : false,
   );
@@ -40,39 +39,23 @@
   <title>Register certificate | CBP</title>
 </svelte:head>
 
-<section
-  class="w-full flex-1 px-5 py-6 md:px-8"
-  aria-labelledby="register-heading"
->
+<section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="register-heading">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="grid gap-1">
-      <h1 id="register-heading" class="font-heading text-xl font-semibold">
-        Register certificate
-      </h1>
+      <h1 id="register-heading" class="font-heading text-xl font-semibold">Register certificate</h1>
       <p class="text-xs text-muted-foreground">
-        Upload a certificate, request one from Let’s Encrypt, or create a
-        self-signed certificate.
+        Upload a certificate, request one from Let’s Encrypt, or create a self-signed certificate.
       </p>
     </div>
-    <Button href={resolve("/certificates")} variant="outline"
-      >Back to certificates</Button
-    >
+    <Button href={resolve('/certificates')} variant="outline">Back to certificates</Button>
   </header>
 
   <Tabs.Root
     class="mt-6"
-    value={data.issue
-      ? 'letsencrypt'
-      : data.selfSigned
-        ? 'selfsigned'
-        : 'upload'}
+    value={data.issue ? 'letsencrypt' : data.selfSigned ? 'selfsigned' : 'upload'}
     onValueChange={(method) => {
       const target =
-        method === 'letsencrypt'
-          ? issuance
-          : method === 'selfsigned'
-            ? selfSigned
-            : registration;
+        method === 'letsencrypt' ? issuance : method === 'selfsigned' ? selfSigned : registration;
       void goto(target, { keepFocus: true, noScroll: true });
     }}
   >
@@ -95,11 +78,10 @@
             {#if generated.retained}
               CBP saved the private key. Download a copy if you need it locally.
             {:else}
-              Download and store this private key securely. CBP does not keep a
-              copy, and it cannot be recovered later.
+              Download and store this private key securely. CBP does not keep a copy, and it cannot
+              be recovered later.
             {/if}
-            Self-signed certificates are not trusted automatically by browsers
-            or clients.
+            Self-signed certificates are not trusted automatically by browsers or clients.
           </p>
           {#if generated.storeError}
             <p class="text-xs text-destructive">{generated.storeError}</p>
@@ -110,15 +92,18 @@
             <Button
               href={`data:application/x-pem-file;charset=utf-8,${encodeURIComponent(generated.privateKey)}`}
               download={`${generated.domain.replace(/^\*\./, 'wildcard.')}.key.pem`}
-              >Download private key</Button
             >
+              Download private key
+            </Button>
           {/if}
           <Button
             href={resolve('/certificates/[id]', {
               id: generated.certificateId,
             })}
-            variant="outline">View certificate</Button
+            variant="outline"
           >
+            View certificate
+          </Button>
         </div>
       </section>
     {/if}
@@ -137,8 +122,7 @@
                 return;
               }
               await update();
-              if (result.type === 'success')
-                toast.success('Self-signed certificate created.');
+              if (result.type === 'success') toast.success('Self-signed certificate created.');
             } finally {
               issuing = false;
             }
@@ -147,9 +131,7 @@
       >
         <FieldGroup>
           <Field>
-            <FieldLabel for="self-signed-hostnames">
-              DNS hostnames or IP addresses
-            </FieldLabel>
+            <FieldLabel for="self-signed-hostnames">DNS hostnames or IP addresses</FieldLabel>
             <textarea
               id="self-signed-hostnames"
               name="hostnames"
@@ -165,19 +147,17 @@
               class="w-full resize-y border border-input bg-background px-3 py-2 font-mono text-xs focus-visible:outline-2 focus-visible:outline-ring"
             ></textarea>
             <FieldDescription id="self-signed-hostnames-help">
-              Enter up to 100 DNS names or IP addresses, one per line.
-              Wildcards are supported for DNS names only. The certificate is
-              valid for one year.
+              Enter up to 100 DNS names or IP addresses, one per line. Wildcards are supported for
+              DNS names only. The certificate is valid for one year.
             </FieldDescription>
           </Field>
           <p class="text-xs text-muted-foreground">
-            Browsers and clients will show a trust warning unless you install
-            and trust this certificate yourself.
+            Browsers and clients will show a trust warning unless you install and trust this
+            certificate yourself.
           </p>
           {#if !data.canGenerateSelfSignedCertificate}
             <p class="text-xs text-destructive">
-              Use HTTPS or localhost to generate a certificate and receive its
-              private key.
+              Use HTTPS or localhost to generate a certificate and receive its private key.
             </p>
           {/if}
           <Field orientation="horizontal">
@@ -193,11 +173,10 @@
             </FieldLabel>
           </Field>
           <FieldDescription>
-            CBP saves the private key and renews the certificate before it
-            expires. Deploy the renewed certificate when it’s ready.
+            CBP saves the private key and renews the certificate before it expires. Deploy the
+            renewed certificate when it’s ready.
             {#if !data.selfSignedRenewalAvailable}
-              Set <code>BETTER_AUTH_SECRET</code> to at least 32 characters to
-              enable renewal.
+              Set <code>BETTER_AUTH_SECRET</code> to at least 32 characters to enable renewal.
             {/if}
           </FieldDescription>
           {#if data.canStorePrivateKey}
@@ -214,17 +193,18 @@
             </Field>
           {:else}
             <p class="text-xs text-muted-foreground">
-              Saving the key to Vault requires Vault configuration, credential
-              management permission, and a trusted HTTPS connection.
+              Saving the key to Vault requires Vault configuration, credential management
+              permission, and a trusted HTTPS connection.
             </p>
           {/if}
           <div class="flex justify-end">
-            <Button
-              type="submit"
-              disabled={issuing || !data.canGenerateSelfSignedCertificate}
-            >
+            <Button type="submit" disabled={issuing || !data.canGenerateSelfSignedCertificate}>
               {#if issuing}
-                <Spinner data-icon="inline-start" aria-hidden="true" class="motion-reduce:animate-none" />
+                <Spinner
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  class="motion-reduce:animate-none"
+                />
                 Creating certificate
               {:else}
                 Generate certificate
@@ -290,7 +270,11 @@
           <div class="flex justify-end">
             <Button type="submit" disabled={issuing || !data.renewalAvailable}>
               {#if issuing}
-                <Spinner data-icon="inline-start" aria-hidden="true" class="motion-reduce:animate-none" />
+                <Spinner
+                  data-icon="inline-start"
+                  aria-hidden="true"
+                  class="motion-reduce:animate-none"
+                />
                 Requesting certificate
               {:else}
                 Create certificate
@@ -301,7 +285,19 @@
       </form>
     </Tabs.Content>
     <Tabs.Content value="upload">
-      <form class="mt-3 border p-4 sm:p-5" method="POST" action={registration} enctype="multipart/form-data" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'failure' && typeof result.data?.message === 'string') toast.error(result.data.message); else if (result.type === 'redirect') toast.success('Certificate registered.'); }}>
+      <form
+        class="mt-3 border p-4 sm:p-5"
+        method="POST"
+        action={registration}
+        enctype="multipart/form-data"
+        use:enhance={() =>
+          async ({ result, update }) => {
+            await update();
+            if (result.type === 'failure' && typeof result.data?.message === 'string')
+              toast.error(result.data.message);
+            else if (result.type === 'redirect') toast.success('Certificate registered.');
+          }}
+      >
         <FieldGroup>
           <CertificateChainFields />
           <div class="flex justify-end">

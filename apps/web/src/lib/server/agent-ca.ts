@@ -1,5 +1,5 @@
-import { X509Certificate } from "node:crypto";
-import { certificatePemBlocks } from "./certificate-chain.js";
+import { X509Certificate } from 'node:crypto';
+import { certificatePemBlocks } from './certificate-chain.js';
 
 const maxPemBytes = 32 * 1024;
 
@@ -8,11 +8,7 @@ export function publicAgentCaPem(pem: string) {
   const blocks = certificatePemBlocks(pem);
   if (!blocks) return null;
   try {
-    return (
-      blocks
-        .map((block) => new X509Certificate(block).toString().trim())
-        .join("\n") + "\n"
-    );
+    return blocks.map((block) => new X509Certificate(block).toString().trim()).join('\n') + '\n';
   } catch {
     return null;
   }

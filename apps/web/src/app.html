@@ -3,27 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script>
+    <script nonce="%sveltekit.nonce%">
       (() => {
         try {
-          const saved = localStorage.getItem("cbp-theme");
+          const saved = localStorage.getItem('cbp-theme');
           if (
-            (saved === "light" || saved === "dark" || saved === "system") &&
-            localStorage.getItem("mode-watcher-mode") === null
+            (saved === 'light' || saved === 'dark' || saved === 'system') &&
+            localStorage.getItem('mode-watcher-mode') === null
           ) {
-            localStorage.setItem("mode-watcher-mode", saved);
+            localStorage.setItem('mode-watcher-mode', saved);
           }
+          // Set the mode before first paint here, because ModeWatcher's own head script has no CSP nonce.
+          const mode = localStorage.getItem('mode-watcher-mode') ?? 'system';
+          const light =
+            mode === 'light' ||
+            (mode === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+          document.documentElement.classList.toggle('dark', !light);
+          document.documentElement.style.colorScheme = light ? 'light' : 'dark';
         } catch {
           // Keep initializing the time zone when storage is unavailable.
         }
 
         const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        const preference = "cbp-time-zone=" + encodeURIComponent(timeZone);
-        if (timeZone && !document.cookie.split("; ").includes(preference)) {
+        const preference = 'cbp-time-zone=' + encodeURIComponent(timeZone);
+        if (timeZone && !document.cookie.split('; ').includes(preference)) {
           document.cookie =
             preference +
-            "; Path=/; Max-Age=31536000; SameSite=Lax" +
-            (location.protocol === "https:" ? "; Secure" : "");
+            '; Path=/; Max-Age=31536000; SameSite=Lax' +
+            (location.protocol === 'https:' ? '; Secure' : '');
         }
       })();
     </script>

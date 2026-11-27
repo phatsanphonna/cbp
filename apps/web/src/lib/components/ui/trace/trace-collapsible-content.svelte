@@ -1,7 +1,7 @@
 <script lang="ts">
-  import * as Collapsible from "#lib/components/ui/collapsible/index.js";
-  import { cn, type WithoutChild } from "#lib/utils.js";
-  import type { Collapsible as CollapsiblePrimitive } from "bits-ui";
+  import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+  import { cn, type WithoutChild } from '#lib/utils.js';
+  import type { Collapsible as CollapsiblePrimitive } from 'bits-ui';
 
   let {
     ref = $bindable(null),
@@ -20,7 +20,7 @@
   <div
     data-slot="trace-collapsible-content-inner"
     class={cn(
-      "mt-2 mb-1 ml-[calc(--spacing(1.75)_-_1px)] border-l pr-1 pl-3.75 leading-relaxed min-w-0 wrap-break-word text-muted-foreground",
+      'mt-2 mb-1 ml-[calc(--spacing(1.75)_-_1px)] border-l pr-1 pl-3.75 leading-relaxed min-w-0 wrap-break-word text-muted-foreground',
       className,
     )}
   >

@@ -1,10 +1,8 @@
 # Repository Guidelines
 
-## Project Structure
+## Agent Working Style
 
-- `apps/web/` contains the SvelteKit app. Find pages and endpoints in `src/routes/`, shared Svelte components in `src/lib/components/`, server helpers in `src/lib/server/`, and public assets in `static/`.
-- `apps/controller/` contains the Go gRPC controller and its web API client. `apps/agent/` contains the Go CLI, Linux systemd integration, and certificate deployment logic.
-- `packages/agent-rpc/` defines the shared gRPC contract in `agent.proto` and `rpc.go`. `packages/database/` contains the PostgreSQL schemas, queries, and Drizzle setup scripts.
+Use Ponytail `ultra` mode by default for coding tasks in this repository. Before editing, question scope that the task does not justify. Make the smallest change that fully solves the request, and reuse existing code before adding abstractions or dependencies. Follow this guidance directly if the Ponytail skill is unavailable. Honor any mode the user explicitly requests for the current session.
 
 ## Build, Test, and Development
 

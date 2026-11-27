@@ -1,15 +1,16 @@
-import { expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
-import { findAuthUserId, user } from "./auth-schema.js";
+import { expect, test } from 'bun:test';
+import { randomUUID } from 'node:crypto';
+import { eq, inArray } from 'drizzle-orm';
+import { findAuthUserId, user } from './auth-schema.js';
 import {
   claimDeployment,
   expireDeploymentJobs,
   finishDeployment,
   queueDeployments,
-} from "./deployment-jobs.js";
-import { revokeHostAgent } from "./host-agents.js";
-import { openDatabase } from "./index.js";
+} from './deployment-jobs.js';
+import { revokeHostAgent } from './host-agents.js';
+import { openDatabase } from './index.js';
+import { removeHost } from './inventory.js';
 import {
   certificates,
   deploymentJobs,
@@ -17,37 +18,35 @@ import {
   deployments,
   hostAgents,
   hosts,
-} from "./inventory-schema.js";
+} from './inventory-schema.js';
 
 const databaseURL = Bun.env.CBP_TEST_DATABASE_URL;
 
 test.skipIf(!databaseURL)(
-  "Ansible jobs require the matching endpoint and survive agent revocation",
+  'Ansible jobs require the matching endpoint and survive agent revocation',
   async () => {
     const db = openDatabase(databaseURL);
     const hostId = randomUUID();
     const certificateId = randomUUID();
     const endpoint = `${hostId}.example.test:443`;
     const id = randomUUID();
-    const worker = { method: "Ansible", endpoint } as const;
+    const worker = { method: 'Ansible', endpoint } as const;
     try {
-      await db
-        .insert(hosts)
-        .values({
-          id: hostId,
-          name: endpoint,
-          agentManaged: true,
-          ansibleManaged: true,
-        });
-      await db.insert(hostAgents).values({ hostId, tokenHash: "agent-hash" });
+      await db.insert(hosts).values({
+        id: hostId,
+        name: endpoint,
+        agentManaged: true,
+        ansibleManaged: true,
+      });
+      await db.insert(hostAgents).values({ hostId, tokenHash: 'agent-hash' });
       await db.insert(certificates).values({
         id: certificateId,
         domain: endpoint,
-        issuer: "test",
+        issuer: 'test',
         serial: certificateId,
-        fullchain: "chain",
+        fullchain: 'chain',
         validFrom: new Date(0),
-        validUntil: new Date("2099-01-01"),
+        validUntil: new Date('2099-01-01'),
       });
       const [deployment] = await db
         .insert(deployments)
@@ -55,8 +54,8 @@ test.skipIf(!databaseURL)(
           certificateId,
           hostId,
           endpoint,
-          engine: "Nginx",
-          method: "Ansible",
+          engine: 'Nginx',
+          method: 'Ansible',
         })
         .returning({ id: deployments.id });
       const job = {
@@ -64,45 +63,33 @@ test.skipIf(!databaseURL)(
         deploymentId: deployment.id,
         hostId,
         endpoint,
-        engine: "Nginx",
-        fullchain: "chain",
-        sealedKey: "sealed",
+        engine: 'Nginx',
+        fullchain: 'chain',
       };
-      expect(
-        (await queueDeployments(db, { certificateId }, [job], "Ansible"))
-          .status,
-      ).toBe("queued");
-      expect(
-        await claimDeployment(db, hostId, "agent-hash", (row) => row.id),
-      ).toBeNull();
-      expect(await revokeHostAgent(db, hostId, "agent-hash")).toBe("ok");
+      expect((await queueDeployments(db, { certificateId }, [job], 'Ansible')).status).toBe(
+        'queued',
+      );
+      expect(await claimDeployment(db, hostId, 'agent-hash', (row) => row.id)).toBeNull();
+      expect(await revokeHostAgent(db, hostId, 'agent-hash')).toBe('ok');
       expect(
         await claimDeployment(
           db,
           hostId,
-          { ...worker, endpoint: "other.example.test:443" },
+          { ...worker, endpoint: 'other.example.test:443' },
           (row) => row.id,
         ),
       ).toBeNull();
-      expect(
-        await claimDeployment(db, hostId, worker, (row) => row.sealedKey),
-      ).toBe("sealed");
-      expect(
-        await claimDeployment(db, hostId, worker, (row) => row.id),
-      ).toBeNull();
-      expect(await finishDeployment(db, hostId, worker, id, null)).toBe("ok");
-      expect(await finishDeployment(db, hostId, worker, id, null)).toBe("ok");
+      expect(await claimDeployment(db, hostId, worker, (row) => row.fullchain)).toBe('chain');
+      expect(await claimDeployment(db, hostId, worker, (row) => row.id)).toBeNull();
+      expect(await finishDeployment(db, hostId, worker, id, null)).toBe('ok');
+      expect(await finishDeployment(db, hostId, worker, id, null)).toBe('ok');
       const [host] = await db.select().from(hosts).where(eq(hosts.id, hostId));
-      const [result] = await db
-        .select()
-        .from(deploymentJobs)
-        .where(eq(deploymentJobs.id, id));
+      const [result] = await db.select().from(deploymentJobs).where(eq(deploymentJobs.id, id));
       expect(host.ansibleSucceeded).toBe(true);
       expect(host.ansibleRunAt).toBeInstanceOf(Date);
       expect(result).toMatchObject({
-        method: "Ansible",
-        status: "Deployed",
-        sealedKey: "sealed",
+        method: 'Ansible',
+        status: 'Deployed',
       });
     } finally {
       try {
@@ -116,7 +103,7 @@ test.skipIf(!databaseURL)(
 );
 
 test.skipIf(!databaseURL)(
-  "deployment expiry and enrollment revocation clear queued keys",
+  'deployment expiry and enrollment revocation end queued jobs',
   async () => {
     const db = openDatabase(databaseURL);
     const hostId = randomUUID();
@@ -124,21 +111,19 @@ test.skipIf(!databaseURL)(
     const endpoint = `${hostId}.example.test:443`;
     const expiredId = randomUUID();
     const queuedId = randomUUID();
-    const agentHash = "agent-hash";
+    const agentHash = 'agent-hash';
 
     try {
       await db.transaction(async (tx) => {
-        await tx
-          .insert(hosts)
-          .values({ id: hostId, name: endpoint, agentManaged: true });
+        await tx.insert(hosts).values({ id: hostId, name: endpoint, agentManaged: true });
         await tx.insert(hostAgents).values({ hostId, tokenHash: agentHash });
         await tx.insert(certificates).values({
           id: certificateId,
           domain: endpoint,
-          issuer: "test",
+          issuer: 'test',
           serial: certificateId,
           validFrom: new Date(0),
-          validUntil: new Date("2099-01-01"),
+          validUntil: new Date('2099-01-01'),
         });
         const [deployment] = await tx
           .insert(deployments)
@@ -146,8 +131,8 @@ test.skipIf(!databaseURL)(
             certificateId,
             hostId,
             endpoint,
-            engine: "Nginx",
-            method: "Agent",
+            engine: 'Nginx',
+            method: 'Agent',
           })
           .returning({ id: deployments.id });
         const [run] = await tx
@@ -160,10 +145,9 @@ test.skipIf(!databaseURL)(
           hostId,
           agentHash,
           endpoint,
-          engine: "Nginx",
-          fullchain: "chain",
-          status: "Queued",
-          sealedKey: "sealed-test-key",
+          engine: 'Nginx',
+          fullchain: 'chain',
+          status: 'Queued',
         } as const;
         await tx.insert(deploymentJobs).values([
           { ...job, id: expiredId, expiresAt: new Date(0) },
@@ -177,7 +161,6 @@ test.skipIf(!databaseURL)(
               .select({
                 id: deploymentJobs.id,
                 status: deploymentJobs.status,
-                sealedKey: deploymentJobs.sealedKey,
               })
               .from(deploymentJobs)
               .where(inArray(deploymentJobs.id, [expiredId, queuedId]))
@@ -185,22 +168,11 @@ test.skipIf(!databaseURL)(
         );
 
       await expireDeploymentJobs(db);
-      expect((await readJobs())[expiredId]).toMatchObject({
-        status: "Expired",
-        sealedKey: null,
-      });
-      expect(await revokeHostAgent(db, hostId, "different-token")).toBe(
-        "denied",
-      );
-      expect((await readJobs())[queuedId]).toMatchObject({
-        status: "Queued",
-        sealedKey: "sealed-test-key",
-      });
-      expect(await revokeHostAgent(db, hostId, agentHash)).toBe("ok");
-      expect((await readJobs())[queuedId]).toMatchObject({
-        status: "Failed",
-        sealedKey: null,
-      });
+      expect((await readJobs())[expiredId]).toMatchObject({ status: 'Expired' });
+      expect(await revokeHostAgent(db, hostId, 'different-token')).toBe('denied');
+      expect((await readJobs())[queuedId]).toMatchObject({ status: 'Queued' });
+      expect(await revokeHostAgent(db, hostId, agentHash)).toBe('ok');
+      expect((await readJobs())[queuedId]).toMatchObject({ status: 'Failed' });
     } finally {
       try {
         await db.delete(certificates).where(eq(certificates.id, certificateId));
@@ -212,25 +184,63 @@ test.skipIf(!databaseURL)(
   },
 );
 
-test.skipIf(!databaseURL)(
-  "email and username resolve to the same account ID",
-  async () => {
-    const db = openDatabase(databaseURL);
-    const id = randomUUID();
-    const email = `${id}@example.test`;
+test.skipIf(!databaseURL)('a host with a running deployment cannot be removed', async () => {
+  const db = openDatabase(databaseURL);
+  const hostId = randomUUID();
+  const certificateId = randomUUID();
+  const endpoint = `${hostId}.example.test:443`;
+  const jobId = randomUUID();
+  try {
+    await db.insert(hosts).values({ id: hostId, name: endpoint, agentManaged: true });
+    await db.insert(certificates).values({
+      id: certificateId,
+      domain: endpoint,
+      issuer: 'test',
+      serial: certificateId,
+      validFrom: new Date(0),
+      validUntil: new Date('2099-01-01'),
+    });
+    const [run] = await db
+      .insert(deploymentRuns)
+      .values({ slug: hostId, certificateId })
+      .returning({ id: deploymentRuns.id });
+    await db.insert(deploymentJobs).values({
+      id: jobId,
+      runId: run.id,
+      hostId,
+      endpoint,
+      engine: 'Nginx',
+      fullchain: 'chain',
+      status: 'Running',
+      expiresAt: new Date(Date.now() + 600_000),
+    });
+    expect(await removeHost(db, hostId)).toBe('busy');
+    await db.update(deploymentJobs).set({ status: 'Deployed' }).where(eq(deploymentJobs.id, jobId));
+    expect(await removeHost(db, hostId)).toBe('removed');
+  } finally {
     try {
-      await db
-        .insert(user)
-        .values({ id, name: "Test account", username: id, email });
-      expect(await findAuthUserId(db, email)).toBe(id);
-      expect(await findAuthUserId(db, id)).toBe(id);
-      expect(await findAuthUserId(db, `missing-${email}`)).toBeUndefined();
+      await db.delete(certificates).where(eq(certificates.id, certificateId));
+      await db.delete(hosts).where(eq(hosts.id, hostId));
     } finally {
-      try {
-        await db.delete(user).where(eq(user.id, id));
-      } finally {
-        await db.$client.close();
-      }
+      await db.$client.close();
     }
-  },
-);
+  }
+});
+
+test.skipIf(!databaseURL)('email and username resolve to the same account ID', async () => {
+  const db = openDatabase(databaseURL);
+  const id = randomUUID();
+  const email = `${id}@example.test`;
+  try {
+    await db.insert(user).values({ id, name: 'Test account', username: id, email });
+    expect(await findAuthUserId(db, email)).toBe(id);
+    expect(await findAuthUserId(db, id)).toBe(id);
+    expect(await findAuthUserId(db, `missing-${email}`)).toBeUndefined();
+  } finally {
+    try {
+      await db.delete(user).where(eq(user.id, id));
+    } finally {
+      await db.$client.close();
+    }
+  }
+});

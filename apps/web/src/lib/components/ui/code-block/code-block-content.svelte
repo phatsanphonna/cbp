@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { cn, type WithElementRef } from "#lib/utils.js";
-  import CodeBlockLine from "./code-block-line.svelte";
-  import type { HTMLAttributes } from "svelte/elements";
+  import { cn, type WithElementRef } from '#lib/utils.js';
+  import CodeBlockLine from './code-block-line.svelte';
+  import type { HTMLAttributes } from 'svelte/elements';
 
   let {
     ref = $bindable(null),
@@ -23,9 +23,7 @@
 
   // A `code` string is split into lines so each one can be numbered.
   const lines = $derived(
-    code !== undefined && lineNumbers
-      ? code.replace(/\n$/, "").split("\n")
-      : null,
+    code !== undefined && lineNumbers ? code.replace(/\n$/, '').split('\n') : null,
   );
 </script>
 
@@ -57,7 +55,7 @@
   tabindex={0}
   style="counter-reset: line {startLine - 1};{style ?? ''}"
   class={cn(
-    "px-3 py-3 leading-relaxed group-has-data-[slot=code-block-header]/code-block:pt-2 group-has-data-[slot=code-block-footer]/code-block:pb-2 group-data-[size=sm]/code-block:px-2 group-data-[size=sm]/code-block:py-2 group-data-[size=sm]/code-block:group-has-data-[slot=code-block-header]/code-block:pt-1.5 min-h-0 min-w-0 scroll-fade-x scrollbar-thin overflow-auto text-start font-mono outline-none data-wrap:scroll-fade-y data-wrap:wrap-break-word data-wrap:whitespace-pre-wrap",
+    'px-3 py-3 leading-relaxed group-has-data-[slot=code-block-header]/code-block:pt-2 group-has-data-[slot=code-block-footer]/code-block:pb-2 group-data-[size=sm]/code-block:px-2 group-data-[size=sm]/code-block:py-2 group-data-[size=sm]/code-block:group-has-data-[slot=code-block-header]/code-block:pt-1.5 min-h-0 min-w-0 scroll-fade-x scrollbar-thin overflow-auto text-start font-mono outline-none data-wrap:scroll-fade-y data-wrap:wrap-break-word data-wrap:whitespace-pre-wrap',
     className,
   )}
   {...restProps}>{@render content()}</pre>

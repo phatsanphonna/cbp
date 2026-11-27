@@ -1,9 +1,9 @@
-import adapter from "@sveltejs/adapter-bun";
-import { sveltekit } from "@sveltejs/kit/vite";
-import tailwindcss from "@tailwindcss/vite";
-import { defineConfig } from "vite";
+import adapter from '@sveltejs/adapter-bun';
+import { sveltekit } from '@sveltejs/kit/vite';
+import tailwindcss from '@tailwindcss/vite';
+import { defineConfig } from 'vite';
 
-const envDir = "../..";
+const envDir = '../..';
 
 export default defineConfig({
   envDir,
@@ -11,12 +11,28 @@ export default defineConfig({
     tailwindcss(),
     sveltekit({
       adapter: adapter({
-        out: "dist",
-        envPrefix: "CBP_BUN_",
-        serverOptions: { hostname: "0.0.0.0", idleTimeout: 30 },
+        out: 'dist',
+        envPrefix: 'CBP_BUN_',
+        serverOptions: { hostname: '0.0.0.0', idleTimeout: 30 },
       }),
       env: { dir: envDir },
+      // Inline scripts need the per-request nonce; inline styles come from the theme and components.
+      csp: {
+        mode: 'nonce',
+        directives: {
+          'default-src': ['self'],
+          'script-src': ['self'],
+          'style-src': ['self', 'unsafe-inline'],
+          'img-src': ['self', 'data:'],
+          'font-src': ['self'],
+          'connect-src': ['self'],
+          'object-src': ['none'],
+          'base-uri': ['self'],
+          'form-action': ['self'],
+          'frame-ancestors': ['none'],
+        },
+      },
     }),
   ],
-  ssr: { noExternal: ["@tanstack/svelte-table", "@tanstack/svelte-store"] },
+  ssr: { noExternal: ['@tanstack/svelte-table', '@tanstack/svelte-store'] },
 });

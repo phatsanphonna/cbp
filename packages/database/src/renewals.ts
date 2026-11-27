@@ -13,11 +13,7 @@ import {
   sql,
 } from 'drizzle-orm';
 import type { openDatabase } from './index.js';
-import {
-  acmeAccounts,
-  acmeChallenges,
-  certificates,
-} from './inventory-schema.js';
+import { acmeAccounts, acmeChallenges, certificates } from './inventory-schema.js';
 
 type Database = ReturnType<typeof openDatabase>;
 const renewalAt = sql`greatest(
@@ -81,19 +77,11 @@ export function listRenewals(db: Database) {
 }
 
 export async function findRenewalSource(db: Database, id: string) {
-  const [certificate] = await db
-    .select(source)
-    .from(certificates)
-    .where(eq(certificates.id, id));
+  const [certificate] = await db.select(source).from(certificates).where(eq(certificates.id, id));
   return certificate;
 }
 
-export function setAutoRenew(
-  db: Database,
-  id: string,
-  enabled: boolean,
-  fingerprint?: string,
-) {
+export function setAutoRenew(db: Database, id: string, enabled: boolean, fingerprint?: string) {
   return db
     .update(certificates)
     .set({ autoRenew: enabled, renewalRetryAt: null, renewalError: null })
@@ -101,11 +89,17 @@ export function setAutoRenew(
       and(
         eq(certificates.id, id),
         eq(certificates.autoRenew, !enabled),
-        fingerprint === undefined
-          ? undefined
-          : eq(certificates.fingerprint, fingerprint),
+        fingerprint === undefined ? undefined : eq(certificates.fingerprint, fingerprint),
       ),
     )
+    .returning({ id: certificates.id });
+}
+
+export function setAutoDeploy(db: Database, id: string, enabled: boolean) {
+  return db
+    .update(certificates)
+    .set({ autoDeploy: enabled })
+    .where(and(eq(certificates.id, id), eq(certificates.autoDeploy, !enabled)))
     .returning({ id: certificates.id });
 }
 
@@ -117,10 +111,8 @@ export async function claimRenewal(
 ) {
   const retryAt = new Date(Date.now() + 60 * 60_000);
   const issuerPattern =
-    issuer === 'letsencrypt'
-      ? "%Let's Encrypt%"
-      : '%CN=Self-signed certificate%';
-  const next = db
+    issuer === 'letsencrypt' ? "%Let's Encrypt%" : '%CN=Self-signed certificate%';
+  const renewalCandidate = db
     .select({ id: certificates.id })
     .from(certificates)
     .where(
@@ -128,9 +120,7 @@ export async function claimRenewal(
         force ? undefined : certificates.autoRenew,
         certificateId ? eq(certificates.id, certificateId) : undefined,
         ilike(certificates.issuer, issuerPattern),
-        issuer === 'self-signed' && !force
-          ? isNotNull(certificates.renewalKey)
-          : undefined,
+        issuer === 'self-signed' && !force ? isNotNull(certificates.renewalKey) : undefined,
         force
           ? or(
               isNull(certificates.renewalRetryAt),
@@ -142,41 +132,28 @@ export async function claimRenewal(
     )
     .orderBy(asc(renewalAt), asc(certificates.id))
     .limit(1)
+    // Skip certificates already claimed by another renewal worker.
     .for('update', { skipLocked: true });
   const [certificate] = await db
     .update(certificates)
     .set({ renewalRetryAt: retryAt, renewalError: null })
-    .where(eq(certificates.id, next))
+    .where(eq(certificates.id, renewalCandidate))
     .returning(source);
   return certificate && { ...certificate, retryAt };
 }
 
-export function recordRenewalFailure(
-  db: Database,
-  id: string,
-  retryAt: Date,
-  message: string,
-) {
+export function recordRenewalFailure(db: Database, id: string, retryAt: Date, message: string) {
   return db
     .update(certificates)
     .set({ renewalError: message })
-    .where(
-      and(eq(certificates.id, id), eq(certificates.renewalRetryAt, retryAt)),
-    );
+    .where(and(eq(certificates.id, id), eq(certificates.renewalRetryAt, retryAt)));
 }
 
 export function recordRenewalWarning(db: Database, id: string, message: string) {
-  return db
-    .update(certificates)
-    .set({ renewalError: message })
-    .where(eq(certificates.id, id));
+  return db.update(certificates).set({ renewalError: message }).where(eq(certificates.id, id));
 }
 
-export async function findRenewalKey(
-  db: Database,
-  id: string,
-  fullchain: string,
-) {
+export async function findRenewalKey(db: Database, id: string, fullchain: string) {
   const [row] = await db
     .select({ key: certificates.renewalKey })
     .from(certificates)
@@ -185,34 +162,19 @@ export async function findRenewalKey(
 }
 
 export async function findAcmeAccount(db: Database, id: string) {
-  const [row] = await db
-    .select()
-    .from(acmeAccounts)
-    .where(eq(acmeAccounts.id, id));
+  const [row] = await db.select().from(acmeAccounts).where(eq(acmeAccounts.id, id));
   return row?.encryptedKey;
 }
 
-export function saveAcmeAccount(
-  db: Database,
-  id: string,
-  encryptedKey: string,
-) {
-  return db
-    .insert(acmeAccounts)
-    .values({ id, encryptedKey })
-    .onConflictDoNothing();
+export function saveAcmeAccount(db: Database, id: string, encryptedKey: string) {
+  return db.insert(acmeAccounts).values({ id, encryptedKey }).onConflictDoNothing();
 }
 
 export async function findAcmeChallenge(db: Database, token: string) {
   const [row] = await db
     .select({ authorization: acmeChallenges.authorization })
     .from(acmeChallenges)
-    .where(
-      and(
-        eq(acmeChallenges.token, token),
-        gt(acmeChallenges.expiresAt, new Date()),
-      ),
-    );
+    .where(and(eq(acmeChallenges.token, token), gt(acmeChallenges.expiresAt, new Date())));
   return row?.authorization;
 }
 
@@ -230,7 +192,5 @@ export function removeAcmeChallenge(db: Database, token: string) {
 }
 
 export function expireAcmeChallenges(db: Database) {
-  return db
-    .delete(acmeChallenges)
-    .where(lte(acmeChallenges.expiresAt, new Date()));
+  return db.delete(acmeChallenges).where(lte(acmeChallenges.expiresAt, new Date()));
 }

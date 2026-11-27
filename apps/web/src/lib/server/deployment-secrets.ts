@@ -9,44 +9,80 @@ const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 // node-vault otherwise sends localhost requests through inherited proxy settings.
 const directRequest = {
-  defaults: () => (options: { uri: string; method: string; headers: Record<string, string>; json?: unknown; timeout?: number }) =>
-    new Promise((resolve, reject) => {
-      const url = new URL(options.uri);
-      const payload = options.json === undefined ? undefined : JSON.stringify(options.json);
-      const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(url, {
-        method: options.method,
-        headers: { ...options.headers, ...(payload ? { 'content-type': 'application/json' } : {}) },
-      }, (response) => {
-        const chunks: Buffer[] = [];
-        let size = 0;
-        response.on('data', (chunk: Buffer) => {
-          size += chunk.length;
-          if (size > 1024 * 1024) response.destroy(new Error('Vault response too large'));
-          else chunks.push(chunk);
-        });
-        response.on('error', reject);
-        response.on('end', () => {
-          try {
-            const text = Buffer.concat(chunks).toString('utf8');
-            resolve({ statusCode: response.statusCode, request: { path: url.pathname }, body: text ? JSON.parse(text) : null });
-          } catch (error) { reject(error); }
-        });
-      });
-      request.setTimeout(options.timeout ?? 5000, () => request.destroy(new Error('Vault request timed out')));
-      request.on('error', reject);
-      request.end(payload);
-    }),
+  defaults:
+    () =>
+    (options: {
+      uri: string;
+      method: string;
+      headers: Record<string, string>;
+      json?: unknown;
+      timeout?: number;
+    }) =>
+      new Promise((resolve, reject) => {
+        const url = new URL(options.uri);
+        const payload = options.json === undefined ? undefined : JSON.stringify(options.json);
+        const request = (url.protocol === 'https:' ? httpsRequest : httpRequest)(
+          url,
+          {
+            method: options.method,
+            headers: {
+              ...options.headers,
+              ...(payload ? { 'content-type': 'application/json' } : {}),
+            },
+          },
+          (response) => {
+            const chunks: Buffer[] = [];
+            let size = 0;
+            response.on('data', (chunk: Buffer) => {
+              size += chunk.length;
+              if (size > 1024 * 1024) response.destroy(new Error('Vault response too large'));
+              else chunks.push(chunk);
+            });
+            response.on('error', reject);
+            response.on('end', () => {
+              try {
+                const text = Buffer.concat(chunks).toString('utf8');
+                resolve({
+                  statusCode: response.statusCode,
+                  request: { path: url.pathname },
+                  body: text ? JSON.parse(text) : null,
+                });
+              } catch (error) {
+                reject(error);
+              }
+            });
+          },
+        );
+        request.setTimeout(options.timeout ?? 5000, () =>
+          request.destroy(new Error('Vault request timed out')),
+        );
+        request.on('error', reject);
+        request.end(payload);
+      }),
 };
 
 function vault() {
   if (!CBP_VAULT_ADDR && !CBP_VAULT_TOKEN) return null;
   if (!CBP_VAULT_ADDR || !CBP_VAULT_TOKEN) throw new Error('Vault configuration is incomplete');
   const address = new URL(CBP_VAULT_ADDR);
-  if (address.username || address.password ||
-      (address.protocol !== 'https:' && !(address.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(address.hostname))))
+  if (
+    address.username ||
+    address.password ||
+    (address.protocol !== 'https:' &&
+      !(
+        address.protocol === 'http:' &&
+        ['127.0.0.1', 'localhost', '[::1]'].includes(address.hostname)
+      ))
+  )
     throw new Error('Vault requires HTTPS or a loopback HTTP address');
   const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(address.hostname);
-  return createVault({ endpoint: CBP_VAULT_ADDR, token: CBP_VAULT_TOKEN, debug: () => {}, requestOptions: { timeout: 5000 }, ...(loopback ? { 'request-promise': directRequest } : {}) });
+  return createVault({
+    endpoint: CBP_VAULT_ADDR,
+    token: CBP_VAULT_TOKEN,
+    debug: () => {},
+    requestOptions: { timeout: 5000 },
+    ...(loopback ? { 'request-promise': directRequest } : {}),
+  });
 }
 
 function path(id: string) {
@@ -72,7 +108,8 @@ export async function hasSavedCredential(kind: SavedKind, id: string) {
     const metadata = await client.read(savedPath(kind, id, 'metadata'));
     return Number(metadata?.data?.current_version) > 0;
   } catch (error) {
-    if ((error as { response?: { statusCode?: number } }).response?.statusCode === 404) return false;
+    if ((error as { response?: { statusCode?: number } }).response?.statusCode === 404)
+      return false;
     throw error;
   }
 }
@@ -91,7 +128,10 @@ export async function readSavedCredentialRecord(kind: SavedKind, id: string) {
   const value: unknown = result?.data?.data?.value;
   if (typeof value !== 'string') throw new Error('Invalid saved credential');
   const created = result?.data?.metadata?.created_time;
-  const createdAt = typeof created === 'string' && Number.isFinite(Date.parse(created)) ? new Date(created).toISOString() : null;
+  const createdAt =
+    typeof created === 'string' && Number.isFinite(Date.parse(created))
+      ? new Date(created).toISOString()
+      : null;
   return { value, createdAt };
 }
 

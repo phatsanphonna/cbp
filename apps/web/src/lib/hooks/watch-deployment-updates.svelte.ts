@@ -1,12 +1,10 @@
-import { invalidate } from "$app/navigation";
-import { subscribeToLiveEvents } from "./subscribe-to-live-events.js";
+import { invalidate } from '$app/navigation';
+import { subscribeToLiveEvents } from './subscribe-to-live-events.js';
 
-export function nextDeploymentExpiry(
-  jobs: { status: string; expiresIn: number }[],
-) {
+export function nextDeploymentExpiry(jobs: { status: string; expiresIn: number }[]) {
   return Math.min(
     ...jobs
-      .filter(({ status }) => status === "Queued" || status === "Running")
+      .filter(({ status }) => status === 'Queued' || status === 'Running')
       .map(({ expiresIn }) => expiresIn),
   );
 }
@@ -25,7 +23,7 @@ export function watchDeploymentUpdates(expiry: () => number | null) {
     try {
       do {
         refreshAgain = false;
-        await invalidate("cbp:agent-deployments");
+        await invalidate('cbp:agent-deployments');
       } while (refreshAgain && enabled);
     } catch {
       // Reconnecting to the stream refreshes the current state.
@@ -36,7 +34,7 @@ export function watchDeploymentUpdates(expiry: () => number | null) {
 
   $effect(() => {
     if (!enabled) return;
-    const unsubscribe = subscribeToLiveEvents("deployment", refresh);
+    const unsubscribe = subscribeToLiveEvents('deployment', refresh);
     void refresh();
     return () => {
       unsubscribe();

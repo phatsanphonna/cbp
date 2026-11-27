@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Info } from "@lucide/svelte";
-  import { Badge } from "#lib/components/ui/badge/index.ts";
-  import { Spinner } from "#lib/components/ui/spinner/index.ts";
-  import * as Tooltip from "#lib/components/ui/tooltip/index.ts";
+  import { Info } from '@lucide/svelte';
+  import { Badge } from '#lib/components/ui/badge/index.ts';
+  import { Spinner } from '#lib/components/ui/spinner/index.ts';
+  import * as Tooltip from '#lib/components/ui/tooltip/index.ts';
 
   let {
     status,
@@ -11,7 +11,7 @@
     href,
     linkLabel,
   }: {
-    status: "Queued" | "Running" | "Expired" | "Failed" | "Deployed";
+    status: 'Queued' | 'Running' | 'Expired' | 'Failed' | 'Deployed';
     detail: string | null;
     showTooltip?: boolean;
     href?: string;
@@ -20,29 +20,29 @@
 
   const explanation = $derived.by(() => {
     switch (status) {
-      case "Queued":
-        return "Waiting for the controller to claim this job for the agent.";
-      case "Running":
-        return "Claimed through the controller. Waiting for the agent’s result.";
-      case "Expired":
-        return detail ?? "The deployment job expired.";
-      case "Failed":
+      case 'Queued':
+        return 'Waiting for the controller to claim this job for the agent.';
+      case 'Running':
+        return 'Claimed through the controller. Waiting for the agent’s result.';
+      case 'Expired':
+        return detail ?? 'The deployment job expired.';
+      case 'Failed':
         return detail || null;
-      case "Deployed":
-        return "The deployment completed successfully.";
+      case 'Deployed':
+        return 'The deployment completed successfully.';
     }
   });
 </script>
 
 {#snippet badge()}
   <Badge
-    variant={status === "Failed" || status === "Expired"
-      ? "destructive"
-      : status === "Deployed"
-        ? "secondary"
-        : "outline"}
+    variant={status === 'Failed' || status === 'Expired'
+      ? 'destructive'
+      : status === 'Deployed'
+        ? 'secondary'
+        : 'outline'}
   >
-    {#if status === "Queued" || status === "Running"}
+    {#if status === 'Queued' || status === 'Running'}
       <Spinner data-icon="inline-start" aria-hidden="true" />
     {/if}
     {status}
@@ -59,35 +59,35 @@
         {#snippet child({ props })}
           <a
             {...props}
-            href={href}
+            {href}
             aria-label={linkLabel ?? `View ${status} deployment details`}
             class="inline-flex cursor-pointer focus-visible:outline-2 focus-visible:outline-ring"
-          >{@render badge()}</a>
+          >
+            {@render badge()}
+          </a>
         {/snippet}
       </Tooltip.Trigger>
     {:else}
       <Tooltip.Trigger
         class="inline-flex cursor-help focus-visible:outline-2 focus-visible:outline-ring"
-        aria-label={status === "Failed"
-          ? "Failed. Show failure details"
-          : undefined}
+        aria-label={status === 'Failed' ? 'Failed. Show failure details' : undefined}
       >
         {@render badge()}
       </Tooltip.Trigger>
     {/if}
-    <Tooltip.Content
-      role="tooltip"
-      sideOffset={4}
-      class="max-w-sm wrap-anywhere">{explanation}</Tooltip.Content
-    >
+    <Tooltip.Content role="tooltip" sideOffset={4} class="max-w-sm wrap-anywhere">
+      {explanation}
+    </Tooltip.Content>
   </Tooltip.Root>
 {:else}
   {#if href}
     <a
-      href={href}
+      {href}
       aria-label={linkLabel ?? `View ${status} deployment details`}
       class="inline-flex focus-visible:outline-2 focus-visible:outline-ring"
-    >{@render badge()}</a>
+    >
+      {@render badge()}
+    </a>
   {:else}
     {@render badge()}
   {/if}

@@ -1,26 +1,24 @@
 import { BETTER_AUTH_SECRET, CBP_LETS_ENCRYPT_EMAIL } from '$app/env/private';
 import { createPrivateKey, X509Certificate } from 'node:crypto';
-import { Client, axios, crypto, directory } from 'acme-client';
+import { axios, Client, crypto, directory } from 'acme-client';
 import { updateCertificateChain } from '@cbp/database/inventory';
 import {
   claimRenewal,
   expireAcmeChallenges,
   findAcmeAccount,
+  findRenewalKey,
   findRenewalSource,
   recordRenewalFailure,
   recordRenewalWarning,
   removeAcmeChallenge,
   saveAcmeAccount,
   saveAcmeChallenge,
-  findRenewalKey,
 } from '@cbp/database/renewals';
 import { parseCertificateChain } from './certificate-chain.js';
 import { getDatabase } from './database.js';
 import { decryptSecret, encryptSecret } from './encrypted-secret.js';
-import {
-  saveCredential,
-  savedCredentialsAvailable,
-} from './deployment-secrets.js';
+import { saveCredential, savedCredentialsAvailable } from './deployment-secrets.js';
+import { autoDeployRenewal } from './auto-deploy.js';
 import { letsEncryptNames } from './renewal-names.js';
 import {
   renewSelfSignedCertificate,
@@ -29,26 +27,18 @@ import {
 } from './self-signed-certificate.js';
 
 const email = CBP_LETS_ENCRYPT_EMAIL?.trim();
-export const renewalAvailable = Boolean(
-  email && (BETTER_AUTH_SECRET?.length ?? 0) >= 32,
-);
-export const selfSignedRenewalAvailable =
-  (BETTER_AUTH_SECRET?.length ?? 0) >= 32;
+export const renewalAvailable = Boolean(email && (BETTER_AUTH_SECRET?.length ?? 0) >= 32);
+export const selfSignedRenewalAvailable = (BETTER_AUTH_SECRET?.length ?? 0) >= 32;
 export const acmeToken = /^[A-Za-z0-9_-]{22,128}$/;
 const provider = 'letsencrypt';
 const accountContext = 'cbp/letsencrypt/account/v1';
-export const renewalKeyContext = (id: string) =>
-  'cbp/letsencrypt/certificate/v1/' + id;
+export const renewalKeyContext = (id: string) => 'cbp/letsencrypt/certificate/v1/' + id;
 
 async function accountKey(db: ReturnType<typeof getDatabase>) {
   let stored = await findAcmeAccount(db, provider);
   if (!stored) {
     const pem = await crypto.createPrivateEcdsaKey();
-    await saveAcmeAccount(
-      db,
-      provider,
-      encryptSecret(pem.toString(), accountContext),
-    );
+    await saveAcmeAccount(db, provider, encryptSecret(pem.toString(), accountContext));
     stored = await findAcmeAccount(db, provider);
   }
   return stored && decryptSecret(stored, accountContext);
@@ -60,8 +50,7 @@ export async function issueLetsEncryptCertificate(
   names: string[],
   expiresAt: Date,
 ) {
-  let failure =
-    'Could not load the Let’s Encrypt account. Check the server secret and database.';
+  let failure = 'Could not load the Let’s Encrypt account. Check the server secret and database.';
   try {
     const key = await accountKey(db);
     if (!key) return { message: failure };
@@ -76,10 +65,7 @@ export async function issueLetsEncryptCertificate(
     const leafKey = await crypto.createPrivateEcdsaKey();
     const [privateKey, csr] = await crypto.createCsr(
       {
-        commonName:
-          domain.length <= 64
-            ? domain
-            : names.find((name) => name.length <= 64),
+        commonName: domain.length <= 64 ? domain : names.find((name) => name.length <= 64),
         altNames: names,
       },
       leafKey,
@@ -103,8 +89,7 @@ export async function issueLetsEncryptCertificate(
       },
     });
 
-    failure =
-      'Let’s Encrypt returned a certificate with unexpected names, validity, or key.';
+    failure = 'Let’s Encrypt returned a certificate with unexpected names, validity, or key.';
     const chain = parseCertificateChain(fullchain);
     const issuedNames = letsEncryptNames(domain, fullchain);
     const now = Date.now();
@@ -113,9 +98,7 @@ export async function issueLetsEncryptCertificate(
       issuedNames?.join(',') !== names.join(',') ||
       chain.metadata.validFrom.getTime() > now ||
       chain.metadata.validUntil.getTime() <= now ||
-      !new X509Certificate(fullchain).checkPrivateKey(
-        createPrivateKey(privateKey),
-      )
+      !new X509Certificate(fullchain).checkPrivateKey(createPrivateKey(privateKey))
     )
       return { message: failure };
 
@@ -139,10 +122,7 @@ export async function renewDueCertificate() {
   await renewDueSelfSigned(db);
 }
 
-export async function renewCertificateNow(
-  id: string,
-  privateKeyOverride?: string,
-) {
+export async function renewCertificateNow(id: string, privateKeyOverride?: string) {
   const db = getDatabase();
   const source = await findRenewalSource(db, id);
   if (!source) return { ok: false, status: 404, message: 'Certificate not found.' };
@@ -201,16 +181,8 @@ export async function renewCertificateNow(
       };
 }
 
-async function renewDueLetsEncrypt(
-  db: ReturnType<typeof getDatabase>,
-  certificateId?: string,
-) {
-  const certificate = await claimRenewal(
-    db,
-    'letsencrypt',
-    certificateId,
-    Boolean(certificateId),
-  );
+async function renewDueLetsEncrypt(db: ReturnType<typeof getDatabase>, certificateId?: string) {
+  const certificate = await claimRenewal(db, 'letsencrypt', certificateId, Boolean(certificateId));
   if (!certificate) return false;
 
   let failure =
@@ -235,20 +207,11 @@ async function renewDueLetsEncrypt(
     }
 
     failure = 'Could not save the renewed certificate.';
-    const result = await updateCertificateChain(
-      db,
-      certificate.id,
-      issued.metadata,
-      undefined,
-      {
-        fingerprint: certificate.fingerprint,
-        retryAt: certificate.retryAt,
-        encryptedKey: encryptSecret(
-          issued.privateKey,
-          renewalKeyContext(certificate.id),
-        ),
-      },
-    );
+    const result = await updateCertificateChain(db, certificate.id, issued.metadata, undefined, {
+      fingerprint: certificate.fingerprint,
+      retryAt: certificate.retryAt,
+      encryptedKey: encryptSecret(issued.privateKey, renewalKeyContext(certificate.id)),
+    });
     if (result === 'changed' || result === 'duplicate' || !result) return false;
     failure = '';
     const warning = await storeRenewedKey(db, certificate.id, issued.privateKey);
@@ -259,13 +222,7 @@ async function renewDueLetsEncrypt(
       message: failure,
     });
   } finally {
-    if (failure)
-      await recordRenewalFailure(
-        db,
-        certificate.id,
-        certificate.retryAt,
-        failure,
-      );
+    if (failure) await recordRenewalFailure(db, certificate.id, certificate.retryAt, failure);
   }
   return false;
 }
@@ -275,12 +232,7 @@ async function renewDueSelfSigned(
   certificateId?: string,
   privateKeyOverride?: string,
 ) {
-  const certificate = await claimRenewal(
-    db,
-    'self-signed',
-    certificateId,
-    Boolean(certificateId),
-  );
+  const certificate = await claimRenewal(db, 'self-signed', certificateId, Boolean(certificateId));
   if (!certificate) return false;
 
   let failure = 'Could not renew the self-signed certificate.';
@@ -290,11 +242,7 @@ async function renewDueSelfSigned(
     const names = selfSignedCertificateNames(certificate.domain, fullchain);
     if (!names) return false;
     const vaultConfigured = savedCredentialsAvailable();
-    const encryptedKey = await findRenewalKey(
-      db,
-      certificate.id,
-      fullchain,
-    );
+    const encryptedKey = await findRenewalKey(db, certificate.id, fullchain);
     const storedPrivateKey = encryptedKey
       ? decryptSecret(encryptedKey, selfSignedKeyContext(certificate.id))
       : null;
@@ -304,34 +252,22 @@ async function renewDueSelfSigned(
       return false;
     }
 
-    const issued = await renewSelfSignedCertificate(
-      names,
-      fullchain,
-      privateKey,
-    );
+    const issued = await renewSelfSignedCertificate(names, fullchain, privateKey);
     if (issued.metadata.validUntil <= certificate.validUntil) {
       failure = 'The renewed certificate does not extend its expiry date.';
       return false;
     }
 
     failure = 'Could not save the renewed self-signed certificate.';
-    const result = await updateCertificateChain(
-      db,
-      certificate.id,
-      issued.metadata,
-      undefined,
-      {
-        fingerprint: certificate.fingerprint,
-        retryAt: certificate.retryAt,
-        previousEncryptedKey: encryptSecret(
-          privateKey,
-          selfSignedKeyContext(certificate.id),
-        ),
-        encryptedKey: certificate.autoRenew || encryptedKey || vaultConfigured
+    const result = await updateCertificateChain(db, certificate.id, issued.metadata, undefined, {
+      fingerprint: certificate.fingerprint,
+      retryAt: certificate.retryAt,
+      previousEncryptedKey: encryptSecret(privateKey, selfSignedKeyContext(certificate.id)),
+      encryptedKey:
+        certificate.autoRenew || encryptedKey || vaultConfigured
           ? encryptSecret(issued.privateKey, selfSignedKeyContext(certificate.id))
           : null,
-      },
-    );
+    });
     if (result === 'changed' || result === 'duplicate' || !result) return false;
     failure = '';
     const warning = await storeRenewedKey(db, certificate.id, issued.privateKey);
@@ -342,13 +278,7 @@ async function renewDueSelfSigned(
       message: failure,
     });
   } finally {
-    if (failure)
-      await recordRenewalFailure(
-        db,
-        certificate.id,
-        certificate.retryAt,
-        failure,
-      );
+    if (failure) await recordRenewalFailure(db, certificate.id, certificate.retryAt, failure);
   }
   return false;
 }
@@ -358,21 +288,26 @@ async function storeRenewedKey(
   certificateId: string,
   privateKey: string,
 ) {
-  const warning = savedCredentialsAvailable()
+  const vaultWarning = savedCredentialsAvailable()
     ? await saveCredential('certificate', certificateId, privateKey)
         .then(() => undefined)
         .catch(() => 'Vault could not store the rotated private key.')
     : 'Vault is not configured, so the rotated private key was not saved there.';
+  // The renewal is already saved, so a deploy failure must not fail it.
+  const deployWarning = await autoDeployRenewal(db, certificateId, privateKey).catch(
+    () => 'Automatic deployment could not be queued.',
+  );
+  const warning = [vaultWarning, deployWarning].filter(Boolean).join(' ');
   if (!warning) return undefined;
 
   try {
     await recordRenewalWarning(db, certificateId, warning);
   } catch {
-    console.error('Could not record the Vault key rotation warning', {
+    console.error('Could not record the renewal warning', {
       certificateId,
     });
   }
-  console.error('Vault private key rotation warning', {
+  console.error('Certificate renewal warning', {
     certificateId,
     message: warning,
   });

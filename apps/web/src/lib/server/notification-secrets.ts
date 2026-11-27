@@ -1,4 +1,4 @@
-import { encryptSecret, decryptSecret } from './encrypted-secret.js';
+import { decryptSecret, encryptSecret } from './encrypted-secret.js';
 
 export type NotificationSettings = { secret: string; sender?: string };
 
@@ -8,9 +8,7 @@ export function encryptNotificationSettings(settings: NotificationSettings) {
   return encryptSecret(JSON.stringify(settings), context);
 }
 
-export function decryptNotificationSettings(
-  value: string,
-): NotificationSettings | null {
+export function decryptNotificationSettings(value: string): NotificationSettings | null {
   try {
     const settings = decryptSecret(value, context);
     return settings === null ? null : JSON.parse(settings);

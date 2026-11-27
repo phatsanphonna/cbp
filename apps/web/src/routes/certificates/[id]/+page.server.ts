@@ -1,5 +1,5 @@
-import { resolve } from "$app/paths";
-import { error, fail, redirect } from "@sveltejs/kit";
+import { resolve } from '$app/paths';
+import { error, fail, redirect } from '@sveltejs/kit';
 import {
   findCertificate,
   findCertificateDomain,
@@ -7,29 +7,27 @@ import {
   listHostOptions,
   removeCertificate,
   updateCertificateChain,
-} from "@cbp/database/inventory";
-import {
-  parseCertificateChain,
-  readCertificateChain,
-} from "#lib/server/certificate-chain.js";
-import {
-  deployCertificateAction,
-  loadAgentDeployments,
-} from "#lib/server/agent-deployment.js";
-import { getDatabase } from "#lib/server/database.js";
-import { dateFormatter } from "#lib/server/date-formatter.js";
+} from '@cbp/database/inventory';
+import { parseCertificateChain, readCertificateChain } from '#lib/server/certificate-chain.js';
+import { deployCertificateAction, loadAgentDeployments } from '#lib/server/agent-deployment.js';
+import { getDatabase } from '#lib/server/database.js';
+import { dateFormatter } from '#lib/server/date-formatter.js';
 import { readDeploymentKey } from '#lib/server/deployment-key.js';
 import { boundAnsibleCredential } from '#lib/server/ansible-credentials.js';
-import { deleteSavedCredential, hasSavedCredential, savedCredentialsAvailable } from '#lib/server/deployment-secrets.js';
+import {
+  deleteSavedCredential,
+  hasSavedCredential,
+  savedCredentialsAvailable,
+} from '#lib/server/deployment-secrets.js';
 import { hasTrustedTransport } from '#lib/server/trusted-transport.js';
 import {
   linkDeploymentAction,
   removeDeploymentAction,
   updateDeploymentEndpointAction,
-} from "#lib/server/deployment-actions.js";
-import { displayCertificateDomain } from "../display-domain.js";
-import { expiryStatus } from "../expiry.js";
-import { hasPermission } from "#lib/server/access-control.js";
+} from '#lib/server/deployment-actions.js';
+import { displayCertificateDomain } from '../display-domain.js';
+import { expiryStatus } from '../expiry.js';
+import { hasPermission } from '#lib/server/access-control.js';
 import {
   renewalAvailable,
   renewCertificateNow,
@@ -40,18 +38,15 @@ import {
   selfSignedCertificateNames,
   selfSignedIssuer,
 } from '#lib/server/self-signed-certificate.js';
-import {
-  findRenewalSource,
-  setAutoRenew,
-} from '@cbp/database/renewals';
-import type { Actions, PageServerLoad, RequestEvent } from "./$types";
+import { findRenewalSource, setAutoDeploy, setAutoRenew } from '@cbp/database/renewals';
+import type { Actions, PageServerLoad, RequestEvent } from './$types';
 
 export const load: PageServerLoad = async (event) => {
   const { params, cookies, depends } = event;
-  depends("cbp:agent-deployments");
+  depends('cbp:agent-deployments');
   const database = getDatabase();
   const certificate = await findCertificate(database, params.id);
-  if (!certificate) error(404, "Certificate not found");
+  if (!certificate) error(404, 'Certificate not found');
   const selfSigned = certificate.issuer === selfSignedIssuer;
   const letsEncrypt = certificate.issuer.includes("Let's Encrypt");
   const renewalNames = selfSigned
@@ -59,25 +54,18 @@ export const load: PageServerLoad = async (event) => {
     : letsEncrypt
       ? letsEncryptNames(certificate.domain, certificate.fullchain)
       : null;
-  const renewalAvailableForCertificate = selfSigned
-    ? selfSignedRenewalAvailable
-    : renewalAvailable;
+  const renewalAvailableForCertificate = selfSigned ? selfSignedRenewalAvailable : renewalAvailable;
   const nextRenewal = certificate.autoRenew
     ? new Date(
         Math.max(
           certificate.validFrom.getTime() +
-            (certificate.validUntil.getTime() -
-              certificate.validFrom.getTime()) *
-              (2 / 3),
+            (certificate.validUntil.getTime() - certificate.validFrom.getTime()) * (2 / 3),
           certificate.renewalRetryAt?.getTime() ?? 0,
         ),
       )
     : null;
-  const canManageRenewals = hasPermission(
-    event.locals.user,
-    'renewals.manage',
-  );
-  const format = dateFormatter(cookies.get("cbp-time-zone"));
+  const canManageRenewals = hasPermission(event.locals.user, 'renewals.manage');
+  const format = dateFormatter(cookies.get('cbp-time-zone'));
   const timestamp = (date: Date | null) =>
     date ? { iso: date.toISOString(), label: format.format(date) } : null;
   const [hosts, agentDeployments] = await Promise.all([
@@ -89,10 +77,10 @@ export const load: PageServerLoad = async (event) => {
   ]);
   let savedCredentials = { available: false, key: false, ansible: false, error: false };
   let boundCredentials: Record<string, string> = {};
-  const canManageCredentials = hasPermission(event.locals.user, "credentials.manage");
-  const canManageDeployments = hasPermission(event.locals.user, "deployments.manage");
-  const canManageHosts = hasPermission(event.locals.user, "hosts.manage");
-  const canManageCertificates = hasPermission(event.locals.user, "certificates.manage");
+  const canManageCredentials = hasPermission(event.locals.user, 'credentials.manage');
+  const canManageDeployments = hasPermission(event.locals.user, 'deployments.manage');
+  const canManageHosts = hasPermission(event.locals.user, 'hosts.manage');
+  const canManageCertificates = hasPermission(event.locals.user, 'certificates.manage');
   if (canManageCredentials && savedCredentialsAvailable() && hasTrustedTransport(event)) {
     try {
       const [key, ansible] = await Promise.all([
@@ -100,9 +88,24 @@ export const load: PageServerLoad = async (event) => {
         hasSavedCredential('ansible', params.id),
       ]);
       savedCredentials = { available: true, key, ansible, error: false };
-      const hostIds = [...new Set(certificate.deployments.filter((deployment) => deployment.method === 'Ansible' && deployment.hostId).map((deployment) => deployment.hostId!))];
-      const bound = await Promise.all(hostIds.map(async (hostId) => ({ hostId, credential: await boundAnsibleCredential(hostId) })));
-      boundCredentials = Object.fromEntries(bound.filter(({ credential }) => credential).map(({ hostId, credential }) => [hostId, credential!.name]));
+      const hostIds = [
+        ...new Set(
+          certificate.deployments
+            .filter((deployment) => deployment.method === 'Ansible' && deployment.hostId)
+            .map((deployment) => deployment.hostId!),
+        ),
+      ];
+      const bound = await Promise.all(
+        hostIds.map(async (hostId) => ({
+          hostId,
+          credential: await boundAnsibleCredential(hostId),
+        })),
+      );
+      boundCredentials = Object.fromEntries(
+        bound
+          .filter(({ credential }) => credential)
+          .map(({ hostId, credential }) => [hostId, credential!.name]),
+      );
     } catch {
       savedCredentials.error = true;
     }
@@ -134,13 +137,8 @@ export const load: PageServerLoad = async (event) => {
     certificate: {
       ...certificateDetails,
       renewal: {
-        provider: selfSigned
-          ? 'Self-signed'
-          : letsEncrypt
-            ? 'Let’s Encrypt'
-            : null,
-        eligible:
-          Boolean(renewalNames && certificate.fingerprint),
+        provider: selfSigned ? 'Self-signed' : letsEncrypt ? 'Let’s Encrypt' : null,
+        eligible: Boolean(renewalNames && certificate.fingerprint),
         canAutoRenew:
           Boolean(renewalNames && certificate.fingerprint) &&
           (!selfSigned || certificate.hasRenewalKey),
@@ -149,10 +147,7 @@ export const load: PageServerLoad = async (event) => {
         nextAttempt: nextRenewal?.toISOString() ?? null,
         nextAttemptLabel: nextRenewal ? format.format(nextRenewal) : null,
       },
-      displayDomain: displayCertificateDomain(
-        certificate.domain,
-        certificate.sans,
-      ),
+      displayDomain: displayCertificateDomain(certificate.domain, certificate.sans),
       status: expiryStatus(certificate.validFrom, certificate.validUntil),
       validFrom: certificate.validFrom.toISOString(),
       validFromLabel: format.format(certificate.validFrom),
@@ -196,9 +191,7 @@ async function changeRenewal(event: RequestEvent, enabled: boolean) {
     const source = await findRenewalSource(database, params.id);
     if (!source) error(404, 'Certificate not found');
     const selfSigned = source.issuer === selfSignedIssuer;
-    const available = selfSigned
-      ? selfSignedRenewalAvailable
-      : renewalAvailable;
+    const available = selfSigned ? selfSignedRenewalAvailable : renewalAvailable;
     if (!available)
       return fail(503, {
         renewalError: selfSigned
@@ -206,8 +199,7 @@ async function changeRenewal(event: RequestEvent, enabled: boolean) {
           : 'Configure Let’s Encrypt on the server first.',
       });
     const eligible = selfSigned
-      ? source.hasRenewalKey &&
-        Boolean(selfSignedCertificateNames(source.domain, source.fullchain))
+      ? source.hasRenewalKey && Boolean(selfSignedCertificateNames(source.domain, source.fullchain))
       : source.issuer.includes("Let's Encrypt") &&
         Boolean(letsEncryptNames(source.domain, source.fullchain));
     if (!eligible || !source.fingerprint)
@@ -219,16 +211,29 @@ async function changeRenewal(event: RequestEvent, enabled: boolean) {
     fingerprint = source.fingerprint;
   }
 
-  const [updated] = await setAutoRenew(
-    database,
-    params.id,
-    enabled,
-    fingerprint,
-  );
+  const [updated] = await setAutoRenew(database, params.id, enabled, fingerprint);
   if (!updated)
     return fail(409, {
-      renewalError:
-        'The certificate or its renewal setting changed. Refresh and try again.',
+      renewalError: 'The certificate or its renewal setting changed. Refresh and try again.',
+    });
+  locals.auditTargetId = params.id;
+  redirect(303, resolve('/certificates/[id]', { id: params.id }));
+}
+
+async function changeAutoDeploy(event: RequestEvent, enabled: boolean) {
+  const { locals, params } = event;
+  // Auto-deploy sends each renewed private key to the linked hosts.
+  if (
+    !hasPermission(locals.user, 'deployments.manage') ||
+    !hasPermission(locals.user, 'credentials.manage')
+  )
+    return fail(403, {
+      renewalError: 'Deployment and credential management permissions are required.',
+    });
+  const [updated] = await setAutoDeploy(getDatabase(), params.id, enabled);
+  if (!updated)
+    return fail(409, {
+      renewalError: 'The certificate or its deployment setting changed. Refresh and try again.',
     });
   locals.auditTargetId = params.id;
   redirect(303, resolve('/certificates/[id]', { id: params.id }));
@@ -254,27 +259,28 @@ async function renewNow(event: RequestEvent) {
     const fields = await request.formData().catch(() => null);
     const upload = fields?.get('privateKey');
     const hasUpload = upload instanceof File && upload.size > 0;
+    // Renewing from the stored key returns a new private key to the browser.
+    if (!hasUpload && !hasPermission(locals.user, 'credentials.manage'))
+      return fail(403, {
+        renewalError:
+          'Credential management permission is required to renew with the stored key. Upload the current private key instead.',
+      });
     if (!source.hasRenewalKey || hasUpload) {
       if (!source.fullchain)
         return fail(409, { renewalError: 'This certificate has no fullchain.' });
-      if (!fields)
-        return fail(400, { renewalError: 'Upload the matching private key.' });
+      if (!fields) return fail(400, { renewalError: 'Upload the matching private key.' });
       const key = await readDeploymentKey(fields, source.fullchain);
-      if ('message' in key)
-        return fail(400, { renewalError: key.message });
+      if ('message' in key) return fail(400, { renewalError: key.message });
       privateKey = key.pem;
     }
   }
   const result = await renewCertificateNow(params.id, privateKey);
-  if ('status' in result)
-    return fail(result.status, { renewalError: result.message });
+  if ('status' in result) return fail(result.status, { renewalError: result.message });
   locals.auditTargetId = params.id;
   return {
     renewalResult: {
       ...('privateKey' in result ? { privateKey: result.privateKey } : {}),
-      ...('warning' in result && result.warning
-        ? { warning: result.warning }
-        : {}),
+      ...('warning' in result && result.warning ? { warning: result.warning } : {}),
     },
   };
 }
@@ -282,27 +288,31 @@ async function renewNow(event: RequestEvent) {
 export const actions: Actions = {
   enableRenewal: (event) => changeRenewal(event, true),
   disableRenewal: (event) => changeRenewal(event, false),
+  enableAutoDeploy: (event) => changeAutoDeploy(event, true),
+  disableAutoDeploy: (event) => changeAutoDeploy(event, false),
   renewNow,
   deleteCredential: async (event) => {
-    if (!hasPermission(event.locals.user, "credentials.manage")) return fail(403, { credentialError: 'Credential management permission is required.' });
-    if (!hasTrustedTransport(event)) return fail(403, { credentialError: 'A trusted connection is required.' });
+    if (!hasPermission(event.locals.user, 'credentials.manage'))
+      return fail(403, { credentialError: 'Credential management permission is required.' });
+    if (!hasTrustedTransport(event))
+      return fail(403, { credentialError: 'A trusted connection is required.' });
     const kind = (await event.request.formData()).get('kind');
-    if (kind !== 'certificate' && kind !== 'ansible') return fail(400, { credentialError: 'Invalid credential type.' });
-    if (!(await findCertificateDomain(getDatabase(), event.params.id))) error(404, 'Certificate not found');
+    if (kind !== 'certificate' && kind !== 'ansible')
+      return fail(400, { credentialError: 'Invalid credential type.' });
+    if (!(await findCertificateDomain(getDatabase(), event.params.id)))
+      error(404, 'Certificate not found');
     try {
       await deleteSavedCredential(kind, event.params.id);
     } catch {
       return fail(503, { credentialError: 'Could not delete the credential from Vault.' });
     }
     return {
-      credentialMessage: kind === 'certificate'
-        ? 'Private key removed from Vault.'
-        : 'Saved credential deleted.',
+      credentialMessage:
+        kind === 'certificate' ? 'Private key removed from Vault.' : 'Saved credential deleted.',
     };
   },
   deploy: (event) => deployCertificateAction(event, event.params.id),
-  deployAnsible: (event) =>
-    deployCertificateAction(event, event.params.id, "Ansible"),
+  deployAnsible: (event) => deployCertificateAction(event, event.params.id, 'Ansible'),
   deployMixed: (event) => deployCertificateAction(event, event.params.id, null),
   linkDeployment: ({ params, request }) =>
     linkDeploymentAction(request, { certificateId: params.id }),
@@ -313,42 +323,37 @@ export const actions: Actions = {
   updateChain: async ({ params, request }) => {
     const database = getDatabase();
     const domain = await findCertificateDomain(database, params.id);
-    if (!domain) error(404, "Certificate not found");
+    if (!domain) error(404, 'Certificate not found');
 
     const chain = await readCertificateChain(await request.formData());
-    if ("message" in chain) return fail(400, { message: chain.message });
+    if ('message' in chain) return fail(400, { message: chain.message });
     if (!chain.covers(domain)) {
       return fail(400, {
-        message: "The replacement certificate does not cover this hostname.",
+        message: 'The replacement certificate does not cover this hostname.',
       });
     }
 
-    const updated = await updateCertificateChain(
-      database,
-      params.id,
-      chain.metadata,
-    );
-    if (updated === "duplicate")
+    const updated = await updateCertificateChain(database, params.id, chain.metadata);
+    if (updated === 'duplicate')
       return fail(409, {
-        message: "The replacement is already registered on another record.",
+        message: 'The replacement is already registered on another record.',
       });
-    if (!updated) error(404, "Certificate not found");
-    redirect(303, resolve("/certificates/[id]", { id: params.id }));
+    if (!updated) error(404, 'Certificate not found');
+    redirect(303, resolve('/certificates/[id]', { id: params.id }));
   },
   restoreChain: async ({ params, request }) => {
-    const versionId = (await request.formData()).get("versionId");
+    const versionId = (await request.formData()).get('versionId');
     const gone = fail(409, {
-      restoreError:
-        "This version is no longer available. Refresh and try again.",
+      restoreError: 'This version is no longer available. Refresh and try again.',
     });
-    if (typeof versionId !== "string") return gone;
+    if (typeof versionId !== 'string') return gone;
     const database = getDatabase();
     const version = await findCertificateVersion(database, params.id, versionId);
     if (!version) return gone;
     const chain = parseCertificateChain(version.fullchain);
-    if ("message" in chain || !chain.covers(version.domain)) {
+    if ('message' in chain || !chain.covers(version.domain)) {
       return fail(400, {
-        restoreError: "The saved fullchain is invalid for this hostname.",
+        restoreError: 'The saved fullchain is invalid for this hostname.',
       });
     }
     const restored = await updateCertificateChain(
@@ -357,13 +362,12 @@ export const actions: Actions = {
       { ...chain.metadata, fullchain: version.fullchain },
       versionId,
     );
-    if (restored === "duplicate")
+    if (restored === 'duplicate')
       return fail(409, {
-        restoreError:
-          "The saved certificate is already registered on another record.",
+        restoreError: 'The saved certificate is already registered on another record.',
       });
-    if (restored === "changed") return gone;
-    if (!restored) error(404, "Certificate not found");
+    if (restored === 'changed') return gone;
+    if (!restored) error(404, 'Certificate not found');
     return {
       restoreMessage: version.hasKey
         ? `Restored serial ${chain.metadata.serial} with its private key. Deploy it to update your hosts.`
@@ -373,14 +377,21 @@ export const actions: Actions = {
   remove: async ({ params }) => {
     if (savedCredentialsAvailable()) {
       try {
-        if ((await hasSavedCredential('certificate', params.id)) || (await hasSavedCredential('ansible', params.id)))
-          return fail(409, { message: 'Delete the saved Vault credentials before removing this certificate.' });
+        if (
+          (await hasSavedCredential('certificate', params.id)) ||
+          (await hasSavedCredential('ansible', params.id))
+        )
+          return fail(409, {
+            message: 'Delete the saved Vault credentials before removing this certificate.',
+          });
       } catch {
-        return fail(503, { message: 'Vault must be available to check saved credentials before removing this certificate.' });
+        return fail(503, {
+          message:
+            'Vault must be available to check saved credentials before removing this certificate.',
+        });
       }
     }
-    if (!(await removeCertificate(getDatabase(), params.id)))
-      error(404, "Certificate not found");
-    redirect(303, resolve("/certificates"));
+    if (!(await removeCertificate(getDatabase(), params.id))) error(404, 'Certificate not found');
+    redirect(303, resolve('/certificates'));
   },
 };

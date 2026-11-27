@@ -1,14 +1,13 @@
 <script lang="ts">
-  import { Badge } from "#lib/components/ui/badge/index.ts";
+  import { Badge } from '#lib/components/ui/badge/index.ts';
 
-  let { severity }: { severity: "Info" | "Warning" | "High" | "Critical" } =
-    $props();
+  let { severity }: { severity: 'Info' | 'Warning' | 'High' | 'Critical' } = $props();
 
   const variants = {
-    Info: "outline",
-    Warning: "warning",
-    High: "destructive",
-    Critical: "critical",
+    Info: 'outline',
+    Warning: 'warning',
+    High: 'destructive',
+    Critical: 'critical',
   } as const;
 </script>
 

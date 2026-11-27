@@ -2,17 +2,13 @@
   import { enhance } from '$app/forms';
   import { toast } from 'svelte-sonner';
   import { notifyFormResult } from '#lib/components/svelte/form-feedback.js';
-  import { resolve } from "$app/paths";
-  import FormSelect from "#lib/components/svelte/form-select.svelte";
-  import { Button } from "#lib/components/ui/button/index.ts";
-  import {
-    Field,
-    FieldGroup,
-    FieldLabel,
-  } from "#lib/components/ui/field/index.ts";
-  import { Input } from "#lib/components/ui/input/index.ts";
-  import { hostApplianceTypes } from "#lib/host-appliance-types.js";
-  import type { PageProps } from "./$types";
+  import { resolve } from '$app/paths';
+  import FormSelect from '#lib/components/svelte/form-select.svelte';
+  import { Button } from '#lib/components/ui/button/index.ts';
+  import { Field, FieldGroup, FieldLabel } from '#lib/components/ui/field/index.ts';
+  import { Input } from '#lib/components/ui/input/index.ts';
+  import { hostApplianceTypes } from '#lib/host-appliance-types.js';
+  import type { PageProps } from './$types';
 
   let { form }: PageProps = $props();
   const applianceOptions = hostApplianceTypes.map((type) => ({
@@ -25,23 +21,27 @@
   <title>Add host | CBP</title>
 </svelte:head>
 
-<section
-  class="w-full flex-1 px-5 py-6 md:px-8"
-  aria-labelledby="add-host-heading"
->
+<section class="w-full flex-1 px-5 py-6 md:px-8" aria-labelledby="add-host-heading">
   <header class="flex flex-wrap items-start justify-between gap-4">
     <div class="grid gap-1">
-      <h1 id="add-host-heading" class="font-heading text-xl font-semibold">
-        Add host
-      </h1>
+      <h1 id="add-host-heading" class="font-heading text-xl font-semibold">Add host</h1>
       <p class="text-xs text-muted-foreground">
         Register a server or appliance in the host inventory.
       </p>
     </div>
-    <Button href={resolve("/hosts")} variant="outline">Back to hosts</Button>
+    <Button href={resolve('/hosts')} variant="outline">Back to hosts</Button>
   </header>
 
-  <form method="POST" class="mt-6 border p-4 sm:p-5" use:enhance={() => async ({ result, update }) => { await update(); if (result.type === 'redirect') toast.success('Host added.'); else notifyFormResult(result, {}); }}>
+  <form
+    method="POST"
+    class="mt-6 border p-4 sm:p-5"
+    use:enhance={() =>
+      async ({ result, update }) => {
+        await update();
+        if (result.type === 'redirect') toast.success('Host added.');
+        else notifyFormResult(result, {});
+      }}
+  >
     <FieldGroup>
       <Field>
         <FieldLabel for="host-name" required>Hostname or IP address</FieldLabel>
@@ -62,7 +62,7 @@
           id="appliance-type"
           name="applianceType"
           items={applianceOptions}
-          value={form?.values?.applianceType ?? "Linux"}
+          value={form?.values?.applianceType ?? 'Linux'}
           required
         />
       </Field>
