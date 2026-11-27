@@ -50,7 +50,7 @@ const actionLabels: Record<string, Record<string, string>> = {
     renewNow: 'Renew certificate now',
     deleteCredential: "Delete saved deployment credential",
     updateChain: "Update fullchain",
-    restoreChain: "Restore fullchain",
+    restoreChain: "Restore certificate version",
     remove: "Remove certificate",
   },
   "/certificates/[id]/private-key": {

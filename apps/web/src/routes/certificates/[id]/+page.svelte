@@ -23,6 +23,7 @@
   } from "#lib/components/ui/field/index.ts";
   import { Input } from "#lib/components/ui/input/index.ts";
   import { Separator } from "#lib/components/ui/separator/index.ts";
+  import * as Table from "#lib/components/ui/table/index.ts";
   import DataTable from "#lib/components/svelte/data-table.svelte";
   import type { DataTableFeatures } from "#lib/components/svelte/data-table-features.js";
   import { deploymentServices } from "#lib/deployment-services.js";
@@ -96,6 +97,7 @@
   ]);
   let updateOpen = $state(false);
   let restoreOpen = $state(false);
+  let restoreVersion = $state<PageProps["data"]["certificate"]["versions"][number] | null>(null);
   let removeOpen = $state(false);
   let deleteKeyOpen = $state(false);
   let deleteKeyPending = $state(false);
@@ -215,7 +217,7 @@
           align="end"
           class="min-w-48"
           onCloseAutoFocus={(event) => {
-            if (updateOpen || restoreOpen || removeOpen || deleteKeyOpen) event.preventDefault();
+            if (updateOpen || removeOpen || deleteKeyOpen) event.preventDefault();
           }}
         >
           <DropdownMenu.Group>
@@ -258,11 +260,6 @@
               <DropdownMenu.Item onSelect={() => (updateOpen = true)}
                 >Update fullchain</DropdownMenu.Item
               >
-              {#if certificate.previousChainRevision}
-                <DropdownMenu.Item onSelect={() => (restoreOpen = true)}
-                  >Restore previous fullchain</DropdownMenu.Item
-                >
-              {/if}
               <DropdownMenu.Item
                 variant="destructive"
                 onSelect={() => (removeOpen = true)}
@@ -326,8 +323,8 @@
           <Dialog.Header>
             <Dialog.Title>Update fullchain</Dialog.Title>
             <Dialog.Description>
-              CBP saves the current public chain for rollback. Deploy the
-              replacement separately to your servers.
+              CBP keeps the last 3 versions and their private keys for
+              rollback. Deploy the replacement separately to your servers.
             </Dialog.Description>
           </Dialog.Header>
           <form
@@ -357,14 +354,22 @@
           </form>
         </Dialog.Content>
       </Dialog.Root>
-      {#if certificate.previousChainRevision}
+      {#if restoreVersion}
         <AlertDialog.Root bind:open={restoreOpen}>
-          <AlertDialog.Content onCloseAutoFocus={focusCertificateActions}>
+          <AlertDialog.Content>
             <AlertDialog.Header>
-              <AlertDialog.Title>Restore previous fullchain?</AlertDialog.Title>
+              <AlertDialog.Title class="wrap-anywhere">
+                Restore certificate {restoreVersion.validUntilLabel
+                  ? `expiring ${restoreVersion.validUntilLabel}`
+                  : ''} (serial {restoreVersion.serial})?
+              </AlertDialog.Title>
               <AlertDialog.Description>
-                CBP restores the previous chain and its saved private key when
-                available. Deploy the restored certificate to update your hosts.
+                The current certificate (expiring {certificate.validUntilLabel})
+                moves to previous versions.
+                {restoreVersion.hasKey
+                  ? 'Its saved private key is restored too.'
+                  : 'No private key is saved for this version, so supply it when deploying.'}
+                Deploy afterwards to update your hosts.
               </AlertDialog.Description>
             </AlertDialog.Header>
             <form
@@ -383,15 +388,11 @@
                 };
               }}
             >
-              <input
-                type="hidden"
-                name="previousChainRevision"
-                value={certificate.previousChainRevision}
-              />
+              <input type="hidden" name="versionId" value={restoreVersion.id} />
               <AlertDialog.Footer>
                 <AlertDialog.Cancel type="button">Cancel</AlertDialog.Cancel>
                 <Button type="submit" disabled={restorePending}
-                  >Restore fullchain</Button
+                  >Restore this version</Button
                 >
               </AlertDialog.Footer>
             </form>
@@ -696,6 +697,70 @@
       </div>
     </dl>
   </section>
+
+  {#if certificate.versions.length}
+    <section class="mt-6 border" aria-labelledby="versions-heading">
+      <div class="border-b bg-muted px-4 py-3">
+        <h2 id="versions-heading" class="text-sm font-medium">
+          Previous versions
+        </h2>
+        <p class="text-xs text-muted-foreground">
+          CBP keeps the last 3 replaced certificates.
+        </p>
+      </div>
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>Replaced</Table.Head>
+            <Table.Head>Serial number</Table.Head>
+            <Table.Head>Expires</Table.Head>
+            <Table.Head>SHA-256 fingerprint</Table.Head>
+            <Table.Head>Private key</Table.Head>
+            {#if data.canManageCertificates}
+              <Table.Head><span class="sr-only">Actions</span></Table.Head>
+            {/if}
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each certificate.versions as version (version.id)}
+            <Table.Row>
+              <Table.Cell>{version.replacedAtLabel}</Table.Cell>
+              <Table.Cell class="break-all whitespace-normal">{version.serial}</Table.Cell>
+              <Table.Cell>{version.validUntilLabel ?? '—'}</Table.Cell>
+              <Table.Cell>
+                {#if version.fingerprint}
+                  <span title={version.fingerprint}
+                    >{version.fingerprint.slice(0, 23)}…</span
+                  >
+                {:else}
+                  —
+                {/if}
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant={version.hasKey ? 'secondary' : 'outline'}
+                  >{version.hasKey ? 'Saved' : 'Not saved'}</Badge
+                >
+              </Table.Cell>
+              {#if data.canManageCertificates}
+                <Table.Cell class="text-right">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!version.validUntilLabel}
+                    onclick={() => {
+                      restoreVersion = version;
+                      restoreOpen = true;
+                    }}>Restore</Button
+                  >
+                </Table.Cell>
+              {/if}
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+    </section>
+  {/if}
 
   <section class="mt-6" aria-labelledby="deployments-heading">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-2">

@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { randomUUID } from 'node:crypto';
 import { openDatabase } from './index.js';
 import {
+  listCertificateVersions,
   registerCertificate,
   removeCertificate,
   updateCertificateChain,
@@ -82,12 +83,40 @@ test.skipIf(!databaseURL)(
       );
       expect(await updateCertificateChain(db, id, original)).toBe(true);
       expect(await findRenewalKey(db, id, original.fullchain)).toBeNull();
+      const [renewedVersion, originalVersion] = await listCertificateVersions(db, id);
+      expect(renewedVersion).toMatchObject({ fullchain: renewed.fullchain, hasKey: true });
+      expect(originalVersion).toMatchObject({ fullchain: original.fullchain });
+
+      // A version id from the wrong chain or an unknown id is rejected.
       expect(
-        await updateCertificateChain(db, id, renewed, renewed.fullchain),
+        await updateCertificateChain(db, id, renewed, originalVersion.id),
+      ).toBe('changed');
+      expect(
+        await updateCertificateChain(db, id, renewed, randomUUID()),
+      ).toBe('changed');
+
+      expect(
+        await updateCertificateChain(db, id, renewed, renewedVersion.id),
       ).toBe(true);
       expect(await findRenewalKey(db, id, renewed.fullchain)).toBe(
         'encrypted key',
       );
+      const afterRestore = await listCertificateVersions(db, id);
+      expect(afterRestore.map((version) => version.fullchain)).toEqual([
+        original.fullchain,
+        original.fullchain,
+      ]);
+      expect(afterRestore.some((version) => version.id === renewedVersion.id)).toBe(false);
+
+      for (const n of [1, 2, 3, 4])
+        await updateCertificateChain(db, id, {
+          ...original,
+          fingerprint: randomUUID(),
+          fullchain: `chain ${n}`,
+        });
+      expect(
+        (await listCertificateVersions(db, id)).map((version) => version.fullchain),
+      ).toEqual(['chain 3', 'chain 2', 'chain 1']);
     } finally {
       await removeCertificate(db, id);
       await db.$client.close();

@@ -3,7 +3,7 @@ import { error, fail, redirect } from "@sveltejs/kit";
 import {
   findCertificate,
   findCertificateDomain,
-  findPreviousCertificateChain,
+  findCertificateVersion,
   listHostOptions,
   removeCertificate,
   updateCertificateChain,
@@ -111,6 +111,7 @@ export const load: PageServerLoad = async (event) => {
     fullchain: _fullchain,
     renewalRetryAt: _renewalRetryAt,
     renewalError: _renewalError,
+    versions,
     ...certificateDetails
   } = certificate;
   return {
@@ -157,6 +158,18 @@ export const load: PageServerLoad = async (event) => {
       validFromLabel: format.format(certificate.validFrom),
       validUntil: certificate.validUntil.toISOString(),
       validUntilLabel: format.format(certificate.validUntil),
+      versions: versions.map(({ id, fullchain, replacedAt, hasKey }) => {
+        const chain = parseCertificateChain(fullchain);
+        const metadata = 'message' in chain ? null : chain.metadata;
+        return {
+          id,
+          hasKey,
+          replacedAtLabel: format.format(replacedAt),
+          serial: metadata?.serial ?? 'Unreadable certificate',
+          fingerprint: metadata?.fingerprint ?? null,
+          validUntilLabel: metadata ? format.format(metadata.validUntil) : null,
+        };
+      }),
       deployments: certificate.deployments.map((deployment) => ({
         ...deployment,
         servedCertificateExpiresAt: timestamp(
@@ -323,21 +336,17 @@ export const actions: Actions = {
     redirect(303, resolve("/certificates/[id]", { id: params.id }));
   },
   restoreChain: async ({ params, request }) => {
-    const revision = (await request.formData()).get("previousChainRevision");
+    const versionId = (await request.formData()).get("versionId");
+    const gone = fail(409, {
+      restoreError:
+        "This version is no longer available. Refresh and try again.",
+    });
+    if (typeof versionId !== "string") return gone;
     const database = getDatabase();
-    const previous = await findPreviousCertificateChain(database, params.id);
-    if (!previous) error(404, "Certificate not found");
-    if (!previous.fullchain)
-      return fail(409, {
-        restoreError: "There is no previous fullchain to restore.",
-      });
-    if (revision !== previous.revision)
-      return fail(409, {
-        restoreError:
-          "The previous fullchain changed. Refresh the page and try again.",
-      });
-    const chain = parseCertificateChain(previous.fullchain);
-    if ("message" in chain || !chain.covers(previous.domain)) {
+    const version = await findCertificateVersion(database, params.id, versionId);
+    if (!version) return gone;
+    const chain = parseCertificateChain(version.fullchain);
+    if ("message" in chain || !chain.covers(version.domain)) {
       return fail(400, {
         restoreError: "The saved fullchain is invalid for this hostname.",
       });
@@ -345,23 +354,20 @@ export const actions: Actions = {
     const restored = await updateCertificateChain(
       database,
       params.id,
-      chain.metadata,
-      previous.fullchain,
+      { ...chain.metadata, fullchain: version.fullchain },
+      versionId,
     );
     if (restored === "duplicate")
       return fail(409, {
         restoreError:
           "The saved certificate is already registered on another record.",
       });
-    if (restored === "changed")
-      return fail(409, {
-        restoreError:
-          "The previous fullchain changed. Refresh the page and try again.",
-      });
+    if (restored === "changed") return gone;
     if (!restored) error(404, "Certificate not found");
     return {
-      restoreMessage:
-        "Previous fullchain restored. Deploy it with its matching private key to update your hosts.",
+      restoreMessage: version.hasKey
+        ? `Restored serial ${chain.metadata.serial} with its private key. Deploy it to update your hosts.`
+        : `Restored serial ${chain.metadata.serial}. No private key was saved for it, so supply the matching key when deploying.`,
     };
   },
   remove: async ({ params }) => {
