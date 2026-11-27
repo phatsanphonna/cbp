@@ -4,13 +4,14 @@
   "packageManager": "bun@1.4.5",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "scripts/ansible"
   ],
   "resolutions": {
     "@esbuild-kit/core-utils/esbuild": "0.25.12"
   },
   "scripts": {
-    "dev": "turbo run dev dev:controller dev:ansible --env-mode=loose --continue=dependencies-successful",
+    "dev": "turbo run dev --env-mode=loose --continue=dependencies-successful",
     "dev:controller": "bun --env-file=.env.local apps/controller/dev.ts",
     "dev:ansible": "bun scripts/ansible/dev-runner.ts",
     "build": "turbo run build"
